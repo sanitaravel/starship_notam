@@ -1,0 +1,28 @@
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database
+*.db
+
+# Logs
+logs/
+
+# Generated maps
+maps/
+
+# Downloaded NOTAMs
+notams/
+
+# Bot state
+telegram_chats.json
+
+# Archive
+*.zip
