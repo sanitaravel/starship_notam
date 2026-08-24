@@ -14,8 +14,8 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Create `starship_notam/core/logging.py` that configures a `logger` instance with `RichHandler` (console) and `RotatingFileHandler` (writing to `logs/notam.log`), and exposes a shared `rich.console.Console` instance
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 2. Create parsers package (pure functions, no I/O)
-  - [ ] 2.1 Create `starship_notam/parsers/` package with `__init__.py` and `notam_parser.py`
+- [x] 2. Create parsers package (pure functions, no I/O)
+  - [x] 2.1 Create `starship_notam/parsers/` package with `__init__.py` and `notam_parser.py`
     - Create directory `starship_notam/parsers/`
     - Create `starship_notam/parsers/__init__.py` re-exporting public parser functions
     - Extract NOTAM text parsing logic (ICAO fields, CARF messages, Q-line parsing) from `notam_parser.py` into `starship_notam/parsers/notam_parser.py`
@@ -23,19 +23,19 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Ensure no database, network, or filesystem imports remain
     - _Requirements: 3.1, 3.5, 3.6_
 
-  - [ ] 2.2 Create `starship_notam/parsers/coord_parser.py`
+  - [x] 2.2 Create `starship_notam/parsers/coord_parser.py`
     - Extract coordinate parsing logic (DMS, decimal, polygon extraction) from `visualize_notams.py` into `starship_notam/parsers/coord_parser.py`
     - Function: `parse_coords_from_text(raw: str) -> list[tuple[float, float]] | tuple[float, float] | None`
     - Ensure the module only uses standard library modules (`re`, `typing`)
     - _Requirements: 3.2, 3.5, 3.6_
 
-  - [ ] 2.3 Create `starship_notam/parsers/faa_parser.py`
+  - [x] 2.3 Create `starship_notam/parsers/faa_parser.py`
     - Extract FAA advisory HTML parsing logic from `fetch_faa_advisory.py` into `starship_notam/parsers/faa_parser.py`
     - Function: `parse_faa_advisory_html(html: str) -> list[dict]` returning list of `{"mission": ..., "primary_window": ..., "backup_window": ...}`
     - Only allowed imports: standard library + `beautifulsoup4`
     - _Requirements: 3.3, 3.5, 3.6_
 
-  - [ ] 2.4 Create `starship_notam/parsers/starbase_parser.py`
+  - [x] 2.4 Create `starship_notam/parsers/starbase_parser.py`
     - Extract Starbase closure HTML parsing logic from `fetch_starbase_closures.py` into `starship_notam/parsers/starbase_parser.py`
     - Function: `parse_starbase_html(html: str) -> dict` returning `{"beach": {...} | None, "road_delays": [...]}`
     - Only allowed imports: standard library + `beautifulsoup4`
