@@ -6,8 +6,8 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
 
 ## Tasks
 
-- [ ] 1. Create core package with configuration and logging
-  - [ ] 1.1 Create the `starship_notam/core/` package with `__init__.py`, `config.py`, and `logging.py`
+- [x] 1. Create core package with configuration and logging
+  - [x] 1.1 Create the `starship_notam/core/` package with `__init__.py`, `config.py`, and `logging.py`
     - Create directory `starship_notam/core/`
     - Create `starship_notam/core/__init__.py` that re-exports `config` and `logging` module contents
     - Create `starship_notam/core/config.py` that loads environment variables using `python-dotenv` and exposes typed constants: `TELEGRAM_BOT_TOKEN` (str, required — raises `RuntimeError` if missing), `CHAT_IDS` (list[str] parsed from comma-separated env var), `DB_PATH` (str, default `"notams.db"`), `KEYWORD` (str, default `"STARSHIP"`), `RUNS_PER_HOUR` (int, default `2`), `STATE_PATH` (str, path to `telegram_chats.json`)
