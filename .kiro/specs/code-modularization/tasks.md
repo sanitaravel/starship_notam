@@ -70,8 +70,8 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Import only from `data.connection`, `core`, and Python standard library
     - _Requirements: 2.2, 2.3, 2.5, 2.6_
 
-- [ ] 4. Create scrapers package (I/O layer)
-  - [ ] 4.1 Create `starship_notam/scrapers/` package with `__init__.py` and `notam_scraper.py`
+- [x] 4. Create scrapers package (I/O layer)
+  - [x] 4.1 Create `starship_notam/scrapers/` package with `__init__.py` and `notam_scraper.py`
     - Create directory `starship_notam/scrapers/`
     - Create `starship_notam/scrapers/__init__.py` re-exporting public scraper functions
     - Extract Selenium-based NOTAM search from `notam_request.py` into `starship_notam/scrapers/notam_scraper.py`
@@ -80,14 +80,14 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Does NOT persist to database; raises exception or returns empty list on failure
     - _Requirements: 4.1, 4.3, 4.4, 4.6_
 
-  - [ ] 4.2 Create `starship_notam/scrapers/faa_fetcher.py`
+  - [x] 4.2 Create `starship_notam/scrapers/faa_fetcher.py`
     - Extract HTTP-based FAA advisory fetching from `fetch_faa_advisory.py` into `starship_notam/scrapers/faa_fetcher.py`
     - Function: `fetch_faa_advisory() -> list[dict]` — performs HTTP GET, passes HTML to `parsers.faa_parser.parse_faa_advisory_html`, returns parsed list
     - Returns list of dicts with keys: `mission`, `primary_window`, `backup_window`
     - Does NOT persist to database; raises exception or returns empty list on failure
     - _Requirements: 4.2, 4.3, 4.5, 4.6_
 
-  - [ ] 4.3 Create `starship_notam/scrapers/starbase_fetcher.py`
+  - [x] 4.3 Create `starship_notam/scrapers/starbase_fetcher.py`
     - Extract HTTP-based Starbase status fetching from `fetch_starbase_closures.py` into `starship_notam/scrapers/starbase_fetcher.py`
     - Function: `fetch_starbase_status() -> dict` — performs HTTP GET, passes HTML to `parsers.starbase_parser.parse_starbase_html`, returns parsed dict
     - Does NOT persist to database; raises exception or returns empty list on failure
