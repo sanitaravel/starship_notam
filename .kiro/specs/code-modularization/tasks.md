@@ -41,7 +41,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Only allowed imports: standard library + `beautifulsoup4`
     - _Requirements: 3.4, 3.5, 3.6_
 
-- [ ] 3. Create data package (database layer)
+- [x] 3. Create data package (database layer)
   - [x] 3.1 Create `starship_notam/data/` package with `__init__.py` and `connection.py`
     - Create directory `starship_notam/data/`
     - Create `starship_notam/data/__init__.py` re-exporting public data functions
@@ -58,13 +58,13 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Import only from `data.connection`, `core`, and Python standard library
     - _Requirements: 2.2, 2.3, 2.5, 2.6_
 
-  - [ ] 3.3 Create `starship_notam/data/faa_repo.py`
+  - [x] 3.3 Create `starship_notam/data/faa_repo.py`
     - Extract FAA activity persistence functions from `notam_db.py` into `starship_notam/data/faa_repo.py`
     - Functions: `save_faa_activity(activity, db_path=None)`, `get_faa_activities_needing_post(db_path=None)`, `mark_faa_activity_posted(mission, telegram_message_id, db_path=None)`
     - Import only from `data.connection`, `core`, and Python standard library
     - _Requirements: 2.2, 2.3, 2.5, 2.6_
 
-  - [ ] 3.4 Create `starship_notam/data/starbase_repo.py`
+  - [x] 3.4 Create `starship_notam/data/starbase_repo.py`
     - Extract Starbase alert persistence functions from `notam_db.py` into `starship_notam/data/starbase_repo.py`
     - Functions: `save_beach_alert(alert, db_path=None)`, `save_road_alert(alert, db_path=None)`, `get_beach_alerts_needing_post(db_path=None)`, `get_road_alerts_needing_post(db_path=None)`, `mark_beach_posted(alert_key, db_path=None)`, `mark_road_posted(alert_key, db_path=None)`
     - Import only from `data.connection`, `core`, and Python standard library
