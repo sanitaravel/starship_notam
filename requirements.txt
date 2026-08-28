@@ -1,9 +1,65 @@
+# =============================================================================
+# starship_notam — pinned dependencies (per layer)
+# =============================================================================
+# Every third-party package is pinned to an exact version (==) so that
+# `pip install -r requirements.txt` reproduces a known-good environment.
+#
+# Dependencies are grouped by the package layer that imports them directly.
+# Transitive dependencies (pulled in by the direct ones) are pinned at the
+# bottom so the full environment is reproducible.
+#
+# Layer dependency boundaries (see Requirement 10):
+#   - core/logging  -> rich, python-dotenv
+#   - data          -> Python standard library only (no third-party packages)
+#   - parsers       -> beautifulsoup4
+#   - scrapers      -> selenium, requests
+#   - bot           -> python-telegram-bot, python-dotenv
+#   - visualization -> matplotlib, cartopy, pillow, shapely
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# core / logging layer
+# -----------------------------------------------------------------------------
+rich==15.0.0
+python-dotenv==1.2.2
+
+# -----------------------------------------------------------------------------
+# data layer
+#   Standard library only (sqlite3, json, hashlib, datetime, os, pathlib,
+#   typing). No third-party dependencies.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# parsers layer
+# -----------------------------------------------------------------------------
+beautifulsoup4==4.15.0
+
+# -----------------------------------------------------------------------------
+# scrapers layer
+# -----------------------------------------------------------------------------
+selenium==4.45.0
+requests==2.34.2
+
+# -----------------------------------------------------------------------------
+# bot layer
+# -----------------------------------------------------------------------------
+python-telegram-bot==22.8
+
+# -----------------------------------------------------------------------------
+# visualization layer
+# -----------------------------------------------------------------------------
+matplotlib==3.11.0
+Cartopy==0.25.0
+pillow==12.2.0
+shapely==2.1.2
+
+# -----------------------------------------------------------------------------
+# transitive dependencies (pinned for reproducible installs)
+# -----------------------------------------------------------------------------
 annotated-types==0.7.0
 anyio==4.14.0
 attrs==26.1.0
-beautifulsoup4==4.15.0
 bs4==0.0.2
-Cartopy==0.25.0
 certifi==2026.6.17
 cffi==2.0.0
 charset-normalizer==3.4.7
@@ -17,13 +73,11 @@ httpx==0.28.1
 idna==3.18
 kiwisolver==1.5.0
 markdown-it-py==4.2.0
-matplotlib==3.11.0
 mdurl==0.1.2
 numpy==2.5.0
 oauthlib==3.3.1
 outcome==1.3.0.post0
 packaging==26.2
-pillow==12.2.0
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
@@ -33,13 +87,7 @@ pyproj==3.7.2
 pyshp==3.0.13
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
-python-dotenv==1.2.2
-python-telegram-bot==22.8
-requests==2.34.2
 requests-oauthlib==2.0.0
-rich==15.0.0
-selenium==4.45.0
-shapely==2.1.2
 six==1.17.0
 sniffio==1.3.1
 sortedcontainers==2.4.0

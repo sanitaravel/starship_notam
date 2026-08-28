@@ -165,13 +165,13 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
   - Ensure the application starts correctly via `python -m starship_notam` and `python main.py`.
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Update dependency management and cleanup
-  - [ ] 10.1 Update `requirements.txt` with pinned dependencies per layer
+- [x] 10. Update dependency management and cleanup
+  - [x] 10.1 Update `requirements.txt` with pinned dependencies per layer
     - Ensure every third-party package is listed with exact version pinning (`==`)
     - Verify layer dependency boundaries: data (stdlib only), parsers (beautifulsoup4), scrapers (selenium, requests), bot (python-telegram-bot, python-dotenv), visualization (matplotlib, cartopy, pillow, shapely), core/logging (rich)
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
 
-  - [ ] 10.2 Remove original flat module files from project root
+  - [x] 10.2 Remove original flat module files from project root
     - Remove `notam_db.py`, `notam_parser.py`, `notam_request.py`, `fetch_faa_advisory.py`, `fetch_starbase_closures.py`, `telegram_bot.py`, `visualize_notams.py`, `notam_logging.py` from the project root
     - Keep `test_api.py` at root or move to `tests/` directory
     - Verify backward-compatible imports still work via `starship_notam/__init__.py` re-exports
