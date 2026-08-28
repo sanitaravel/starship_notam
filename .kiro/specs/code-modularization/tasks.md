@@ -93,8 +93,8 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Does NOT persist to database; raises exception or returns empty list on failure
     - _Requirements: 4.2, 4.3, 4.6_
 
-- [ ] 5. Create visualization package
-  - [ ] 5.1 Create `starship_notam/visualization/` package with `__init__.py` and `map_renderer.py`
+- [x] 5. Create visualization package
+  - [x] 5.1 Create `starship_notam/visualization/` package with `__init__.py` and `map_renderer.py`
     - Create directory `starship_notam/visualization/`
     - Create `starship_notam/visualization/__init__.py` re-exporting `render_notam_image`
     - Extract Cartopy/Matplotlib map rendering logic from `visualize_notams.py` into `starship_notam/visualization/map_renderer.py`
@@ -103,7 +103,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Raise `ImportError` with clear message if Cartopy/Matplotlib is missing
     - _Requirements: 6.2, 6.6, 6.7_
 
-  - [ ] 5.2 Create `starship_notam/visualization/image_composer.py`
+  - [x] 5.2 Create `starship_notam/visualization/image_composer.py`
     - Extract PIL-based image composition logic from `visualize_notams.py` into `starship_notam/visualization/image_composer.py`
     - Function: `render_notam_image(notam_dict: dict, output_path: str) -> str` and `plot_single_notam(name, parsed, coords, out_path, _unused=None) -> str`
     - Import `parse_coords_from_text` from `starship_notam.parsers.coord_parser` for coordinate extraction
