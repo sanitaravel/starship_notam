@@ -42,7 +42,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - _Requirements: 3.4, 3.5, 3.6_
 
 - [ ] 3. Create data package (database layer)
-  - [ ] 3.1 Create `starship_notam/data/` package with `__init__.py` and `connection.py`
+  - [x] 3.1 Create `starship_notam/data/` package with `__init__.py` and `connection.py`
     - Create directory `starship_notam/data/`
     - Create `starship_notam/data/__init__.py` re-exporting public data functions
     - Create `starship_notam/data/connection.py` with `get_connection(db_path: str | None = None) -> sqlite3.Connection` and `init_db(db_path: str | None = None) -> None`
@@ -51,7 +51,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Ensure transactions are rolled back on failure
     - _Requirements: 2.1, 2.4, 2.5_
 
-  - [ ] 3.2 Create `starship_notam/data/notam_repo.py`
+  - [x] 3.2 Create `starship_notam/data/notam_repo.py`
     - Extract NOTAM persistence functions from `notam_db.py` into `starship_notam/data/notam_repo.py`
     - Functions: `save_notam(name, parsed, db_path=None)`, `get_notams_needing_images(db_path=None)`, `mark_image_generated(name, db_path=None)`, `load_all_notams(db_path=None)`
     - Functions accept and return plain Python dictionaries
