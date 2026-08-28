@@ -115,8 +115,8 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
   - Ensure all leaf packages (core, parsers, data, scrapers, visualization) are importable independently.
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Create bot package
-  - [ ] 7.1 Create `starship_notam/bot/` package with `__init__.py` and `formatting.py`
+- [x] 7. Create bot package
+  - [x] 7.1 Create `starship_notam/bot/` package with `__init__.py` and `formatting.py`
     - Create directory `starship_notam/bot/`
     - Create `starship_notam/bot/__init__.py` re-exporting public bot functions
     - Extract message formatting functions from `telegram_bot.py` into `starship_notam/bot/formatting.py`
@@ -124,7 +124,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - This module must NOT import Telegram API or perform network I/O
     - _Requirements: 5.1, 5.4_
 
-  - [ ] 7.2 Create `starship_notam/bot/transport.py`
+  - [x] 7.2 Create `starship_notam/bot/transport.py`
     - Extract Telegram API interaction from `telegram_bot.py` into `starship_notam/bot/transport.py`
     - Functions: `async send_photo(chat_id, photo_path, caption=None) -> bool`, `async send_message(chat_id, text) -> int | None`, `async refresh_known_chats() -> list[str]`
     - Use lazy import for `telegram` (python-telegram-bot) inside function body
@@ -133,7 +133,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Return `None`/`False` on send failures; remove blocked chats (403) from state
     - _Requirements: 5.2, 5.4, 5.5_
 
-  - [ ] 7.3 Create `starship_notam/bot/orchestrator.py`
+  - [x] 7.3 Create `starship_notam/bot/orchestrator.py`
     - Extract main orchestration loop and scheduling logic from `telegram_bot.py` into `starship_notam/bot/orchestrator.py`
     - Functions: `async main_loop() -> None`, `async generate_and_send(chat_list=None) -> None`
     - Import from `bot.formatting`, `bot.transport`, `scrapers.*`, `data.*`, `visualization.*`, and `core.config`
