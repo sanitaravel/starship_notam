@@ -16,6 +16,13 @@ DATE_RANGE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Numeric slash-date format, e.g. "8/28/26 from 12:00 PM to 9:00 PM"
+# or "8/28/26 12:00 PM to 8/29/26 9:00 AM".
+NUMERIC_DATE_RANGE_RE = re.compile(
+    r"^(?P<start_month>\d{1,2})/(?P<start_day>\d{1,2})/(?P<start_year>\d{2,4})(?:\s+from)?\s+(?P<start_time>\d{1,2}:\d{2}\s*[AP]M)\s+to\s+(?:(?P<end_month>\d{1,2})/(?P<end_day>\d{1,2})/(?P<end_year>\d{2,4})(?:\s+from)?\s+)?(?P<end_time>\d{1,2}:\d{2}\s*[AP]M)$",
+    re.IGNORECASE,
+)
+
 
 def _normalize_date_text(date_str):
     cleaned = TZ_SUFFIX_RE.sub("", date_str)
@@ -27,26 +34,41 @@ def _normalize_time_text(time_text):
     return re.sub(r"(\d)([AP]M)$", r"\1 \2", time_text.strip(), flags=re.IGNORECASE)
 
 
+def _normalize_year(value, default):
+    if not value:
+        return int(default)
+    year = int(value)
+    if year < 100:
+        year += 2000
+    return year
+
+
 def parse_datetime_range(date_str, year=None):
     if not year:
         year = datetime.now().year
 
     normalized = _normalize_date_text(date_str)
+
     match = DATE_RANGE_RE.match(normalized)
+    if match:
+        month_fmt = "%B"
+    else:
+        match = NUMERIC_DATE_RANGE_RE.match(normalized)
+        month_fmt = "%m"
 
     if not match:
         raise ValueError(f"Unrecognized closure date format: {date_str}")
 
     parts = match.groupdict()
 
-    start_year = int(parts.get("start_year") or year)
-    end_year = int(parts.get("end_year") or start_year)
+    start_year = _normalize_year(parts.get("start_year"), year)
+    end_year = _normalize_year(parts.get("end_year"), start_year)
     start_time = _normalize_time_text(parts["start_time"])
     end_time = _normalize_time_text(parts["end_time"])
 
     start = datetime.strptime(
         f"{parts['start_month']} {parts['start_day']} {start_year} {start_time}",
-        "%B %d %Y %I:%M %p",
+        f"{month_fmt} %d %Y %I:%M %p",
     ).replace(tzinfo=CENTRAL)
 
     end_month = parts.get("end_month") or parts["start_month"]
@@ -54,7 +76,7 @@ def parse_datetime_range(date_str, year=None):
 
     end = datetime.strptime(
         f"{end_month} {end_day} {end_year} {end_time}",
-        "%B %d %Y %I:%M %p",
+        f"{month_fmt} %d %Y %I:%M %p",
     ).replace(tzinfo=CENTRAL)
 
     if not parts.get("end_month") and end < start:
