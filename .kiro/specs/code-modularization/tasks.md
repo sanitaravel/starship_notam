@@ -141,14 +141,14 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - The main loop must never terminate due to a transient error
     - _Requirements: 5.3, 5.4, 8.2_
 
-- [ ] 8. Create top-level package init and entry point
-  - [ ] 8.1 Create `starship_notam/__init__.py` with backward-compatible re-exports
+- [x] 8. Create top-level package init and entry point
+  - [x] 8.1 Create `starship_notam/__init__.py` with backward-compatible re-exports
     - Create `starship_notam/__init__.py` that re-exports every public function and object previously importable from flat modules
     - Map: `notam_db` → `data`, `notam_parser` → `parsers`, `notam_request` → `scrapers`, `notam_logging` → `core`, `telegram_bot` → `bot`, `visualize_notams` → `visualization`, `fetch_faa_advisory` → `scrapers`, `fetch_starbase_closures` → `scrapers`
     - Use lazy imports where possible to avoid loading heavy dependencies at package import time
     - _Requirements: 1.3, 1.4, 8.3_
 
-  - [ ] 8.2 Create `starship_notam/__main__.py` entry point
+  - [x] 8.2 Create `starship_notam/__main__.py` entry point
     - Create `starship_notam/__main__.py` that imports and runs `bot.orchestrator.main_loop()`
     - Initialize database via `data.connection.init_db()`
     - Refresh Telegram chats via `bot.transport.refresh_known_chats()`
@@ -156,7 +156,7 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Supports invocation via `python -m starship_notam`
     - _Requirements: 8.1, 8.2_
 
-  - [ ] 8.3 Create top-level `main.py` convenience script
+  - [x] 8.3 Create top-level `main.py` convenience script
     - Create `main.py` at project root that invokes `starship_notam.__main__` logic
     - Provides the same behavior as the current `python telegram_bot.py` invocation
     - _Requirements: 8.1, 8.2_
