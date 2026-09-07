@@ -1,0 +1,24 @@
+# =============================================================================
+# starship_notam — development / test dependencies (pinned)
+# =============================================================================
+# Install with:  pip install -r requirements-dev.txt
+# These packages are NOT required to run the application; they are only used
+# for the test suite. Every package is pinned to an exact version (==) per
+# Requirement 10.1 so the test environment is reproducible.
+#
+# Runtime dependencies live in requirements.txt; install both for development:
+#   pip install -r requirements.txt -r requirements-dev.txt
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# test framework
+# -----------------------------------------------------------------------------
+pytest==8.4.2
+pytest-asyncio==1.2.0
+
+# -----------------------------------------------------------------------------
+# transitive dependencies of pytest (pinned for reproducible installs)
+# -----------------------------------------------------------------------------
+colorama==0.4.6
+iniconfig==2.3.0
+pluggy==1.6.0

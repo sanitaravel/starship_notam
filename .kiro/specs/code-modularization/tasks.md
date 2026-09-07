@@ -177,14 +177,14 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Verify backward-compatible imports still work via `starship_notam/__init__.py` re-exports
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 11. Write unit tests for each layer
-  - [ ] 11.1 Create test infrastructure and `tests/conftest.py`
+- [x] 11. Write unit tests for each layer
+  - [x] 11.1 Create test infrastructure and `tests/conftest.py`
     - Create `tests/` directory structure: `tests/unit/test_parsers/`, `tests/unit/test_data/`, `tests/unit/test_bot/`, `tests/unit/test_visualization/`, `tests/integration/`
     - Create `tests/conftest.py` with shared fixtures (in-memory SQLite DB, sample NOTAM text, sample HTML strings)
     - Add `pytest`, `pytest-asyncio` to dev dependencies
     - _Requirements: 9.1, 9.2, 9.3_
 
-  - [ ] 11.2 Write parser layer unit tests
+  - [x] 11.2 Write parser layer unit tests
     - Create `tests/unit/test_parsers/test_notam_parser.py` — test `parse_notam` and `parse_carf_message` with known inputs
     - Create `tests/unit/test_parsers/test_coord_parser.py` — test DMS, decimal, and polygon coordinate parsing
     - Create `tests/unit/test_parsers/test_faa_parser.py` — test `parse_faa_advisory_html` with sample HTML
@@ -192,19 +192,19 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Assert deterministic outputs given identical inputs
     - _Requirements: 3.6, 9.1, 9.4_
 
-  - [ ] 11.3 Write data layer unit tests
+  - [x] 11.3 Write data layer unit tests
     - Create `tests/unit/test_data/test_notam_repo.py` — test save/load round-trips with in-memory SQLite
     - Create `tests/unit/test_data/test_faa_repo.py` — test FAA activity persistence
     - Create `tests/unit/test_data/test_starbase_repo.py` — test beach/road alert persistence
     - Test error handling: verify exceptions are raised on failures, no partial commits
     - _Requirements: 2.5, 9.2_
 
-  - [ ] 11.4 Write bot formatting unit tests
+  - [x] 11.4 Write bot formatting unit tests
     - Create `tests/unit/test_bot/test_formatting.py` — test all formatting functions with known input dicts
     - Verify formatting module can be imported without Telegram API available
     - _Requirements: 5.1, 5.5_
 
-- [ ] 12. Write integration tests
+- [~] 12. Write integration tests
   - [ ] 12.1 Write import isolation and dependency boundary tests
     - Create `tests/integration/test_import_isolation.py` — verify parsers import without DB/Selenium/Telegram
     - Create `tests/integration/test_dependency_boundaries.py` — walk source files and assert no forbidden imports per layer
