@@ -46,6 +46,12 @@ from starship_notam.bot.transport import (
     send_photo,
 )
 
+from starship_notam.bot.reloader import (
+    restart_process,
+    snapshot_sources,
+    sources_changed,
+)
+
 from starship_notam.data import (
     get_beach_alerts_needing_post,
     get_faa_activities_needing_post,
@@ -434,6 +440,10 @@ async def main_loop() -> None:
     """
     ensure_setup()
     logger.info("Starting Telegram NOTAM bot loop (python-telegram-bot)")
+
+    # Snapshot our own source files so we can detect code updates on disk
+    # and restart in place to pick them up (see bot.reloader).
+    source_snapshot = snapshot_sources()
     # refresh known chats (discover groups the bot was added to)
     try:
         chat_list = await refresh_known_chats()
@@ -461,6 +471,18 @@ async def main_loop() -> None:
                 logger.exception("Error in generate_and_send")
 
             await sleep_until_next_run()
+
+            # Safe point between cycles: if our source changed on disk,
+            # restart in place so the new code takes effect. restart_process
+            # replaces the process image and does not return on success; if
+            # it fails it logs and we keep running the current code.
+            if sources_changed(source_snapshot):
+                logger.info("Source change detected at safe point; restarting")
+                try:
+                    restart_process()
+                except Exception:
+                    logger.exception("Restart failed; refreshing snapshot and continuing")
+                    source_snapshot = snapshot_sources()
 
     except asyncio.CancelledError:
         logger.info("Telegram NOTAM bot stopped")
