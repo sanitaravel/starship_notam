@@ -271,6 +271,34 @@ def parse_notice_card(card: Any, category: str | None = None) -> dict | None:
     return parse_notice_container(card, category=category)
 
 
+def parse_road_notice_card(card: Any) -> list[dict]:
+    """Expand a road notice card into one road-delay dict per distinct event.
+
+    A single ``rich-notification`` element can contain several road delays
+    separated by blank lines (each with its own ``Description:`` / ``Date:``
+    pair). Collapsing them into one entry would drop every delay after the
+    first, so this returns a list with one self-contained dict per event.
+
+    Non-rich cards fall back to :func:`parse_notice_card`, which yields a
+    single entry.
+    """
+    if card.get("id") == "rich-notification":
+        parsed = parse_rich_notification(card)
+        delays: list[dict] = []
+        for event in parsed:
+            origin, destination = _extract_route(event.get("description"))
+            if origin is not None or destination is not None:
+                event["origin"] = origin
+                event["destination"] = destination
+            event.setdefault("title", event.get("description"))
+            event.setdefault("periods", [dict(event)])
+            delays.append(event)
+        return delays
+
+    parsed = parse_notice_card(card, category="road")
+    return [parsed] if parsed else []
+
+
 def parse_starbase_html(html: str) -> dict:
     """Parse Starbase beach/road closure HTML into structured data.
 
@@ -310,9 +338,7 @@ def parse_starbase_html(html: str) -> dict:
 
         if cards:
             for card in cards:
-                parsed = parse_notice_card(card, category="road")
-                if parsed:
-                    result["road_delays"].append(parsed)
+                result["road_delays"].extend(parse_road_notice_card(card))
         else:
             for item in soup.select("#road-closure .cms-item-2"):
                 container = item.select_one(".notice-container-no-hover.road-updates")
@@ -327,8 +353,6 @@ def parse_starbase_html(html: str) -> dict:
                 if not notif:
                     continue
 
-                parsed = parse_notice_card(notif, category="road")
-                if parsed:
-                    result["road_delays"].append(parsed)
+                result["road_delays"].extend(parse_road_notice_card(notif))
 
     return result

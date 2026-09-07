@@ -65,7 +65,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         logger.exception("Cartopy/Matplotlib not available: %s", e)
         raise ImportError(
             "cartopy and matplotlib are required for map rendering; "
-            "install them via requirements.txt"
+            "install project dependencies via 'pip install .'"
         ) from e
 
     fig_dpi = 100

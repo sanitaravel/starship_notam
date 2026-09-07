@@ -60,6 +60,46 @@ def test_parses_road_delay(sample_starbase_html):
     assert delay["raw_date"] == "July 8 from 12:00 PM to 11:59 PM CT"
 
 
+def test_parses_multiple_road_delays_in_one_notification():
+    """A rich-notification with several Description/Date pairs yields one
+    road-delay entry per event (regression: only the first was kept)."""
+    html = (
+        "<html><body>"
+        '<div id="road-closure" class="road-updates">'
+        '  <div class="collection-list w-dyn-items">'
+        '    <div class="cms-item-2 w-dyn-item">'
+        '      <div class="notice-container-no-hover road-updates">'
+        '        <div class="cms-big-text">Road Delay</div>'
+        '        <div class="cms-big-text empty-state w-condition-invisible">'
+        "          No road delays."
+        "        </div>"
+        '        <div id="rich-notification" class="w-richtext">'
+        "          Description: Production to Pad<br/>"
+        "          Date: September 7 11:59 PM to September 8 4:00 AM<br/><br/>"
+        "          Description: Production to Masseys<br/>"
+        "          Date: September 7 11:59 PM to September 8 4:00 AM"
+        "        </div>"
+        "      </div>"
+        "    </div>"
+        "  </div>"
+        "</div>"
+        "</body></html>"
+    )
+
+    result = parse_starbase_html(html)
+    road_delays = result["road_delays"]
+
+    assert len(road_delays) == 2
+
+    first, second = road_delays
+    assert first["description"] == "Production to Pad"
+    assert first["origin"] == "Production"
+    assert first["destination"] == "Pad"
+    assert second["description"] == "Production to Masseys"
+    assert second["origin"] == "Production"
+    assert second["destination"] == "Masseys"
+
+
 # ---------------------------------------------------------------------------
 # Empty / missing sections
 # ---------------------------------------------------------------------------

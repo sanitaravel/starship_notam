@@ -204,14 +204,14 @@ Refactor the Starship NOTAM monitoring and Telegram bot project from a flat file
     - Verify formatting module can be imported without Telegram API available
     - _Requirements: 5.1, 5.5_
 
-- [~] 12. Write integration tests
-  - [ ] 12.1 Write import isolation and dependency boundary tests
+- [x] 12. Write integration tests
+  - [x] 12.1 Write import isolation and dependency boundary tests
     - Create `tests/integration/test_import_isolation.py` — verify parsers import without DB/Selenium/Telegram
     - Create `tests/integration/test_dependency_boundaries.py` — walk source files and assert no forbidden imports per layer
     - Verify import completes within 2 seconds for each layer
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 10.8_
 
-  - [ ] 12.2 Write backward compatibility tests
+  - [x] 12.2 Write backward compatibility tests
     - Create `tests/integration/test_backward_compat.py` — verify every previously-public function is accessible from both old-style and new package paths
     - Test that `from starship_notam.data import save_notam` and equivalent old paths resolve correctly
     - _Requirements: 1.3, 8.3_
