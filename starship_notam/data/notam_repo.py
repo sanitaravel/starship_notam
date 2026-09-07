@@ -10,13 +10,12 @@ This module imports only from ``starship_notam.data.connection``,
 import hashlib
 import json
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from starship_notam.core.config import DB_PATH
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db
+from starship_notam.data.connection import get_connection, init_db, utc_now_iso
 
 
 def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
@@ -28,7 +27,7 @@ def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
     the content has changed.
     """
     init_db(db_path)
-    now = datetime.utcnow().isoformat() + "Z"
+    now = utc_now_iso()
 
     def _safe_get(k: str):
         return parsed.get(k) if isinstance(parsed, dict) else None
@@ -226,7 +225,7 @@ def get_notams_needing_images(
 def mark_image_generated(name: str, db_path: Optional[str] = None) -> None:
     """Mark a NOTAM as having had its image generated."""
     init_db(db_path)
-    now = datetime.utcnow().isoformat() + "Z"
+    now = utc_now_iso()
     conn = get_connection(db_path)
     try:
         cur = conn.cursor()

@@ -9,10 +9,23 @@ This module does NOT import from Telegram, parsing, or visualization modules.
 import json
 import os
 import sqlite3
+from datetime import datetime, timezone
 from typing import Optional
 
 from starship_notam.core.config import DB_PATH
 from starship_notam.core.logging import logger
+
+
+def utc_now_iso() -> str:
+    """Return the current UTC time as an ISO-8601 string with a "Z" suffix.
+
+    Uses a timezone-aware UTC datetime (``datetime.now(timezone.utc)``) rather
+    than the deprecated ``datetime.utcnow()``. The tzinfo is stripped before
+    formatting so the output keeps the historical ``...Z`` shape (e.g.
+    ``2024-01-01T00:00:00Z``) instead of ``+00:00``, preserving the exact
+    string format previously stored in the database.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
 
 def get_connection(db_path: Optional[str] = None) -> sqlite3.Connection:

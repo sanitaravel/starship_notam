@@ -10,11 +10,10 @@ This module imports only from ``starship_notam.data.connection``,
 
 import hashlib
 import json
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db
+from starship_notam.data.connection import get_connection, init_db, utc_now_iso
 
 
 def make_beach_key(start_utc, end_utc) -> str:
@@ -38,7 +37,7 @@ def save_beach_alert(alert: Dict, db_path: Optional[str] = None) -> None:
     """
     init_db(db_path)
 
-    now = datetime.utcnow().isoformat() + "Z"
+    now = utc_now_iso()
 
     payload_hash = hashlib.sha256(
         json.dumps(alert, sort_keys=True).encode("utf-8")
@@ -142,7 +141,7 @@ def save_road_alert(alert: Dict, db_path: Optional[str] = None) -> None:
     """
     init_db(db_path)
 
-    now = datetime.utcnow().isoformat() + "Z"
+    now = utc_now_iso()
 
     payload_hash = hashlib.sha256(
         json.dumps(alert, sort_keys=True).encode("utf-8")
@@ -292,7 +291,7 @@ def mark_beach_posted(alert_key, db_path: Optional[str] = None) -> None:
                 processed_at = ?
             WHERE alert_key = ?
             """,
-            (datetime.utcnow().isoformat() + "Z", alert_key),
+            (utc_now_iso(), alert_key),
         )
         conn.commit()
     finally:
@@ -312,7 +311,7 @@ def mark_road_posted(alert_key, db_path: Optional[str] = None) -> None:
                 processed_at = ?
             WHERE alert_key = ?
             """,
-            (datetime.utcnow().isoformat() + "Z", alert_key),
+            (utc_now_iso(), alert_key),
         )
         conn.commit()
     finally:

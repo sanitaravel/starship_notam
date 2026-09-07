@@ -9,11 +9,10 @@ This module imports only from ``starship_notam.data.connection``,
 
 import hashlib
 import json
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db
+from starship_notam.data.connection import get_connection, init_db, utc_now_iso
 
 
 def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
@@ -54,7 +53,7 @@ def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
                     logger.info(f"No effective changes detected for FAA activity '{activity['mission']}'; refreshing updated_at")
                     update_cols = ['updated_at']
                     update_set = ', '.join(f"{c} = ?" for c in update_cols)
-                    update_params = [datetime.utcnow().isoformat() + 'Z', activity['mission']]
+                    update_params = [utc_now_iso(), activity['mission']]
                     cur.execute(f"UPDATE faa_activities SET {update_set} WHERE mission = ?", update_params)
                 else:
                     logger.info(f"Changes detected for FAA activity '{activity['mission']}'; updating all fields")
@@ -63,7 +62,7 @@ def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
                     update_params = [
                         activity['primary_window'],
                         activity['backup_window'],
-                        datetime.utcnow().isoformat() + 'Z',
+                        utc_now_iso(),
                         payload_hash,
                         activity['mission']
                     ]
@@ -77,8 +76,8 @@ def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
                 activity["mission"],
                 activity["primary_window"],
                 activity["backup_window"],
-                datetime.utcnow().isoformat() + 'Z',
-                datetime.utcnow().isoformat() + 'Z',
+                utc_now_iso(),
+                utc_now_iso(),
                 payload_hash
             ))
     finally:
@@ -116,7 +115,7 @@ def get_faa_activities_needing_post(db_path: Optional[str] = None) -> List[Dict]
 def mark_faa_activity_posted(mission, telegram_message_id, db_path: Optional[str] = None) -> None:
     """Mark an FAA activity as posted to Telegram with its message ID."""
     logger.info("Marking FAA activity '%s' as posted to Telegram with message ID %s", mission, telegram_message_id)
-    now = datetime.utcnow().isoformat() + "Z"
+    now = utc_now_iso()
 
     conn = get_connection(db_path)
     try:
