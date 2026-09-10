@@ -28,3 +28,6 @@ telegram_chats.json
 
 # Archive
 *.zip
+
+# Tests
+.hypothesis/

@@ -35,8 +35,8 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - Keep imports stdlib-only, matching the existing `core` layer conventions
     - _Requirements: 1.3, 1.6, 9.2_
 
-- [ ] 2. Implement the ELS_Parser pure functions
-  - [ ] 2.1 Create `parsers/fcc_els_parser.py` with `parse_fcc_els_results_html`
+- [x] 2. Implement the ELS_Parser pure functions
+  - [x] 2.1 Create `parsers/fcc_els_parser.py` with `parse_fcc_els_results_html`
     - Module-level imports only: `from __future__ import annotations`, `re`,
       `from urllib.parse import urlparse, parse_qs`,
       `from bs4 import BeautifulSoup`, and
@@ -55,7 +55,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       `application_seq`; return `[]` when there are no data rows
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 4.7, 9.2_
 
-  - [ ] 2.2 Implement `parse_fcc_els_detail_html` in the same module
+  - [x] 2.2 Implement `parse_fcc_els_detail_html` in the same module
     - Parse STA_Print label/value pairs: for each `<tr>` with two or more
       `<td>`/`<th>` cells, treat the first non-empty cell as label and the next
       non-empty cell as value, trimming both and stripping a trailing colon
@@ -65,7 +65,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - Return `{label: value}`; return `{}` when no pairs are recognized
     - _Requirements: 3.4, 3.5, 4.7, 9.2_
 
-  - [ ]* 2.3 Write property tests for the results parser
+  - [x] 2.3 Write property tests for the results parser
     - Create `tests/unit/test_parsers/test_fcc_els_parser.py`; Hypothesis
       strategies generate results-table HTML from field-value records with
       random whitespace, random call-sign blanks/"N/A", random extra query
@@ -77,7 +77,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 1, 2, 3, 4_
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
-  - [ ]* 2.4 Write property + edge-case tests for the detail parser
+  - [x] 2.4 Write property + edge-case tests for the detail parser
     - In `tests/unit/test_parsers/test_fcc_els_parser.py`, generate STA_Print
       detail HTML from random label/value pair sets, including the empty /
       no-field case

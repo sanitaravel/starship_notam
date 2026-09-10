@@ -12,6 +12,61 @@
         "chatSessionId": "sess_97760874-7f82-455f-9aa1-c98e720f7ba4",
         "timestamp": 1789071226938
       }
+    ],
+    "2.1 Create `parsers/fcc_els_parser.py` with `parse_fcc_els_results_html`": [
+      {
+        "executionId": "ab730420-fa21-423b-b5d7-cc288db83c16",
+        "chatSessionId": "sess_6783a11a-4b20-4197-b55f-fcb462de9117",
+        "timestamp": 1789071463903
+      },
+      {
+        "executionId": "ab730420-fa21-423b-b5d7-cc288db83c16",
+        "chatSessionId": "sess_6783a11a-4b20-4197-b55f-fcb462de9117",
+        "timestamp": 1789071672634
+      }
+    ],
+    "2.2 Implement `parse_fcc_els_detail_html` in the same module": [
+      {
+        "executionId": "ab730420-fa21-423b-b5d7-cc288db83c16",
+        "chatSessionId": "sess_6783a11a-4b20-4197-b55f-fcb462de9117",
+        "timestamp": 1789071680088
+      },
+      {
+        "executionId": "ab730420-fa21-423b-b5d7-cc288db83c16",
+        "chatSessionId": "sess_6783a11a-4b20-4197-b55f-fcb462de9117",
+        "timestamp": 1789071842353
+      }
+    ],
+    "2. Implement the ELS_Parser pure functions": [
+      {
+        "executionId": "ab730420-fa21-423b-b5d7-cc288db83c16",
+        "chatSessionId": "sess_6783a11a-4b20-4197-b55f-fcb462de9117",
+        "timestamp": 1789071846400
+      }
+    ],
+    "2.3 Write property tests for the results parser": [
+      {
+        "executionId": "c4000bf8-9cf4-4842-bb23-9411c151c930",
+        "chatSessionId": "sess_903c0f99-2ca2-444b-bea3-b2bf833d4e5b",
+        "timestamp": 1789071928344
+      },
+      {
+        "executionId": "c4000bf8-9cf4-4842-bb23-9411c151c930",
+        "chatSessionId": "sess_903c0f99-2ca2-444b-bea3-b2bf833d4e5b",
+        "timestamp": 1789072374496
+      }
+    ],
+    "2.4 Write property + edge-case tests for the detail parser": [
+      {
+        "executionId": "14261179-8a1a-4cf5-9a5a-29c3d4e37f84",
+        "chatSessionId": "sess_55ec7275-27df-473d-b080-58d1e73bc0bb",
+        "timestamp": 1789072532920
+      },
+      {
+        "executionId": "14261179-8a1a-4cf5-9a5a-29c3d4e37f84",
+        "chatSessionId": "sess_55ec7275-27df-473d-b080-58d1e73bc0bb",
+        "timestamp": 1789072874372
+      }
     ]
   }
 }
