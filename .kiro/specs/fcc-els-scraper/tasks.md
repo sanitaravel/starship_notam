@@ -87,8 +87,8 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 5_
     - _Requirements: 2.8, 3.4, 3.5_
 
-- [ ] 3. Create the FCC ELS database schema
-  - [ ] 3.1 Add the `fcc_els_applications` table to `connection.init_db`
+- [x] 3. Create the FCC ELS database schema
+  - [x] 3.1 Add the `fcc_els_applications` table to `connection.init_db`
     - In `starship_notam/data/connection.py`, append a `CREATE TABLE IF NOT
       EXISTS fcc_els_applications (...)` block with columns: `id` PK
       AUTOINCREMENT, `file_number TEXT UNIQUE NOT NULL`, `application_seq`,
@@ -103,7 +103,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       re-raises on error; follow the per-table `commit()` pattern
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ]* 3.2 Write schema tests
+  - [x] 3.2 Write schema tests
     - In `tests/unit/test_data`, add tests using the `db_path` fixture:
       `init_db` on a fresh DB creates the table with the expected columns and
       the `file_number` UNIQUE constraint (Req 6.1, 6.3, 6.4); running `init_db`
@@ -138,7 +138,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       utc_now_iso()`, and `telegram_message_id` WHERE `file_number = ?`
     - _Requirements: 5.6, 7.1, 9.3_
 
-  - [ ]* 4.3 Write property tests for the repository
+  - [ ] 4.3 Write property tests for the repository
     - Create `tests/unit/test_data/test_fcc_els_repo.py` using a `tmp_path`
       `db_path` (matching existing repo tests)
     - **Property 8: Payload hash is key-order independent** — _Validates: Requirements 5.2_
@@ -149,7 +149,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 8, 9, 10, 11, 12_
     - _Requirements: 5.1, 5.2, 5.4, 5.5, 6.4, 7.1_
 
-  - [ ]* 4.4 Write repository example tests
+  - [ ] 4.4 Write repository example tests
     - Insert sets `telegram_posted = 0` with timestamps and hash (Req 5.3);
       `mark_*_posted` populates the three Telegram columns (Req 5.6); a forced
       DB error causes rollback + raise with no partial row (Req 5.7)
@@ -173,7 +173,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       network I/O
     - _Requirements: 7.3, 7.9, 9.4_
 
-  - [ ]* 6.2 Write property test for the formatter
+  - [ ] 6.2 Write property test for the formatter
     - Create `tests/unit/test_bot/test_fcc_els_formatting.py`; generate
       application dicts whose field values include `<`, `>`, `&`
     - **Property 13: Formatter output is well-formed and escaped** — _Validates: Requirements 7.3_
@@ -194,7 +194,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - Add `DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"` at module level
     - _Requirements: 1.4, 1.5, 9.1_
 
-  - [ ]* 7.2 Write property test for the date helpers
+  - [ ] 7.2 Write property test for the date helpers
     - Create `tests/unit/test_scrapers/__init__.py` (or `.gitkeep`) and
       `tests/unit/test_scrapers/test_fcc_els_dates.py`; use
       `hypothesis.strategies.dates()`
@@ -230,7 +230,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       partial data, and continue; return the accumulated list
     - _Requirements: 3.1, 3.2, 3.3, 3.6, 3.7, 4.1_
 
-  - [ ]* 7.5 Write scraper example tests with a mocked Selenium driver
+  - [ ] 7.5 Write scraper example tests with a mocked Selenium driver
     - Create `tests/unit/test_scrapers/test_fcc_els_fetcher.py`: licensee filled
       with "Space Exploration" (Req 1.3); show-records set to 50 (Req 1.6);
       submit after fields populated (Req 1.7); parser called with `page_source`
@@ -280,7 +280,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       `await _process_faa_activities(chat_list)` in `generate_and_send`
     - _Requirements: 8.1, 5.8_
 
-  - [ ]* 9.3 Write orchestrator example tests
+  - [ ] 9.3 Write orchestrator example tests
     - Add tests (mocked scraper/repo/transport, patched `asyncio.to_thread` and
       `asyncio.sleep`) in `tests/unit/test_bot`: the step runs
       fetch→persist→post (Req 8.1); scraper runs via `asyncio.to_thread`
@@ -300,7 +300,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       the layer rules (e.g. Selenium must stay lazy)
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.6, 9.7_
 
-  - [ ]* 10.2 Add export-availability tests
+  - [ ] 10.2 Add export-availability tests
     - Assert `starship_notam.scrapers.fetch_fcc_els_applications` and the three
       `starship_notam.data` repo functions are importable and listed in each
       package's `__all__`

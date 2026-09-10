@@ -67,6 +67,37 @@
         "chatSessionId": "sess_55ec7275-27df-473d-b080-58d1e73bc0bb",
         "timestamp": 1789072874372
       }
+    ],
+    "3.1 Add the `fcc_els_applications` table to `connection.init_db`": [
+      {
+        "executionId": "5544ccc3-29a7-43aa-b773-07b3f54c2d14",
+        "chatSessionId": "sess_cd4865f0-b105-4d38-b95c-76a0bd3425a9",
+        "timestamp": 1789073060746
+      },
+      {
+        "executionId": "5544ccc3-29a7-43aa-b773-07b3f54c2d14",
+        "chatSessionId": "sess_cd4865f0-b105-4d38-b95c-76a0bd3425a9",
+        "timestamp": 1789073232700
+      }
+    ],
+    "3.2 Write schema tests": [
+      {
+        "executionId": "5544ccc3-29a7-43aa-b773-07b3f54c2d14",
+        "chatSessionId": "sess_cd4865f0-b105-4d38-b95c-76a0bd3425a9",
+        "timestamp": 1789073245922
+      },
+      {
+        "executionId": "5544ccc3-29a7-43aa-b773-07b3f54c2d14",
+        "chatSessionId": "sess_cd4865f0-b105-4d38-b95c-76a0bd3425a9",
+        "timestamp": 1789073361068
+      }
+    ],
+    "3. Create the FCC ELS database schema": [
+      {
+        "executionId": "5544ccc3-29a7-43aa-b773-07b3f54c2d14",
+        "chatSessionId": "sess_cd4865f0-b105-4d38-b95c-76a0bd3425a9",
+        "timestamp": 1789073366055
+      }
     ]
   }
 }

@@ -49,8 +49,8 @@ def init_db(db_path: Optional[str] = None) -> None:
     """Create the database tables if they don't exist and run migrations.
 
     Ensures that all required tables (notams, faa_activities, starbase_beach,
-    starbase_road) exist and that their schemas are up-to-date. Legacy columns
-    are migrated and removed as needed.
+    starbase_road, fcc_els_applications) exist and that their schemas are
+    up-to-date. Legacy columns are migrated and removed as needed.
 
     On failure, any pending transaction is rolled back so the database is never
     left in a partially committed state.
@@ -161,6 +161,62 @@ def init_db(db_path: Optional[str] = None) -> None:
                 processed_at TEXT
             )
         """)
+        conn.commit()
+
+        # --- fcc_els_applications table ---
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS fcc_els_applications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                file_number TEXT UNIQUE NOT NULL,
+
+                application_seq TEXT,
+                applicant_name TEXT,
+                call_sign TEXT,
+                receipt_date TEXT,
+                status TEXT,
+                status_date TEXT,
+
+                current_detail_url TEXT,
+                detail_json TEXT,
+
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+
+                payload_hash TEXT,
+
+                telegram_posted INTEGER DEFAULT 0,
+                telegram_posted_at TEXT,
+                telegram_message_id TEXT
+            )
+        """)
+        conn.commit()
+
+        # Additive migration: add any missing columns without dropping/recreating.
+        cur.execute("PRAGMA table_info(fcc_els_applications)")
+        els_cols = [r['name'] for r in cur.fetchall()]
+        els_expected_cols = {
+            'application_seq': 'TEXT',
+            'applicant_name': 'TEXT',
+            'call_sign': 'TEXT',
+            'receipt_date': 'TEXT',
+            'status': 'TEXT',
+            'status_date': 'TEXT',
+            'current_detail_url': 'TEXT',
+            'detail_json': 'TEXT',
+            'payload_hash': 'TEXT',
+            'telegram_posted': 'INTEGER DEFAULT 0',
+            'telegram_posted_at': 'TEXT',
+            'telegram_message_id': 'TEXT',
+        }
+        for col_name, col_def in els_expected_cols.items():
+            if col_name not in els_cols:
+                logger.info(
+                    'Adding %s column to fcc_els_applications table', col_name
+                )
+                cur.execute(
+                    f"ALTER TABLE fcc_els_applications ADD COLUMN {col_name} {col_def}"
+                )
         conn.commit()
 
         # --- Legacy migration: parsed_json column removal ---
