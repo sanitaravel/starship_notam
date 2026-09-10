@@ -36,3 +36,11 @@ KEYWORD: str = os.environ.get("KEYWORD", "STARSHIP")
 RUNS_PER_HOUR: int = int(os.environ.get("RUNS_PER_HOUR", "2"))
 
 STATE_PATH: str = str(_PROJECT_ROOT / "telegram_chats.json")
+
+# --- FCC ELS scraper configuration ---
+
+FCC_ELS_SEARCH_URL: str = "https://apps.fcc.gov/oetcf/els/reports/GenericSearch.cfm"
+
+FCC_ELS_SEARCH_TERM: str = "Space Exploration"
+
+FCC_ELS_RECORD_LIMIT: int = 50

@@ -38,6 +38,7 @@ dependencies = [
 dev = [
     "pytest==8.4.2",
     "pytest-asyncio==1.2.0",
+    "hypothesis==6.140.3",
 ]
 
 # Fully pinned transitive dependencies, kept separate from the declared direct

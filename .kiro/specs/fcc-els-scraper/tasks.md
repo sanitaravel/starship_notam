@@ -19,7 +19,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
 
 ## Tasks
 
-- [ ] 1. Add test tooling and optional config constants
+- [x] 1. Add test tooling and optional config constants
   - [ ] 1.1 Add Hypothesis to the dev dependencies
     - In `pyproject.toml`, add `hypothesis` (pinned) to
       `[project.optional-dependencies].dev` alongside `pytest` and
