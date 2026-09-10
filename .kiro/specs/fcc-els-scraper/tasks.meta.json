@@ -136,6 +136,49 @@
         "chatSessionId": "sess_519348ed-14e3-4251-8d35-6f171867b167",
         "timestamp": 1789073824378
       }
+    ],
+    "6.1 Add `format_fcc_els_application` to `bot/formatting.py`": [
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789074568456
+      },
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789074751298
+      }
+    ],
+    "1.1 Add Hypothesis to the dev dependencies": [
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789074770310
+      },
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789074833083
+      }
+    ],
+    "6.2 Write property test for the formatter": [
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789074867167
+      },
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789075115573
+      }
+    ],
+    "6. Implement the ELS_Formatter": [
+      {
+        "executionId": "4d93c8f3-41b8-4fc6-8ebf-287d0bdb2a3c",
+        "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
+        "timestamp": 1789075121027
+      }
     ]
   }
 }

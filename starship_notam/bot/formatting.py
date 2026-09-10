@@ -11,6 +11,7 @@ Public functions:
     format_faa_activity(activity) -> str
     format_road_alert(alert) -> str
     format_beach_alert(alert) -> str
+    format_fcc_els_application(app) -> str
 """
 
 from __future__ import annotations
@@ -138,6 +139,58 @@ def format_beach_alert(alert: dict) -> str:
         secondary_text = period_text(secondary_period)
         if secondary_text:
             parts.append(f"<b>Запасной период:</b> {secondary_text}")
+
+    return "\n\n".join(parts)
+
+
+def format_fcc_els_application(app: dict) -> str:
+    """Format an FCC ELS application dict into a Russian-language HTML string.
+
+    All user-supplied text is passed through ``html.escape``. The full set of
+    raw detail fields (parsed from ``detail_json``, which may be a dict or a
+    JSON string) is rendered inside an expandable blockquote. Performs no
+    network I/O; uses standard library only.
+    """
+    parts = []
+    parts.append("<b>Новая заявка FCC ELS</b>")
+
+    applicant_name = str(app.get("applicant_name") or "")
+    file_number = str(app.get("file_number") or "")
+    call_sign = str(app.get("call_sign") or "")
+    status = str(app.get("status") or "")
+    receipt_date = str(app.get("receipt_date") or "")
+    status_date = str(app.get("status_date") or "")
+
+    parts.append(f"<b>Заявитель:</b> {html.escape(applicant_name)}")
+    parts.append(f"<b>Номер дела:</b> {html.escape(file_number)}")
+    if call_sign:
+        parts.append(f"<b>Позывной:</b> {html.escape(call_sign)}")
+    parts.append(f"<b>Статус:</b> {html.escape(status)}")
+    parts.append(f"<b>Дата получения:</b> {html.escape(receipt_date)}")
+    parts.append(f"<b>Дата статуса:</b> {html.escape(status_date)}")
+
+    # Detail fields: accept either a dict or a JSON string (mirrors how
+    # format_beach_alert handles periods_json).
+    detail = app.get("detail_json")
+    if isinstance(detail, str):
+        try:
+            detail = json.loads(detail)
+        except Exception:
+            detail = {}
+    if not isinstance(detail, dict):
+        detail = {}
+
+    if detail:
+        detail_lines = [
+            f"{html.escape(str(label))}: {html.escape(str(value))}"
+            for label, value in detail.items()
+        ]
+        expandable_bq = (
+            "<blockquote expandable>"
+            + "\n".join(detail_lines)
+            + "</blockquote>"
+        )
+        parts.append(expandable_bq)
 
     return "\n\n".join(parts)
 
