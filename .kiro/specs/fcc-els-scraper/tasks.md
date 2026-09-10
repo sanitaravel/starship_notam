@@ -255,8 +255,8 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       `mark_fcc_els_application_posted`, and append the three names to `__all__`
     - _Requirements: 9.5_
 
-- [ ] 9. Integrate into the orchestrator
-  - [ ] 9.1 Add `_process_fcc_els_applications` to `bot/orchestrator.py`
+- [~] 9. Integrate into the orchestrator
+  - [x] 9.1 Add `_process_fcc_els_applications` to `bot/orchestrator.py`
     - Add module-level imports for the three repo functions from
       `starship_notam.data`, `fetch_fcc_els_applications` from
       `starship_notam.scrapers`, and `format_fcc_els_application` from
@@ -275,7 +275,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       send succeeds; wrap every per-app step in `try/except`
     - _Requirements: 7.2, 7.4, 7.5, 7.6, 7.7, 7.8, 8.2, 8.3, 8.4, 8.5, 8.6, 9.6_
 
-  - [ ] 9.2 Call the new step from `generate_and_send`
+  - [x] 9.2 Call the new step from `generate_and_send`
     - Invoke `await _process_fcc_els_applications(chat_list)` immediately after
       `await _process_faa_activities(chat_list)` in `generate_and_send`
     - _Requirements: 8.1, 5.8_

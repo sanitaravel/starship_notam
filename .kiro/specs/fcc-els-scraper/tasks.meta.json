@@ -239,6 +239,30 @@
         "chatSessionId": "sess_6393399d-5f5b-413c-a652-f1f06866bec4",
         "timestamp": 1789076261499
       }
+    ],
+    "9.1 Add `_process_fcc_els_applications` to `bot/orchestrator.py`": [
+      {
+        "executionId": "bfdea5bf-6243-4f52-9ba3-a060d11ec434",
+        "chatSessionId": "sess_4aef5194-78bc-43eb-b872-5301d8c26ee0",
+        "timestamp": 1789076449985
+      },
+      {
+        "executionId": "bfdea5bf-6243-4f52-9ba3-a060d11ec434",
+        "chatSessionId": "sess_4aef5194-78bc-43eb-b872-5301d8c26ee0",
+        "timestamp": 1789076684519
+      }
+    ],
+    "9.2 Call the new step from `generate_and_send`": [
+      {
+        "executionId": "bfdea5bf-6243-4f52-9ba3-a060d11ec434",
+        "chatSessionId": "sess_4aef5194-78bc-43eb-b872-5301d8c26ee0",
+        "timestamp": 1789076452362
+      },
+      {
+        "executionId": "bfdea5bf-6243-4f52-9ba3-a060d11ec434",
+        "chatSessionId": "sess_4aef5194-78bc-43eb-b872-5301d8c26ee0",
+        "timestamp": 1789076688227
+      }
     ]
   }
 }

@@ -38,6 +38,7 @@ from starship_notam.bot.formatting import (
     build_notam_caption,
     format_beach_alert,
     format_faa_activity,
+    format_fcc_els_application,
     format_road_alert,
 )
 from starship_notam.bot.transport import (
@@ -55,15 +56,18 @@ from starship_notam.bot.reloader import (
 from starship_notam.data import (
     get_beach_alerts_needing_post,
     get_faa_activities_needing_post,
+    get_fcc_els_applications_needing_post,
     get_notams_needing_images,
     get_road_alerts_needing_post,
     init_db,
     mark_beach_posted,
     mark_faa_activity_posted,
+    mark_fcc_els_application_posted,
     mark_image_generated,
     mark_road_posted,
     save_beach_alert,
     save_faa_activity,
+    save_fcc_els_application,
     save_notam,
     save_road_alert,
 )
@@ -73,6 +77,7 @@ from starship_notam.parsers.notam_parser import parse_notam
 
 from starship_notam.scrapers import (
     fetch_faa_advisory,
+    fetch_fcc_els_applications,
     fetch_starbase_status,
     search_notams,
 )
@@ -278,6 +283,69 @@ async def _process_faa_activities(chat_list: list[str]) -> None:
             logger.exception(f"Failed to send FAA activity {activity}")
 
 
+async def _process_fcc_els_applications(chat_list: list[str]) -> None:
+    """Fetch FCC ELS applications, persist them, and post any needing posting."""
+    logger.info("Refreshing FCC ELS applications needing Telegram post")
+    try:
+        logger.info("Getting FCC ELS applications")
+        apps = await asyncio.to_thread(fetch_fcc_els_applications)
+        for app in apps or []:
+            try:
+                save_fcc_els_application(app, config.DB_PATH)
+            except Exception:
+                logger.exception(
+                    f"Failed to save FCC ELS application {app}"
+                )
+    except Exception:
+        logger.exception("Failed to fetch and parse FCC ELS applications")
+
+    fcc_pending = get_fcc_els_applications_needing_post(config.DB_PATH)
+    if len(fcc_pending) == 0:
+        logger.info("No FCC ELS applications needing Telegram post at this time")
+        return
+
+    logger.info(
+        f"Found {len(fcc_pending)} FCC ELS applications needing post to Telegram"
+    )
+    for app in fcc_pending:
+        try:
+            text = format_fcc_els_application(app)
+
+            message_ids = []
+            for chat_id in chat_list:
+                message_id = await send_message(chat_id, text)
+                if message_id:
+                    logger.info(f"Sent FCC ELS application to chat {chat_id}")
+                    message_ids.append(message_id)
+                else:
+                    logger.warning(
+                        f"Failed to send FCC ELS application to chat {chat_id}"
+                    )
+
+                await asyncio.sleep(5)
+
+            if message_ids:
+                logger.info(f"Marking FCC ELS application as posted: {app}")
+                try:
+                    mark_fcc_els_application_posted(
+                        app["file_number"],
+                        ",".join(str(mid) for mid in message_ids),
+                        config.DB_PATH,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        f"Failed to mark FCC ELS application as posted: {app}, reason: {e}"
+                    )
+            else:
+                logger.error(
+                    f"Failed to send FCC ELS application to any configured chat; "
+                    f"keeping unposted for retry: {app.get('file_number', '<unknown>')}"
+                )
+
+        except Exception:
+            logger.exception(f"Failed to send FCC ELS application {app}")
+
+
 def _ingest_starbase_alerts() -> None:
     """Fetch Starbase status and persist beach/road alerts."""
     logger.info("Refreshing Starbase alerts needing Telegram post")
@@ -385,6 +453,7 @@ async def generate_and_send(chat_list: Optional[list[str]] = None) -> None:
     chat_list = await _get_chat_list_with_fallback()
     await _process_notam_images(chat_list)
     await _process_faa_activities(chat_list)
+    await _process_fcc_els_applications(chat_list)
     _ingest_starbase_alerts()
     await _process_beach_alerts(chat_list)
     await _process_road_alerts(chat_list)
