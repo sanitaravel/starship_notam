@@ -180,8 +180,8 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 13_
     - _Requirements: 7.3_
 
-- [ ] 7. Implement the ELS_Scraper
-  - [ ] 7.1 Create date helpers in `scrapers/fcc_els_fetcher.py`
+- [~] 7. Implement the ELS_Scraper
+  - [x] 7.1 Create date helpers in `scrapers/fcc_els_fetcher.py`
     - Add pure helpers `_receipt_date_to(today=None)` (today as `mm/dd/yyyy`)
       and `_receipt_date_from(today=None)` (today − 1 calendar month, wrapping
       year and clamping the day to the target month's last valid day, formatted
@@ -202,7 +202,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 7_
     - _Requirements: 1.4, 1.5_
 
-  - [ ] 7.3 Implement `fetch_fcc_els_applications`
+  - [x] 7.3 Implement `fetch_fcc_els_applications`
     - Lazily import Selenium inside the function (`webdriver`, `Remote`, `By`,
       `WebDriverWait`, `expected_conditions as EC`); build headless
       `ChromeOptions` with the same flags as the NOTAM scraper
@@ -219,7 +219,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       raise nothing on any search/navigation failure
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 4.2, 4.3, 4.4, 4.5, 4.6, 9.1_
 
-  - [ ] 7.4 Implement per-row detail retrieval and merge
+  - [x] 7.4 Implement per-row detail retrieval and merge
     - For each row, retry `driver.get(row["current_detail_url"])` up to 3 times
       with a 30-second `page_load_timeout`; on success `detail =
       parse_fcc_els_detail_html(driver.page_source)`

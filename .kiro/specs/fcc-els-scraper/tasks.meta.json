@@ -179,6 +179,42 @@
         "chatSessionId": "sess_f93b2492-95ba-433b-ae5b-c4613834358f",
         "timestamp": 1789075121027
       }
+    ],
+    "7.1 Create date helpers in `scrapers/fcc_els_fetcher.py`": [
+      {
+        "executionId": "1009b0a6-3183-4b69-a750-c62f635904c0",
+        "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
+        "timestamp": 1789075503244
+      },
+      {
+        "executionId": "1009b0a6-3183-4b69-a750-c62f635904c0",
+        "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
+        "timestamp": 1789075841231
+      }
+    ],
+    "7.3 Implement `fetch_fcc_els_applications`": [
+      {
+        "executionId": "1009b0a6-3183-4b69-a750-c62f635904c0",
+        "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
+        "timestamp": 1789075505529
+      },
+      {
+        "executionId": "1009b0a6-3183-4b69-a750-c62f635904c0",
+        "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
+        "timestamp": 1789075844491
+      }
+    ],
+    "7.4 Implement per-row detail retrieval and merge": [
+      {
+        "executionId": "1009b0a6-3183-4b69-a750-c62f635904c0",
+        "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
+        "timestamp": 1789075507553
+      },
+      {
+        "executionId": "1009b0a6-3183-4b69-a750-c62f635904c0",
+        "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
+        "timestamp": 1789075847864
+      }
     ]
   }
 }
