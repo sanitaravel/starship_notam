@@ -1,9 +1,14 @@
+"""Pure NOTAM text parsing logic.
+
+This module contains deterministic, I/O-free functions for parsing ICAO NOTAM
+text, CARF/TFR-style messages, and Q-line qualifiers into structured dicts.
+"""
+
 import re
-import json
 from datetime import datetime
 from typing import Dict, Optional, List, Any
-from notam_logging import logger
-from notam_db import save_notam
+
+from starship_notam.core.logging import logger
 
 
 def _find_fields(text: str) -> Dict[str, str]:
@@ -187,7 +192,6 @@ def parse_notam(text: str) -> Dict[str, str]:
     if 'E' not in parsed:
         parsed['E'] = fields.get('E', '')
         logger.debug("E) field set from parsed fields")
-
 
     return parsed
 
@@ -500,30 +504,3 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
         out['C'] = out['validity_end']
 
     return out
-
-
-def save_notam_json(parsed: Dict[str, str], path) -> None:
-    """Persist parsed NOTAM. If `path` is a Path inside the notams/ dir we use its
-    stem as the NOTAM name and save into the SQLite DB. Kept the function name for
-    backwards compatibility with callers in this repo.
-    """
-    # derive a stable name from provided path (e.g. 'A0669_26.json' -> 'A0669_26')
-    try:
-        name = getattr(path, 'stem', None) or str(path)
-        # convert filesystem-safe names back to a display name if they used underscores
-        name = name
-    except Exception:
-        name = str(path)
-
-    try:
-        save_notam(name, parsed)
-        # logger.info(f"Saved parsed NOTAM to DB as: {name}")
-    except Exception as e:
-        logger.exception(f"Failed to save NOTAM to DB for {name}: {e}")
-
-
-if __name__ == '__main__':
-    sample = '''
-    !FDC 6/3895 ZHU TX..AIRSPACE BROWNSVILLE, TX..TEMPORARY FLIGHT RESTRICTIONS. PURSUANT TO 14 CFR SECTION 91.137(A)(1) GROUND HAZARD WI AN AREA DEFINED AS 255720N0970928W (BRO072011.9) TO 255728N0971011W (BRO071011.3) TO 255746N0971051W (BRO068010.8) TO 255815N0971128W (BRO065010.3) TO 255843N0971149W (BRO062010.2) TO 255923N0971147W (BRO059010.4) TO 255923N0971204W (BRO058010.2) TO 255832N0971643W (BRO050006.1) TO 255644N0971640W (BRO067005.4) TO 255720N0970928W (BRO072011.9) TO POINT OF ORIGIN SFC-5000FT AGL ONLY RELIEF ACFT OPS UNDER DIRECTION OF SPACEX ARE AUTH IN THE AIRSPACE. SPACEX, KYLE HURN TEL 956-346-8311 IS IN CHARGE OF ON SCENE EMERG RESPONSE ACTIVITY. HOUSTON/ZHU/ARTCC TEL 281-230-5560 IS THE FAA CDN FAC. 2607081350-2607160500
-    '''
-    print(parse_notam(sample))

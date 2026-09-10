@@ -1,11 +1,18 @@
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-import re
-from zoneinfo import ZoneInfo
-from notam_logging import logger
+"""Starbase beach and road closure HTML parsing.
 
-URL = "https://www.starbase.texas.gov/beach-road-access"
+Pure-function parser: accepts raw HTML, returns structured data.
+No I/O, no logging, no network imports.
+
+Public API:
+    parse_starbase_html(html: str) -> dict
+"""
+
+import re
+from datetime import datetime, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from bs4 import BeautifulSoup
 
 CENTRAL = ZoneInfo("America/Chicago")
 UTC = ZoneInfo("UTC")
@@ -24,13 +31,15 @@ NUMERIC_DATE_RANGE_RE = re.compile(
 )
 
 
-def _normalize_date_text(date_str):
+def _normalize_date_text(date_str: str) -> str:
+    """Remove timezone suffixes and collapse whitespace."""
     cleaned = TZ_SUFFIX_RE.sub("", date_str)
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
 
 
-def _normalize_time_text(time_text):
+def _normalize_time_text(time_text: str) -> str:
+    """Ensure space between digits and AM/PM."""
     return re.sub(r"(\d)([AP]M)$", r"\1 \2", time_text.strip(), flags=re.IGNORECASE)
 
 
@@ -43,7 +52,12 @@ def _normalize_year(value, default):
     return year
 
 
-def parse_datetime_range(date_str, year=None):
+def parse_datetime_range(date_str: str, year: int | None = None) -> tuple[datetime, datetime]:
+    """Parse a date range string into a (start_utc, end_utc) tuple.
+
+    Interprets times as US Central and converts to UTC.
+    Raises ValueError if the format is not recognized.
+    """
     if not year:
         year = datetime.now().year
 
@@ -85,7 +99,8 @@ def parse_datetime_range(date_str, year=None):
     return start.astimezone(UTC), end.astimezone(UTC)
 
 
-def _extract_route(description):
+def _extract_route(description: str | None) -> tuple[str | None, str | None]:
+    """Extract origin/destination from a route description string."""
     if not description:
         return None, None
 
@@ -101,26 +116,27 @@ def _extract_route(description):
     return None, None
 
 
-def _is_notice_card(element):
+def _is_notice_card(element: Any) -> bool:
+    """Check if a BeautifulSoup element is a notice card."""
     if element is None:
         return False
 
     if element.get("id") == "rich-notification":
         return True
 
-    # return False
     return (
         element.find("h3") is not None
         or element.find(class_="closure-dates") is not None
     )
 
 
-def _collect_notice_cards(container):
+def _collect_notice_cards(container: Any) -> list:
+    """Collect notice card elements from a container."""
     if container is None:
         return []
 
     cards = []
-    seen = set()
+    seen: set[int] = set()
 
     if _is_notice_card(container):
         seen.add(id(container))
@@ -135,21 +151,24 @@ def _collect_notice_cards(container):
     return cards
 
 
-def parse_notice_container(container, category=None):
+def parse_notice_container(container: Any, category: str | None = None) -> dict:
+    """Parse a notice container element into a structured dict."""
     title = None
     title_el = container.select_one("h3, h4, .notice-title")
     if title_el:
         title = title_el.get_text(" ", strip=True)
 
     description = None
-    description_el = container.select_one(".w-richtext p, .w-richtext, .rich-text p, .rich-text")
+    description_el = container.select_one(
+        ".w-richtext p, .w-richtext, .rich-text p, .rich-text"
+    )
     if description_el:
         description = description_el.get_text(" ", strip=True)
 
     if not description:
         description = title
 
-    periods = []
+    periods: list[dict] = []
     closure_dates = container.select_one(".closure-dates")
     if closure_dates:
         label = None
@@ -165,7 +184,7 @@ def parse_notice_container(container, category=None):
                 continue
 
             if "cms-small-text" in classes and label:
-                period = {
+                period: dict[str, Any] = {
                     "label": label,
                     "raw_date": text,
                 }
@@ -174,7 +193,7 @@ def parse_notice_container(container, category=None):
                     period["start_utc"] = start_dt.isoformat()
                     period["end_utc"] = end_dt.isoformat()
                 except Exception:
-                    logger.warning("Could not parse closure dates: %s", text)
+                    pass  # Silently skip unparseable dates (pure parser, no logging)
                 periods.append(period)
                 label = None
 
@@ -197,11 +216,12 @@ def parse_notice_container(container, category=None):
     }
 
 
-def parse_rich_notification(notification):
+def parse_rich_notification(notification: Any) -> list[dict]:
+    """Parse a rich notification element into a list of event dicts."""
     text = notification.get_text("\n", strip=True)
 
-    events = []
-    current = {}
+    events: list[dict] = []
+    current: dict[str, str] = {}
 
     for line in text.splitlines():
         if ":" not in line:
@@ -212,21 +232,18 @@ def parse_rich_notification(notification):
         value = value.strip()
 
         if key == "description":
-            # Finish previous event if it exists
             if current:
                 events.append(current)
             current = {"description": value}
-
         elif key == "date":
             current["date"] = value
-
         else:
             current[key] = value
 
     if current:
         events.append(current)
 
-    parsed_events = []
+    parsed_events: list[dict] = []
 
     for event in events:
         description = event.get("description")
@@ -256,7 +273,8 @@ def parse_rich_notification(notification):
     return parsed_events
 
 
-def parse_notice_card(card, category=None):
+def parse_notice_card(card: Any, category: str | None = None) -> dict | None:
+    """Dispatch to the correct parser for a notice card element."""
     if card.get("id") == "rich-notification":
         parsed = parse_rich_notification(card)
         if not parsed:
@@ -275,23 +293,61 @@ def parse_notice_card(card, category=None):
     return parse_notice_container(card, category=category)
 
 
-def get_starbase_status():
-    logger.info("Fetching Starbase beach and road status from %s", URL)
-    html = requests.get(URL, timeout=30).text
+def parse_road_notice_card(card: Any) -> list[dict]:
+    """Expand a road notice card into one road-delay dict per distinct event.
+
+    A single ``rich-notification`` element can contain several road delays
+    separated by blank lines (each with its own ``Description:`` / ``Date:``
+    pair). Collapsing them into one entry would drop every delay after the
+    first, so this returns a list with one self-contained dict per event.
+
+    Non-rich cards fall back to :func:`parse_notice_card`, which yields a
+    single entry.
+    """
+    if card.get("id") == "rich-notification":
+        parsed = parse_rich_notification(card)
+        delays: list[dict] = []
+        for event in parsed:
+            origin, destination = _extract_route(event.get("description"))
+            if origin is not None or destination is not None:
+                event["origin"] = origin
+                event["destination"] = destination
+            event.setdefault("title", event.get("description"))
+            event.setdefault("periods", [dict(event)])
+            delays.append(event)
+        return delays
+
+    parsed = parse_notice_card(card, category="road")
+    return [parsed] if parsed else []
+
+
+def parse_starbase_html(html: str) -> dict:
+    """Parse Starbase beach/road closure HTML into structured data.
+
+    Args:
+        html: Raw HTML string from the Starbase status page.
+
+    Returns:
+        Dictionary with keys:
+            - "beach": dict | None — parsed beach closure info
+            - "road_delays": list[dict] — parsed road delay entries
+    """
     soup = BeautifulSoup(html, "html.parser")
 
-    result = {
+    result: dict[str, Any] = {
         "beach": None,
-        "road_delays": []
+        "road_delays": [],
     }
 
     # ---------------- BEACH ----------------
     beach_container = soup.select_one(
-        ".beach-public-notice .notice-container, .beach-public-notice .notice-container-no-hover, .beach-updates, .notice-container-no-hover.beach-updates"
+        ".beach-public-notice .notice-container, "
+        ".beach-public-notice .notice-container-no-hover, "
+        ".beach-updates, "
+        ".notice-container-no-hover.beach-updates"
     )
 
     if beach_container:
-        logger.info("Found beach updates container, parsing notifications")
         cards = _collect_notice_cards(beach_container)
         if cards:
             result["beach"] = parse_notice_card(cards[0], category="beach")
@@ -304,39 +360,21 @@ def get_starbase_status():
 
         if cards:
             for card in cards:
-                parsed = parse_notice_card(card, category="road")
-                if parsed:
-                    result["road_delays"].append(parsed)
+                result["road_delays"].extend(parse_road_notice_card(card))
         else:
             for item in soup.select("#road-closure .cms-item-2"):
-                logger.info("Parsing road closure item")
                 container = item.select_one(".notice-container-no-hover.road-updates")
                 if not container:
                     continue
 
                 empty = container.select_one(".empty-state")
                 if empty and "w-condition-invisible" not in (empty.get("class") or []):
-                    logger.info("Found empty road closure item, skipping")
                     continue
 
                 notif = container.select_one("#rich-notification")
                 if not notif:
-                    logger.warning("Found road closure item without notification, skipping")
                     continue
 
-                parsed = parse_notice_card(notif, category="road")
-                if parsed:
-                    result["road_delays"].append(parsed)
+                result["road_delays"].extend(parse_road_notice_card(notif))
 
     return result
-
-
-if __name__ == "__main__":
-    data = get_starbase_status()
-
-    print("Beach:")
-    print(data["beach"])
-
-    for i, d in enumerate(data["road_delays"]):
-        print(f"Delay {i+1}:")
-        print(d)

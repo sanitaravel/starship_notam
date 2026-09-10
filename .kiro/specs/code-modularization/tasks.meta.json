@@ -1,0 +1,91 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "11.1 Create test infrastructure and `tests/conftest.py`": [
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791138678
+      },
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791660523
+      }
+    ],
+    "11.2 Write parser layer unit tests": [
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791665485
+      },
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791904875
+      }
+    ],
+    "11.3 Write data layer unit tests": [
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791666906
+      },
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791905981
+      }
+    ],
+    "11.4 Write bot formatting unit tests": [
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791667496
+      },
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791906896
+      }
+    ],
+    "11. Write unit tests for each layer": [
+      {
+        "executionId": "3f3ae5e7-d3d9-476b-82fe-bd6189ad5f98",
+        "chatSessionId": "sess_f62bffa2-cb1c-481a-9964-efd228bcf00a",
+        "timestamp": 1788791907008
+      }
+    ],
+    "12.1 Write import isolation and dependency boundary tests": [
+      {
+        "executionId": "0405c42c-6cdd-4483-9f31-24a062f7cebd",
+        "chatSessionId": "sess_d0f23646-7a6f-4dd9-ac2c-a3d5f9054cbd",
+        "timestamp": 1788792509859
+      },
+      {
+        "executionId": "0405c42c-6cdd-4483-9f31-24a062f7cebd",
+        "chatSessionId": "sess_d0f23646-7a6f-4dd9-ac2c-a3d5f9054cbd",
+        "timestamp": 1788792855272
+      }
+    ],
+    "12.2 Write backward compatibility tests": [
+      {
+        "executionId": "0405c42c-6cdd-4483-9f31-24a062f7cebd",
+        "chatSessionId": "sess_d0f23646-7a6f-4dd9-ac2c-a3d5f9054cbd",
+        "timestamp": 1788792510612
+      },
+      {
+        "executionId": "0405c42c-6cdd-4483-9f31-24a062f7cebd",
+        "chatSessionId": "sess_d0f23646-7a6f-4dd9-ac2c-a3d5f9054cbd",
+        "timestamp": 1788792856269
+      }
+    ],
+    "12. Write integration tests": [
+      {
+        "executionId": "0405c42c-6cdd-4483-9f31-24a062f7cebd",
+        "chatSessionId": "sess_d0f23646-7a6f-4dd9-ac2c-a3d5f9054cbd",
+        "timestamp": 1788792856491
+      }
+    ]
+  }
+}

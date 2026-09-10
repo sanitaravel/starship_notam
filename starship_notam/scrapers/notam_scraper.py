@@ -1,17 +1,50 @@
-from selenium import webdriver
-from selenium.webdriver import Remote
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from pathlib import Path
+"""Selenium-based FAA NOTAM search automation.
+
+This module drives the FAA NOTAM Search web application to run a free-text
+search for a keyword and extract the resulting NOTAM rows (including each row's
+full ICAO message).
+
+The heavy Selenium dependency is imported lazily inside :func:`search_notams`
+so that importing this module does not require Selenium to be installed. This
+keeps the scraper layer independently importable in test environments.
+
+The scraper performs no persistence: it returns the scraped results to the
+caller and raises an exception (or returns an empty list) on failure.
+"""
+
 import os
 import time
-from notam_parser import parse_notam, save_notam_json
-from notam_logging import logger
 
-DEBUG_MODE = os.environ.get('DEBUG_MODE') == '1'
+from starship_notam.core.logging import logger
 
-def search_notams_selenium(keyword: str) -> list[dict]:
+# Whether to run a local Chrome instance (DEBUG_MODE) or connect to a remote
+# Selenium grid. Read once at import time to preserve prior behavior.
+DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
+
+
+def search_notams(keyword: str) -> list[dict]:
+    """Search the FAA NOTAM site for ``keyword`` and return structured results.
+
+    Each returned dict contains the keys: ``location``, ``number``, ``class``,
+    ``start_date_utc``, ``end_date_utc``, ``condition`` and ``icao_message``
+    (a string, which may be empty).
+
+    Selenium is imported lazily so that this module can be imported without the
+    ``selenium`` package installed. This function does NOT persist any data.
+
+    Raises:
+        ImportError: if Selenium is not installed when this function is called.
+        Exception: propagated from the underlying WebDriver on unrecoverable
+            navigation/setup errors.
+    """
+    # Lazy imports — selenium is an optional heavy dependency only needed at
+    # call time, not at module import time.
+    from selenium import webdriver
+    from selenium.webdriver import Remote
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.ui import WebDriverWait
+
     options = webdriver.ChromeOptions()
     # run Chrome in headless mode for automated runs
     options.add_argument("--headless")
@@ -22,10 +55,11 @@ def search_notams_selenium(keyword: str) -> list[dict]:
     # make headless less detectable
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
+    options.add_experimental_option("useAutomationExtension", False)
     # set a common user-agent to avoid headless detection
     options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+    )
 
     if DEBUG_MODE:
         driver = webdriver.Chrome(options=options)
@@ -48,14 +82,15 @@ def search_notams_selenium(keyword: str) -> list[dict]:
             logger.info("Checking for consent/acknowledgement dialog...")
             # wait for page to be interactive
             try:
-                WebDriverWait(driver, 20).until(lambda d: d.execute_script(
-                    'return document.readyState') == 'complete')
+                WebDriverWait(driver, 20).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
             except Exception:
                 pass
 
             # First try a JS-based click to dismiss modal (works in headless)
             try:
-                js_try_click = '''
+                js_try_click = """
                 (function(){
                     var texts = ["I've read and understood", "I've read", 'I agree', 'Agree', 'Accept'];
                     for (var t of texts){
@@ -73,7 +108,7 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                     }
                     return false;
                 })();
-                '''
+                """
                 clicked = driver.execute_script(js_try_click)
                 if clicked:
                     logger.info("Dismissed consent dialog via JS click")
@@ -89,11 +124,11 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                     for xp in consent_xpaths:
                         try:
                             el = WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.XPATH, xp)))
+                                EC.element_to_be_clickable((By.XPATH, xp))
+                            )
                             el.click()
                             consent_clicked = True
-                            logger.info(
-                                f"Clicked consent element using xpath: {xp}")
+                            logger.info(f"Clicked consent element using xpath: {xp}")
                             break
                         except Exception:
                             continue
@@ -106,8 +141,7 @@ def search_notams_selenium(keyword: str) -> list[dict]:
 
         # open the Location dropdown and select the "Free text" option if present
         try:
-            logger.info(
-                "Opening Location dropdown and selecting 'Free text' if available...")
+            logger.info("Opening Location dropdown and selecting 'Free text' if available...")
             dropdown_btn_xpaths = [
                 "//button[contains(@class,'selectpicker') and contains(@title,'Location')]",
                 "//button[contains(@class,'dropdown-toggle') and contains(.,'Location')]",
@@ -116,11 +150,11 @@ def search_notams_selenium(keyword: str) -> list[dict]:
             for db_xp in dropdown_btn_xpaths:
                 try:
                     db = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, db_xp)))
+                        EC.element_to_be_clickable((By.XPATH, db_xp))
+                    )
                     db.click()
                     dropdown_clicked = True
-                    logger.info(
-                        f"Clicked Location dropdown using xpath: {db_xp}")
+                    logger.info(f"Clicked Location dropdown using xpath: {db_xp}")
                     break
                 except Exception:
                     continue
@@ -136,7 +170,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
             for it_xp in item_xpaths:
                 try:
                     itm = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, it_xp)))
+                        EC.element_to_be_clickable((By.XPATH, it_xp))
+                    )
                     itm.click()
                     free_selected = True
                     logger.info(f"Selected 'Free text' using xpath: {it_xp}")
@@ -144,8 +179,7 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                 except Exception:
                     continue
             if not free_selected:
-                logger.info(
-                    "'Free text' option not found in Location dropdown.")
+                logger.info("'Free text' option not found in Location dropdown.")
         except Exception as e:
             logger.info(f"Location dropdown error: {e}")
 
@@ -154,7 +188,11 @@ def search_notams_selenium(keyword: str) -> list[dict]:
             logger.info("Clicking 'Free Text' tab (if present)...")
             free_text_tab = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'free text')]"))
+                    (
+                        By.XPATH,
+                        "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'free text')]",
+                    )
+                )
             )
             free_text_tab.click()
             logger.info("Clicked 'Free Text' tab")
@@ -174,7 +212,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
         for xp in input_xpaths:
             try:
                 search_box = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, xp)))
+                    EC.element_to_be_clickable((By.XPATH, xp))
+                )
                 found_xp = xp
                 break
             except Exception:
@@ -186,13 +225,16 @@ def search_notams_selenium(keyword: str) -> list[dict]:
             except Exception:
                 pass
             search_box.send_keys(keyword)
-            logger.info(
-                f"Filled free-text input (xpath used: {found_xp}) with '{keyword}'")
+            logger.info(f"Filled free-text input (xpath used: {found_xp}) with '{keyword}'")
         else:
             # fallback: set value via JS on the expected model input
             try:
-                driver.execute_script("var el = document.querySelector('input[ng-model*=" + '"freeFormText"' +
-                                      "]'); if(el){el.value = arguments[0]; el.dispatchEvent(new Event('input'));}", keyword)
+                driver.execute_script(
+                    "var el = document.querySelector('input[ng-model*="
+                    + '"freeFormText"'
+                    + "]'); if(el){el.value = arguments[0]; el.dispatchEvent(new Event('input'));}",
+                    keyword,
+                )
                 logger.info("Filled free-text input via JS fallback")
             except Exception as e:
                 logger.info(f"Could not fill free-text input: {e}")
@@ -207,7 +249,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
         for xp in search_xpaths:
             try:
                 btn = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, xp)))
+                    EC.element_to_be_clickable((By.XPATH, xp))
+                )
                 btn.click()
                 search_clicked = True
                 logger.info(f"Clicked Search button using xpath: {xp}")
@@ -218,24 +261,23 @@ def search_notams_selenium(keyword: str) -> list[dict]:
         if not search_clicked:
             try:
                 # last resort: click first .btn.btn-primary
-                btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable(
-                    (By.CSS_SELECTOR, 'button.btn.btn-primary')))
+                btn = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btn.btn-primary"))
+                )
                 btn.click()
-                logger.info(
-                    "Clicked Search button using CSS fallback .btn.btn-primary")
+                logger.info("Clicked Search button using CSS fallback .btn.btn-primary")
             except Exception:
-                logger.info(
-                    "Could not click Search button (no clickable selector found)")
+                logger.info("Could not click Search button (no clickable selector found)")
 
         # Wait for results table rows to appear
         try:
             rows = WebDriverWait(driver, 20).until(
                 EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "table.table tbody tr.resultRow"))
+                    (By.CSS_SELECTOR, "table.table tbody tr.resultRow")
+                )
             )
         except Exception:
-            rows = driver.find_elements(
-                By.CSS_SELECTOR, "table.table tbody tr.resultRow")
+            rows = driver.find_elements(By.CSS_SELECTOR, "table.table tbody tr.resultRow")
 
         # Parse each result row into structured fields and extract full NOTAM after clicking
         data = []
@@ -246,7 +288,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                 # re-find the row by index to avoid stale element
                 row_xpath = f"(//table[contains(@class,'table')]//tbody//tr[contains(@class,'resultRow')])[{i+1}]"
                 tr = WebDriverWait(driver, 20).until(
-                    EC.element_to_be_clickable((By.XPATH, row_xpath)))
+                    EC.element_to_be_clickable((By.XPATH, row_xpath))
+                )
                 # read basic columns before clicking
                 tds = tr.find_elements(By.TAG_NAME, "td")
 
@@ -266,14 +309,14 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                     "icao_message": "",
                 }
                 logger.info(
-                    f"Processing row {i+1}/{total}: {entry.get('number', '<no-number>')} at {entry.get('location', '')}")
+                    f"Processing row {i+1}/{total}: {entry.get('number', '<no-number>')} at {entry.get('location', '')}"
+                )
                 # click the row to open details
                 try:
                     tr.click()
                 except Exception:
                     try:
-                        driver.execute_script(
-                            "arguments[0].scrollIntoView(true);", tr)
+                        driver.execute_script("arguments[0].scrollIntoView(true);", tr)
                         tr.click()
                     except Exception:
                         pass
@@ -284,7 +327,9 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                     prev_text = ""
                     try:
                         prev_el = driver.find_element(
-                            By.XPATH, "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]")
+                            By.XPATH,
+                            "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]",
+                        )
                         prev_text = prev_el.text.strip()
                     except Exception:
                         prev_text = ""
@@ -292,14 +337,20 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                     # wait for the element to be present first
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located(
-                            (By.XPATH, "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]"))
+                            (
+                                By.XPATH,
+                                "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]",
+                            )
+                        )
                     )
 
                     # then wait (short) until the element's text is non-empty and differs
                     def _non_empty_and_changed(drv):
                         try:
                             el = drv.find_element(
-                                By.XPATH, "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]")
+                                By.XPATH,
+                                "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]",
+                            )
                             txt = el.text.strip()
                             if not txt:
                                 return False
@@ -316,22 +367,25 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                         pass
 
                     icao_el = driver.find_element(
-                        By.XPATH, "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]")
+                        By.XPATH,
+                        "//span[contains(@ng-bind-html,'selectedNOTAM.icaoMessage') or contains(@ng-bind-html,'globalScope.selectedNOTAM.traditionalMessage')]",
+                    )
                     entry["icao_message"] = icao_el.text.strip()
-                    logger.info(
-                        f"Extracted ICAO message ({len(entry['icao_message'])} chars)")
+                    logger.info(f"Extracted ICAO message ({len(entry['icao_message'])} chars)")
                 except Exception:
                     # try alternate selector
                     try:
                         icao_el = driver.find_element(
-                            By.CSS_SELECTOR, "span[ng-bind-html*='selectedNOTAM.icaoMessage'], span[ng-bind-html*='globalScope.selectedNOTAM.traditionalMessage']")
+                            By.CSS_SELECTOR,
+                            "span[ng-bind-html*='selectedNOTAM.icaoMessage'], span[ng-bind-html*='globalScope.selectedNOTAM.traditionalMessage']",
+                        )
                         entry["icao_message"] = icao_el.text.strip()
                         logger.info(
-                            f"Extracted ICAO message via CSS ({len(entry['icao_message'])} chars)")
+                            f"Extracted ICAO message via CSS ({len(entry['icao_message'])} chars)"
+                        )
                     except Exception:
                         entry["icao_message"] = ""
-                        logger.info(
-                            "Could not extract ICAO message for this row")
+                        logger.info("Could not extract ICAO message for this row")
                         # final fallback: try to read from page JS variables (Angular/globalScope)
                         try:
                             js_script = (
@@ -342,15 +396,14 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                             if js_val:
                                 entry["icao_message"] = str(js_val).strip()
                                 logger.info(
-                                    f"Extracted ICAO message via JS ({len(entry['icao_message'])} chars)")
+                                    f"Extracted ICAO message via JS ({len(entry['icao_message'])} chars)"
+                                )
                             else:
                                 entry["icao_message"] = ""
-                                logger.info(
-                                    "Could not extract ICAO message for this row")
+                                logger.info("Could not extract ICAO message for this row")
                         except Exception:
                             entry["icao_message"] = ""
-                            logger.info(
-                                "Could not extract ICAO message for this row")
+                            logger.info("Could not extract ICAO message for this row")
 
                 data.append(entry)
 
@@ -364,7 +417,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                     for bx in back_xpaths:
                         try:
                             b = WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.XPATH, bx)))
+                                EC.element_to_be_clickable((By.XPATH, bx))
+                            )
                             b.click()
                             clicked_back = True
                             break
@@ -374,8 +428,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                         # try closing detail pane via ESC
                         try:
                             from selenium.webdriver.common.keys import Keys
-                            driver.find_element(
-                                By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+
+                            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
                         except Exception:
                             pass
                 except Exception:
@@ -384,7 +438,8 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                 # wait for rows to be present again before next iteration
                 WebDriverWait(driver, 20).until(
                     EC.presence_of_all_elements_located(
-                        (By.CSS_SELECTOR, "table.table tbody tr.resultRow"))
+                        (By.CSS_SELECTOR, "table.table tbody tr.resultRow")
+                    )
                 )
 
             except Exception:
@@ -392,32 +447,6 @@ def search_notams_selenium(keyword: str) -> list[dict]:
                 continue
 
         results = data
-
-        # save each ICAO message to a file inside `notams/`
-        try:
-            out_dir = Path("notams")
-            out_dir.mkdir(exist_ok=True)
-            for idx, entry in enumerate(results, 1):
-                raw_name = entry.get('number') or entry.get(
-                    'location') or f'notam_{idx}'
-                # Replace forward slash with underscore so filename is filesystem-safe
-                # and remove any remaining unsafe characters while keeping letters,
-                # digits, dot, underscore and dash.
-                replaced = raw_name.replace('/', '_')
-                safe = ''.join(c for c in replaced if c.isalnum()
-                               or c in ('_', '-', '.')).strip()
-                if not safe:
-                    safe = replaced or f'notam_{idx}'
-                filename = f"{safe}.json"
-                path = out_dir / filename
-                try:
-                    parsed = parse_notam(entry.get('icao_message', ''))
-                    save_notam_json(parsed, path)
-                except Exception as e:
-                    logger.info(
-                        f"Failed to save NOTAM JSON for {raw_name}: {e}")
-        except Exception:
-            pass
 
     finally:
         # give a short pause so the browser stays visible briefly
@@ -428,5 +457,5 @@ def search_notams_selenium(keyword: str) -> list[dict]:
 
 
 if __name__ == "__main__":
-    notams = search_notams_selenium("STARSHIP")
+    notams = search_notams("STARSHIP")
     logger.info(f"Total NOTAMs extracted: {len(notams)}")

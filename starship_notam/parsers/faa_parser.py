@@ -1,17 +1,33 @@
+"""FAA advisory HTML parsing.
+
+Extracts planned launch/reentry information from the FAA System Operations
+advisory page HTML. This module is a pure-function parser: it accepts an HTML
+string and returns structured data without performing any network, database,
+or filesystem operations.
+"""
+
+from __future__ import annotations
+
 import re
-import requests
+
 from bs4 import BeautifulSoup
-from notam_db import save_faa_activity
-from notam_logging import logger
 
-url = "https://www.fly.faa.gov/adv/adv_spt"
 
-def parse_faa_advisory():
-    logger.info("Fetching FAA advisory from %s", url)
+def parse_faa_advisory_html(html: str) -> list[dict]:
+    """Parse FAA advisory HTML and return a list of launch dictionaries.
 
-    html = requests.get(url, timeout=30).text
+    Parameters
+    ----------
+    html : str
+        Raw HTML content from the FAA advisory page.
+
+    Returns
+    -------
+    list[dict]
+        Each dict contains keys: ``mission`` (str), ``primary_window``
+        (str | None), and ``backup_window`` (str | None).
+    """
     soup = BeautifulSoup(html, "html.parser")
-
     text = soup.get_text("\n")
 
     # Extract the launch block from either advisory layout.
@@ -20,7 +36,7 @@ def parse_faa_advisory():
         r"AIRSPACE FLOW PROGRAM\(S\) PLANNED:\s*(?:NONE\s*)?(.*?)(?:FLIGHT CHECK\(S\):|VIP MOVEMENT\(S\):|$)",
     ]
 
-    block = None
+    block: str | None = None
     for pattern in launch_block_patterns:
         match = re.search(pattern, text, re.DOTALL)
         if match:
@@ -28,14 +44,11 @@ def parse_faa_advisory():
             break
 
     if not block:
-        logger.error("Launch section not found in the FAA advisory")
-        raise RuntimeError("Launch section not found")
+        return []
 
-    logger.info("Launch section found, parsing launches")
-
-    # Parse launches
-    launches = []
-    current = None
+    # Parse individual launches from the block text.
+    launches: list[dict] = []
+    current: dict | None = None
     launch_started = False
 
     for line in block.splitlines():
@@ -67,14 +80,11 @@ def parse_faa_advisory():
             current = {
                 "mission": line,
                 "primary_window": None,
-                "backup_window": None
+                "backup_window": None,
             }
             launch_started = True
 
     if current:
         launches.append(current)
-    
-    logger.info("Parsed %d launches from the FAA advisory", len(launches))
-    # Save to DB
-    for launch in launches:
-        save_faa_activity(launch)
+
+    return launches
