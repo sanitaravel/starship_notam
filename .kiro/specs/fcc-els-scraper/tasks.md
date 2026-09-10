@@ -112,7 +112,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
 - [ ] 4. Implement the ELS_Repository
-  - [ ] 4.1 Create `data/fcc_els_repo.py` with `save_fcc_els_application`
+  - [x] 4.1 Create `data/fcc_els_repo.py` with `save_fcc_els_application`
     - Module-level imports only: `hashlib`, `json`, `typing`,
       `from starship_notam.core.logging import logger`, and
       `from starship_notam.data.connection import get_connection, init_db,
@@ -129,7 +129,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       in `finally`
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 9.3_
 
-  - [ ] 4.2 Implement the query and mark functions in the same module
+  - [x] 4.2 Implement the query and mark functions in the same module
     - `get_fcc_els_applications_needing_post(db_path=None)` selects the full row
       set with `telegram_posted = 0` ordered by `created_at`, returning
       `dict(row)` per row (including `detail_json`)
@@ -138,7 +138,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       utc_now_iso()`, and `telegram_message_id` WHERE `file_number = ?`
     - _Requirements: 5.6, 7.1, 9.3_
 
-  - [ ] 4.3 Write property tests for the repository
+  - [x] 4.3 Write property tests for the repository
     - Create `tests/unit/test_data/test_fcc_els_repo.py` using a `tmp_path`
       `db_path` (matching existing repo tests)
     - **Property 8: Payload hash is key-order independent** — _Validates: Requirements 5.2_
@@ -149,7 +149,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 8, 9, 10, 11, 12_
     - _Requirements: 5.1, 5.2, 5.4, 5.5, 6.4, 7.1_
 
-  - [ ] 4.4 Write repository example tests
+  - [x] 4.4 Write repository example tests
     - Insert sets `telegram_posted = 0` with timestamps and hash (Req 5.3);
       `mark_*_posted` populates the three Telegram columns (Req 5.6); a forced
       DB error causes rollback + raise with no partial row (Req 5.7)
