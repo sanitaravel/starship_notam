@@ -215,6 +215,30 @@
         "chatSessionId": "sess_957e2310-b76b-49a0-88a9-55a45f3b7299",
         "timestamp": 1789075847864
       }
+    ],
+    "8.1 Export the scraper function from `scrapers/__init__.py`": [
+      {
+        "executionId": "57fc83b2-1a2e-4829-8ddc-c5947095056e",
+        "chatSessionId": "sess_6393399d-5f5b-413c-a652-f1f06866bec4",
+        "timestamp": 1789076128483
+      },
+      {
+        "executionId": "57fc83b2-1a2e-4829-8ddc-c5947095056e",
+        "chatSessionId": "sess_6393399d-5f5b-413c-a652-f1f06866bec4",
+        "timestamp": 1789076259284
+      }
+    ],
+    "8.2 Export the repository functions from `data/__init__.py`": [
+      {
+        "executionId": "57fc83b2-1a2e-4829-8ddc-c5947095056e",
+        "chatSessionId": "sess_6393399d-5f5b-413c-a652-f1f06866bec4",
+        "timestamp": 1789076130619
+      },
+      {
+        "executionId": "57fc83b2-1a2e-4829-8ddc-c5947095056e",
+        "chatSessionId": "sess_6393399d-5f5b-413c-a652-f1f06866bec4",
+        "timestamp": 1789076261499
+      }
     ]
   }
 }

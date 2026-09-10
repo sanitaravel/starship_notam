@@ -242,14 +242,14 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 6_
     - _Requirements: 1.2, 1.3, 1.6, 1.7, 1.9, 3.2, 3.3, 3.6, 3.7, 4.1, 4.2, 4.4, 4.5, 4.6_
 
-- [ ] 8. Wire the new units into package exports
-  - [ ] 8.1 Export the scraper function from `scrapers/__init__.py`
+- [~] 8. Wire the new units into package exports
+  - [x] 8.1 Export the scraper function from `scrapers/__init__.py`
     - Add `from .fcc_els_fetcher import fetch_fcc_els_applications` and append
       `"fetch_fcc_els_applications"` to `__all__`, matching the existing export
       pattern
     - _Requirements: 9.5_
 
-  - [ ] 8.2 Export the repository functions from `data/__init__.py`
+  - [x] 8.2 Export the repository functions from `data/__init__.py`
     - Add imports for `save_fcc_els_application`,
       `get_fcc_els_applications_needing_post`, and
       `mark_fcc_els_application_posted`, and append the three names to `__all__`
