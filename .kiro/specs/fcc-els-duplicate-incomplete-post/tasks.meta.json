@@ -1,0 +1,23 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "Falsifying example: test_empty_detail_deferred_then_single_post_when_populated(file_number='1514-EX-ST-2026', empty_json=None). AssertionError: empty-detail app '1514-EX-ST-2026' (detail_json=None) is post-eligible but should be deferred (Req 2.1). get_fcc_els_applications_needing_post returned the empty-detail row (telegram_posted=0, WHERE clause ignores detail completeness). The empty representation also generalizes to detail_json in {None, '', '   ', '{}'} and any file_number. This confirms the bug: the incomplete row is post-eligible, and the empty->populated save resets telegram_posted to 0, producing a duplicate second post for the same file_number.",
+      "lastRunTimestamp": 1789152346553
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "9d16261b-4859-4c93-a9ad-9bd0d5c58ae9",
+        "chatSessionId": "sess_0ed45ee8-b2eb-4872-b27d-76e8985e78b1",
+        "timestamp": 1789152167584
+      },
+      {
+        "executionId": "9d16261b-4859-4c93-a9ad-9bd0d5c58ae9",
+        "chatSessionId": "sess_0ed45ee8-b2eb-4872-b27d-76e8985e78b1",
+        "timestamp": 1789152372631
+      }
+    ]
+  }
+}
