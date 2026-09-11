@@ -15,6 +15,21 @@ from starship_notam.core.logging import logger
 from starship_notam.data.connection import get_connection, init_db, utc_now_iso
 
 
+def _is_empty_detail_json(value: Optional[str]) -> bool:
+    """Return True when a ``detail_json`` value represents an empty detail.
+
+    Single source of truth for the "empty detail" test used to gate
+    post-eligibility in :func:`get_fcc_els_applications_needing_post`. A value
+    is empty when it is ``NULL``/``None``, empty/whitespace-only (all Python
+    whitespace, including tabs and newlines), or the empty JSON object
+    (``'{}'``, ignoring surrounding whitespace).
+    """
+    if value is None:
+        return True
+    stripped = value.strip()
+    return stripped == "" or stripped == "{}"
+
+
 def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> None:
     """Insert or update an FCC ELS application by *file_number*.
 
@@ -182,10 +197,18 @@ def get_fcc_els_applications_needing_post(
             """
         )
         rows = cur.fetchall()
+        # Exclude empty-detail rows in Python using ``_is_empty_detail_json`` as
+        # the single source of truth. SQLite's ``TRIM`` only strips ASCII spaces
+        # (not tabs/newlines), so gating in SQL would diverge from the Python
+        # helper on whitespace-only ``detail_json``; filtering here keeps the
+        # "empty detail" definition in exactly one place (Requirement 2.1).
+        result = [
+            dict(r) for r in rows if not _is_empty_detail_json(r["detail_json"])
+        ]
         logger.debug(
-            "Found %d FCC ELS applications needing Telegram posting", len(rows)
+            "Found %d FCC ELS applications needing Telegram posting", len(result)
         )
-        return [dict(r) for r in rows]
+        return result
     finally:
         conn.close()
 

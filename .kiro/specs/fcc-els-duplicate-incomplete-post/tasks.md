@@ -33,9 +33,9 @@
   - Mark task complete when tests are written, run, and passing on unfixed code
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 3. Fix for duplicate incomplete-then-complete FCC ELS post
+- [x] 3. Fix for duplicate incomplete-then-complete FCC ELS post
 
-  - [ ] 3.1 Gate post-eligibility on non-empty detail
+  - [x] 3.1 Gate post-eligibility on non-empty detail
     - In `get_fcc_els_applications_needing_post` (`starship_notam/data/fcc_els_repo.py`), keep the existing `telegram_posted = 0` filter and `ORDER BY created_at`, and additionally exclude rows whose detail is empty: `detail_json IS NULL OR TRIM(detail_json) = '' OR TRIM(detail_json) = '{}'`
     - Add a small helper (e.g. `_is_empty_detail_json(value)`) that mirrors the SQL predicate, as a single source of truth for the "empty detail" test and for use in tests
     - Do NOT change `save_fcc_els_application`: the empty→populated transition still bumps `payload_hash` and resets `telegram_posted = 0`; because the empty-detail row was never posted, the now-populated row is simply posted once
@@ -45,7 +45,7 @@
     - _Preservation: Preservation Requirements from design (populated-first, no-change re-scrape, new populated app, header/link rendering, other content types unaffected)_
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 3.2 Verify bug condition exploration test now passes
+  - [x] 3.2 Verify bug condition exploration test now passes
     - **Property 1: Expected Behavior** - Single Complete Post For Deferred Application
     - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
     - The test from task 1 encodes the expected behavior
@@ -54,7 +54,7 @@
     - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 3.3 Verify preservation tests still pass
+  - [x] 3.3 Verify preservation tests still pass
     - **Property 2: Preservation** - Non-Deferred And Non-FCC-ELS Behavior Unchanged
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run preservation property tests from step 2
