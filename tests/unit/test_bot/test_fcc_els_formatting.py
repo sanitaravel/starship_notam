@@ -65,14 +65,25 @@ _ALLOWED_TAGS = [
     "</blockquote>",
 ]
 
+# The two detail keys the formatter renders inside the expandable blockquote:
+# the STA_Print "purpose of operation" field and the parser's "Explanation" key.
+_PURPOSE_KEY = "Please explain the purpose of operation"
+_EXPLANATION_KEY = "Explanation"
+
 
 @st.composite
 def _detail_strategy(draw):
-    """Generate a detail mapping (label -> value) with HTML-special content."""
-    labels = draw(
-        st.lists(_htmlish_text(), min_size=0, max_size=5, unique=True)
-    )
-    return {label: draw(_htmlish_text()) for label in labels}
+    """Generate a detail mapping with HTML-special content.
+
+    Only the two keys the formatter reads (purpose + explanation) are populated,
+    each optionally present, since any other keys are ignored by the formatter.
+    """
+    detail = {}
+    if draw(st.booleans()):
+        detail[_PURPOSE_KEY] = draw(_htmlish_text())
+    if draw(st.booleans()):
+        detail[_EXPLANATION_KEY] = draw(_htmlish_text())
+    return detail
 
 
 @st.composite
@@ -86,12 +97,23 @@ def _app_strategy(draw):
         app["detail_json"] = json.dumps(detail, ensure_ascii=False)
     else:
         app["detail_json"] = detail
+    # Optionally include a detail URL so the link-rendering path is exercised.
+    if draw(st.booleans()):
+        app["current_detail_url"] = draw(_htmlish_text())
     app["_detail_source"] = detail  # kept for assertions; ignored by formatter
     return app
 
 
 def _strip_allowed_tags(text: str) -> str:
-    """Remove the fixed set of allowed structural tags from *text*."""
+    """Remove the fixed set of allowed structural tags from *text*.
+
+    The optional source link is emitted as ``<a href="URL">...</a>`` where URL
+    is produced by ``html.escape(..., quote=True)`` (so it contains no raw
+    ``<``/``>``/``&``). We strip the whole opening anchor tag and the closing
+    tag before checking for leaked special characters.
+    """
+    text = re.sub(r'<a href="[^"]*">', "", text)
+    text = text.replace("</a>", "")
     for tag in _ALLOWED_TAGS:
         text = text.replace(tag, "")
     return text
@@ -162,9 +184,9 @@ def test_formatter_escapes_special_chars_in_scalar_fields():
     assert "0123<EX>" not in out
 
 
-def test_formatter_escapes_special_chars_in_detail_values():
-    """Detail labels/values containing special chars are escaped inside the
-    expandable blockquote."""
+def test_formatter_renders_purpose_and_explanation_escaped():
+    """The purpose and explanation values are rendered under their own labels
+    inside the expandable blockquote, with special chars escaped."""
     app = {
         "applicant_name": "SpaceX",
         "file_number": "0123-EX-ST-2025",
@@ -172,12 +194,63 @@ def test_formatter_escapes_special_chars_in_detail_values():
         "status": "Granted",
         "receipt_date": "01/01/2025",
         "status_date": "01/15/2025",
-        "detail_json": {"Freq <MHz>": "2000 & up", "Note": "<b>bold</b>"},
+        "detail_json": {
+            "Please explain the purpose of operation": "Testing 2000 & up",
+            "Explanation": "STA needed for <ground> testing",
+            # An unrelated detail key must NOT appear in the output.
+            "Note": "<b>ignored</b>",
+        },
     }
     out = formatting.format_fcc_els_application(app)
 
     assert "<blockquote expandable>" in out
     assert "</blockquote>" in out
-    assert "Freq &lt;MHz&gt;: 2000 &amp; up" in out
-    # The detail's literal HTML tag must be escaped, not passed through raw.
-    assert "&lt;b&gt;bold&lt;/b&gt;" in out
+    # Both fields render under their Russian labels, escaped.
+    assert "<b>Цель эксплуатации:</b> Testing 2000 &amp; up" in out
+    assert "<b>Обоснование:</b> STA needed for &lt;ground&gt; testing" in out
+    # Unrelated detail fields are not rendered.
+    assert "ignored" not in out
+
+
+def test_formatter_renders_source_link():
+    """A root-relative ``current_detail_url`` is resolved to an absolute,
+    escaped link to the FCC ELS application."""
+    app = {
+        "applicant_name": "SpaceX",
+        "file_number": "0123-EX-ST-2025",
+        "call_sign": "WX2XAB",
+        "status": "Granted",
+        "receipt_date": "01/01/2025",
+        "status_date": "01/15/2025",
+        "detail_json": {},
+        "current_detail_url": (
+            "/oetcf/els/reports/STA_Print.cfm"
+            "?mode=current&application_seq=153622"
+        ),
+    }
+    out = formatting.format_fcc_els_application(app)
+
+    # Absolute URL, with the ampersand in the query escaped for HTML.
+    assert (
+        '<a href="https://apps.fcc.gov/oetcf/els/reports/STA_Print.cfm'
+        "?mode=current&amp;application_seq=153622\">" in out
+    )
+    assert "Открыть заявку</a>" in out
+
+
+def test_formatter_omits_blockquote_and_link_when_absent():
+    """With no purpose/explanation and no detail URL, neither the blockquote
+    nor the link is emitted."""
+    app = {
+        "applicant_name": "SpaceX",
+        "file_number": "0123-EX-ST-2025",
+        "call_sign": "WX2XAB",
+        "status": "Granted",
+        "receipt_date": "01/01/2025",
+        "status_date": "01/15/2025",
+        "detail_json": {"Note": "unrelated"},
+    }
+    out = formatting.format_fcc_els_application(app)
+
+    assert "<blockquote expandable>" not in out
+    assert "<a href=" not in out

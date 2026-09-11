@@ -30,6 +30,7 @@ is added by a later task.
 from __future__ import annotations
 
 import html as html_lib
+import random
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -84,6 +85,11 @@ _ws = st.text(alphabet=" \t\n", max_size=3)
 # A numeric application_seq value.
 _seq = st.text(alphabet="0123456789", min_size=1, max_size=6)
 
+# Seed for deterministically shuffling query-param order. A cheap integer draw
+# (used with ``random.Random(seed)``) instead of an expensive ``st.randoms()``
+# object; the small range still covers all orderings of the handful of params.
+_shuffle_seed = st.integers(min_value=0, max_value=2**16 - 1)
+
 # Extra query params (name -> value); names avoid the reserved keys.
 _extra_params = st.dictionaries(
     keys=st.text(alphabet="abcdefghijklmnop", min_size=1, max_size=5).filter(
@@ -109,8 +115,10 @@ def _valid_records(draw):
         "extra_params": draw(_extra_params),
         "lead": draw(_ws),
         "trail": draw(_ws),
-        # A concrete permutation of all query params (including application_seq).
-        "order": draw(st.randoms(use_true_random=False)),
+        # Seed used to shuffle the query params into an arbitrary order. A plain
+        # integer draw is far cheaper to generate than an ``st.randoms()`` object
+        # (which was tripping HealthCheck.too_slow when drawn per row).
+        "order": draw(_shuffle_seed),
     }
 
 
@@ -132,11 +140,11 @@ def _invalid_records(draw):
         "extra_params": draw(_extra_params),
         "lead": draw(_ws),
         "trail": draw(_ws),
-        "order": draw(st.randoms(use_true_random=False)),
+        "order": draw(_shuffle_seed),
     }
 
 
-def _build_current_href(application_seq, extra_params, rng):
+def _build_current_href(application_seq, extra_params, seed):
     """Build a Current-detail href.
 
     Always contains ``STA_Print.cfm`` and ``mode=current``; when
@@ -147,7 +155,7 @@ def _build_current_href(application_seq, extra_params, rng):
     params = list(extra_params.items())
     if application_seq is not None:
         params.append(("application_seq", application_seq))
-    rng.shuffle(params)
+    random.Random(seed).shuffle(params)
     query = "&".join(f"{k}={v}" for k, v in params)
     base = "https://apps.fcc.gov/oetcf/els/reports/STA_Print.cfm?mode=current"
     return f"{base}&{query}" if query else base

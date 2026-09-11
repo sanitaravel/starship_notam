@@ -1,3 +1,6 @@
+# IDE
+.vscode/
+
 # Virtual environment
 venv/
 
@@ -32,3 +35,5 @@ telegram_chats.json
 # Tests
 .hypothesis/
 _*.py
+_*.html
+_*.txt

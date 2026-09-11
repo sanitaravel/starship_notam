@@ -221,6 +221,52 @@ def _detail_cell_text(cell) -> str:
     return re.sub(r"\s+", " ", cell.get_text(" ", strip=True)).strip()
 
 
+# The STA "Explanation" (why an STA is necessary) fieldset renders its label and
+# free-text answer inside a *single* table cell, so the generic label/value row
+# extraction (which needs two cells) never captures it. We locate the fieldset
+# by its ``<legend>`` text and pull the answer out of the trailing content span.
+_EXPLANATION_LEGEND = "explanation"
+_EXPLANATION_PROMPT_RE = re.compile(
+    r"please explain.*why an sta is necessary", re.IGNORECASE
+)
+# Canonical key under which the extracted explanation value is stored.
+_EXPLANATION_KEY = "Explanation"
+
+
+def _extract_explanation(soup: BeautifulSoup) -> str:
+    """Extract the STA "Explanation" free-text answer, or ``""`` if absent.
+
+    The answer lives in a ``<fieldset>`` whose ``<legend>`` reads "Explanation"
+    and whose single cell contains a bold prompt ("Please explain ... why an STA
+    is necessary:") followed by the answer in a ``small-content`` span. We return
+    the answer text, whitespace-collapsed, preferring the ``small-content`` span
+    and falling back to the cell text with the prompt removed.
+    """
+    for fieldset in soup.find_all("fieldset"):
+        legend = fieldset.find("legend")
+        if legend is None:
+            continue
+        if _normalize_label(legend.get_text(" ", strip=True)) != _EXPLANATION_LEGEND:
+            continue
+
+        # Preferred: the answer is the (last) small-content span in the cell.
+        answer_spans = fieldset.select("span.small-content")
+        for span in reversed(answer_spans):
+            text = re.sub(r"\s+", " ", span.get_text(" ", strip=True)).strip()
+            if text:
+                return text
+
+        # Fallback: take the fieldset text, drop the legend and the bold prompt.
+        cell_text = re.sub(r"\s+", " ", fieldset.get_text(" ", strip=True)).strip()
+        cell_text = re.sub(
+            r"^\s*explanation\s*", "", cell_text, flags=re.IGNORECASE
+        )
+        cell_text = _EXPLANATION_PROMPT_RE.sub("", cell_text)
+        return cell_text.strip(" :").strip()
+
+    return ""
+
+
 def parse_fcc_els_detail_html(html: str) -> dict:
     """Parse an STA_Print detail-page HTML into a ``{label: value}`` dict.
 
@@ -248,6 +294,11 @@ def parse_fcc_els_detail_html(html: str) -> dict:
     value; both are trimmed and a trailing colon is stripped from the label.
     Section-header rows (a single spanning cell) and rows with an empty value
     are skipped. Duplicate labels keep the last occurrence.
+
+    Additionally, the STA "Explanation" answer (why an STA is necessary) — whose
+    label and value share a single cell and so is invisible to the row loop — is
+    extracted from its ``<fieldset>`` and stored under the ``"Explanation"`` key
+    when present.
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -292,5 +343,12 @@ def parse_fcc_els_detail_html(html: str) -> dict:
 
         # Duplicate labels keep the last occurrence.
         detail[label] = value
+
+    # The STA "Explanation" answer lives in a single cell (label + value in one
+    # <td>), so the row loop above cannot capture it. Extract it separately and
+    # store it under a dedicated key when present.
+    explanation = _extract_explanation(soup)
+    if explanation:
+        detail[_EXPLANATION_KEY] = explanation
 
     return detail

@@ -24,6 +24,7 @@ search/navigation failure).
 import os
 import time
 from datetime import date
+from urllib.parse import urljoin
 
 from starship_notam.core import config
 from starship_notam.core.logging import logger
@@ -39,13 +40,18 @@ DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
 # --- Form field locators -------------------------------------------------
 #
 # These identify the four search-form fields on the FCC ELS Generic Search
-# page. The real page structure was not available at implementation time, so
-# these are best-effort locator names based on the field semantics described in
-# the design (licensee name, receipt-date-from, receipt-date-to, show-records).
+# page (``GenericSearch.cfm``). The names below were verified against the live
+# page's HTML source: the form is ``name="generic_search_form"`` and posts to
+# ``GenericSearchResult.cfm``.
+#
+#   Applicant Name      -> <input name="name_licensee">
+#   Receipt Date (from) -> <input name="receipt_date_from">
+#   Receipt Date (to)   -> <input name="receipt_date_to">
+#   Records per page    -> <input name="show_records" value="10"> (a text input,
+#                          NOT a <select>; defaults to "10")
+#
 # They are centralized here so they are easy to correct against the live page.
-# Each entry is a ``(By, value)``-style pair whose ``By`` member is resolved
-# lazily inside :func:`fetch_fcc_els_applications` (where Selenium is imported).
-_LICENSEE_FIELD_NAME = "licensee_name"
+_LICENSEE_FIELD_NAME = "name_licensee"
 _RECEIPT_FROM_FIELD_NAME = "receipt_date_from"
 _RECEIPT_TO_FIELD_NAME = "receipt_date_to"
 _SHOW_RECORDS_FIELD_NAME = "show_records"
@@ -214,23 +220,16 @@ def fetch_fcc_els_applications() -> list[dict]:
             pass
         receipt_to_field.send_keys(receipt_to)
 
-        # show-records may be a <select> or a text/number input; set the value
-        # via Selenium's Select when possible, falling back to send_keys.
+        # show-records is a plain text input pre-filled with a default of "10".
+        # Clear the default before typing the configured record limit.
         try:
-            from selenium.webdriver.support.ui import Select
-
-            Select(show_records_field).select_by_value(
-                str(config.FCC_ELS_RECORD_LIMIT)
-            )
+            show_records_field.clear()
         except Exception:
-            try:
-                show_records_field.clear()
-            except Exception:
-                pass
-            try:
-                show_records_field.send_keys(str(config.FCC_ELS_RECORD_LIMIT))
-            except Exception as e:
-                logger.info(f"Could not set FCC ELS show-records field: {e}")
+            pass
+        try:
+            show_records_field.send_keys(str(config.FCC_ELS_RECORD_LIMIT))
+        except Exception as e:
+            logger.info(f"Could not set FCC ELS show-records field: {e}")
 
         # --- Submit the search --------------------------------------------
         try:
@@ -258,7 +257,12 @@ def fetch_fcc_els_applications() -> list[dict]:
         # --- Per-row detail retrieval and merge ---------------------------
         for row in rows:
             file_number = row.get("file_number")
-            detail_url = row.get("current_detail_url")
+            # The parser returns the raw href as scraped, which on this site is
+            # a root-relative URL (e.g. "/oetcf/els/reports/STA_Print.cfm?..").
+            # Selenium's driver.get() requires an absolute URL, so resolve it
+            # against the search page URL (same scheme/host).
+            raw_detail_url = row.get("current_detail_url")
+            detail_url = urljoin(config.FCC_ELS_SEARCH_URL, raw_detail_url)
             detail: dict | None = None
 
             for attempt in range(1, _DETAIL_MAX_ATTEMPTS + 1):
