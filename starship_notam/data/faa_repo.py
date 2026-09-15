@@ -45,28 +45,23 @@ def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
 
             existing_hash = activity_existing['payload_hash']
 
-            if existing_hash is not None and payload_hash is not None and existing_hash == payload_hash:
+            if existing_hash == payload_hash:
                 logger.info(f"No changes detected for FAA activity '{activity['mission']}'; skipping DB update")
                 return
             else:
-                if existing_hash == payload_hash:
-                    logger.info(f"No effective changes detected for FAA activity '{activity['mission']}'; refreshing updated_at")
-                    update_cols = ['updated_at']
-                    update_set = ', '.join(f"{c} = ?" for c in update_cols)
-                    update_params = [utc_now_iso(), activity['mission']]
-                    cur.execute(f"UPDATE faa_activities SET {update_set} WHERE mission = ?", update_params)
-                else:
-                    logger.info(f"Changes detected for FAA activity '{activity['mission']}'; updating all fields")
-                    update_cols = ['primary_window', 'backup_window', 'updated_at', 'payload_hash']
-                    update_set = ', '.join(f"{c} = ?" for c in update_cols)
-                    update_params = [
-                        activity['primary_window'],
-                        activity['backup_window'],
-                        utc_now_iso(),
-                        payload_hash,
-                        activity['mission']
-                    ]
-                    cur.execute(f"UPDATE faa_activities SET {update_set} WHERE mission = ?", update_params)
+                logger.info(f"Changes detected for FAA activity '{activity['mission']}'; updating all fields")
+                # Reset telegram_posted so the updated activity is re-posted.
+                update_cols = ['primary_window', 'backup_window', 'updated_at', 'payload_hash', 'telegram_posted']
+                update_set = ', '.join(f"{c} = ?" for c in update_cols)
+                update_params = [
+                    activity['primary_window'],
+                    activity['backup_window'],
+                    utc_now_iso(),
+                    payload_hash,
+                    0,
+                    activity['mission']
+                ]
+                cur.execute(f"UPDATE faa_activities SET {update_set} WHERE mission = ?", update_params)
         else:
             logger.info(f"Inserting new FAA activity for mission '{activity['mission']}'")
             cur.execute("""
