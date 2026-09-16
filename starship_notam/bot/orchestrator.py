@@ -133,6 +133,10 @@ async def _refresh_notams_from_source() -> None:
         logger.info("Running NOTAM request for keyword: spacex brownsville")
         results_spacex = await asyncio.to_thread(search_notams, "spacex brownsville")
         _persist_notam_results(results_spacex)
+
+        logger.info("Running NOTAM request for keyword: re-entry")
+        results_reentry = await asyncio.to_thread(search_notams, "re-entry")
+        _persist_notam_results(results_reentry)
     except Exception:
         logger.exception("NOTAM request failed")
 

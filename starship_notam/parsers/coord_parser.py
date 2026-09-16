@@ -81,7 +81,7 @@ def _parse_coords(raw: str) -> list[tuple[float, float]] | None:
     #    or with seconds like '195700N0820100W'. Accept 4..7 digit
     #    DMS tokens (DDMM, DDDMM, DDMMSS, DDDMMSS) followed by N/S/E/W.
     pair_latlon_re = re.compile(
-        r"(\d{4,7}[NS])\s*[,;:\-\u2013\u2014]?\s*(\d{4,7}[EW])", re.IGNORECASE
+        r"(\d{4,7}[NS])\s*[,;:/\-\u2013\u2014]?\s*(\d{4,7}[EW])", re.IGNORECASE
     )
 
     for m in pair_latlon_re.finditer(s):
@@ -94,7 +94,7 @@ def _parse_coords(raw: str) -> list[tuple[float, float]] | None:
         return coords_out
 
     # 2) Look for standalone DMS tokens (e.g. '2358S' or '07500E') and pair them
-    token_re = re.compile(r"(\d{4,5})([NSWE])", re.IGNORECASE)
+    token_re = re.compile(r"(\d{4,7})([NSWE])", re.IGNORECASE)
     tokens = token_re.findall(s)
     if tokens:
         lat_val: float | None = None

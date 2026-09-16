@@ -176,6 +176,16 @@ def extract_starship_template(notam: str) -> str | None:
     if "HIGH ENERGY TESTING" in text and "SPACEX" in text:
         return "ВЫСОКОЭНЕРГЕТИЧЕСКИЕ ТЕСТИРОВАНИЯ"
 
+    # 0c. Pacific Ocean space vehicle re-entry / splashdown (no flight number)
+    if "RE-ENTRY" in text and (
+        "SPACE VEHICLE" in text
+        or "PACIFIC OCEAN" in text
+        or "SPLASHDOWN" in text
+    ):
+        return (
+            "ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ"
+        )
+
     # ----------------------------
     # Extract flight number
     # ----------------------------
@@ -218,7 +228,7 @@ def extract_starship_template(notam: str) -> str | None:
 
     # 2. Reentry + splashdown
     if (
-        "REENTRY" in text
+        ("REENTRY" in text or "RE-ENTRY" in text)
         and "SPLASHDOWN" in text
     ):
         return (
