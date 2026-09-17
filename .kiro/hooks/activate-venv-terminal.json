@@ -9,7 +9,7 @@
         "type": "agent",
         "prompt": "This project uses a Python virtual environment at `venv\\Scripts\\Activate.ps1`. You are starting a new terminal instance. Activate the venv for this terminal session before running project commands, e.g. begin the command with `& venv\\Scripts\\Activate.ps1;` so that Python, pip, pytest, and installed packages resolve to the project environment. Alternatively invoke tools directly via `venv\\Scripts\\python.exe` or `venv\\Scripts\\pytest.exe`."
       },
-      "enabled": false
+      "enabled": true
     }
   ]
 }

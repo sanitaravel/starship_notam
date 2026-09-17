@@ -43,7 +43,7 @@ MAX_EXTENT_HALF_SPAN = 90.0  # degrees; stop expanding once the view is near-glo
 # near-global view chasing distant, unrelated continents. The land search may
 # grow the extent up to this multiple of the fitted half-spans; if no usable
 # land appears within that window, the fitted extent is returned unchanged.
-LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 7.0
+LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 15.0
 # Minimum on-screen footprint (in pixels) a landmass must occupy within the view
 # to count as a usable visual reference. Tiny sub-pixel islands don't help, so we
 # require land at least this large in either dimension. Tuned to match the
@@ -176,6 +176,20 @@ def _expand_extent_until_land(extent, size):
                 logger.info(
                     "Expanded map extent to reveal land after %d zoom-out step(s)", step + 1
                 )
+                half_lon *= LAND_ZOOM_OUT_FACTOR
+                half_lat *= LAND_ZOOM_OUT_FACTOR
+                # Never grow past the bounded window (relative to the fitted span, and
+                # never beyond a near-global half-span).
+                half_lon = min(half_lon, max_half_lon, MAX_EXTENT_HALF_SPAN)
+                half_lat = min(half_lat, max_half_lat, MAX_EXTENT_HALF_SPAN)
+                new_min_lat = max(center_lat - half_lat, -90.0)
+                new_max_lat = min(center_lat + half_lat, 90.0)
+                candidate = [
+                    center_lon - half_lon,
+                    center_lon + half_lon,
+                    new_min_lat,
+                    new_max_lat,
+                ]
                 return candidate
             # Once we've reached the bounded window without finding land, stop:
             # the NOTAM is genuinely in open ocean, so keep it fitted rather than
