@@ -24,8 +24,11 @@ from starship_notam.core.logging import logger
 MAP_W = 743
 MAP_H = 662
 
-# Map extent scale: values >1 slightly zoom out (makes NOTAM area appear smaller)
-MAP_EXTENT_SCALE = 2
+# Map extent scale: values >1 slightly zoom out (makes NOTAM area appear smaller).
+# Kept at 1.0 so the NOTAM geometry stays the dominant feature of the frame; the
+# padding (lat_pad/lon_pad) and cos(lat) aspect-ratio correction applied before
+# scaling still provide breathing room around the geometry.
+MAP_EXTENT_SCALE = 1.0
 
 # When a NOTAM sits in open ocean the initial extent may contain no meaningful
 # land at all, leaving a featureless dark rectangle with no visual reference. In
@@ -35,6 +38,12 @@ MAP_EXTENT_SCALE = 2
 LAND_ZOOM_OUT_FACTOR = 1.6  # per-step multiplier applied to the extent half-spans
 LAND_ZOOM_OUT_MAX_STEPS = 10  # cap on the number of zoom-out iterations
 MAX_EXTENT_HALF_SPAN = 90.0  # degrees; stop expanding once the view is near-global
+# Bound the land-visibility zoom-out relative to the fitted geometry span so an
+# open-ocean NOTAM (with no land nearby) stays fitted instead of ballooning to a
+# near-global view chasing distant, unrelated continents. The land search may
+# grow the extent up to this multiple of the fitted half-spans; if no usable
+# land appears within that window, the fitted extent is returned unchanged.
+LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 3.0
 # Minimum on-screen footprint (in pixels) a landmass must occupy within the view
 # to count as a usable visual reference. Tiny sub-pixel islands don't help, so we
 # require land at least this large in either dimension. Tuned to match the
@@ -141,9 +150,20 @@ def _expand_extent_until_land(extent, size):
         half_lon = (extent[1] - extent[0]) / 2.0
         half_lat = (extent[3] - extent[2]) / 2.0
 
+        # Bound the search relative to the fitted geometry span so open-ocean
+        # NOTAMs stay fitted instead of zooming out to reveal distant continents.
+        fitted_half_lon = half_lon
+        fitted_half_lat = half_lat
+        max_half_lon = fitted_half_lon * LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE
+        max_half_lat = fitted_half_lat * LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE
+
         for step in range(LAND_ZOOM_OUT_MAX_STEPS):
             half_lon *= LAND_ZOOM_OUT_FACTOR
             half_lat *= LAND_ZOOM_OUT_FACTOR
+            # Never grow past the bounded window (relative to the fitted span, and
+            # never beyond a near-global half-span).
+            half_lon = min(half_lon, max_half_lon, MAX_EXTENT_HALF_SPAN)
+            half_lat = min(half_lat, max_half_lat, MAX_EXTENT_HALF_SPAN)
             new_min_lat = max(center_lat - half_lat, -90.0)
             new_max_lat = min(center_lat + half_lat, 90.0)
             candidate = [
@@ -157,16 +177,21 @@ def _expand_extent_until_land(extent, size):
                     "Expanded map extent to reveal land after %d zoom-out step(s)", step + 1
                 )
                 return candidate
-            if half_lon >= MAX_EXTENT_HALF_SPAN and half_lat >= MAX_EXTENT_HALF_SPAN:
-                logger.info("Reached maximum extent while searching for visible land")
-                return candidate
-        logger.info("Land-visibility zoom-out hit step cap; using widest computed extent")
-        return [
-            center_lon - half_lon,
-            center_lon + half_lon,
-            max(center_lat - half_lat, -90.0),
-            min(center_lat + half_lat, 90.0),
-        ]
+            # Once we've reached the bounded window without finding land, stop:
+            # the NOTAM is genuinely in open ocean, so keep it fitted rather than
+            # ballooning to a near-global view.
+            if half_lon >= max_half_lon and half_lat >= max_half_lat:
+                logger.info(
+                    "No usable land within bounded window (%.1fx fitted span); "
+                    "keeping map fitted to NOTAM geometry",
+                    LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE,
+                )
+                return extent
+        logger.info(
+            "Land-visibility zoom-out hit step cap without finding land; "
+            "keeping map fitted to NOTAM geometry"
+        )
+        return extent
     except Exception:
         logger.exception("Failed to expand extent for land visibility; using original extent")
         return extent

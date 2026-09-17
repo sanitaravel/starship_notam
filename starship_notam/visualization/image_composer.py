@@ -260,7 +260,11 @@ def extract_starship_template(notam: str) -> str | None:
         "ACFT HAZARD AREA",
         "DUE LAUNCH OF SPACEX STARSHIP",
         "DUE TO THE LAUNCH OF THE",
-        "TEMPORARY DANGER AREAS"
+        "TEMPORARY DANGER AREAS",
+        "TEMPORARY DANGER AREA",
+        "SPACE DEBRIS",
+        "DEBRIS RETURN",
+        "SPACE DEBRIS RETURN",
     ]):
         return (
             f"ВОЗМОЖНОЕ ПАДЕНИЕ ОБЛОМКОВ "
@@ -278,7 +282,12 @@ def extract_starship_template(notam: str) -> str | None:
             f"FLT-{flight}"
         )
 
-    return None
+    # 6. Generic fallback for recognized Starship flights.
+    # A flight number was extracted but no specific branch matched. Return a
+    # concise flight-referencing summary line instead of None so the card shows
+    # a shortened line rather than the full raw NOTAM text. Non-Starship text
+    # never reaches here (it returns None earlier when no flight is found).
+    return f"ЗОНА NOTAM SPACEX STARSHIP FLT-{flight}"
 
 
 def _notam_from_db_row(name: str, parsed: dict) -> dict:

@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Write bug condition exploration tests
+- [x] 1. Write bug condition exploration tests
   - **Property 1: Bug Condition** - Ocean NOTAM over-zooms and Starship title not summarized
   - **CRITICAL**: These tests MUST FAIL on unfixed code - failure confirms the bugs exist
   - **DO NOT attempt to fix the tests or the code when they fail**
@@ -17,7 +17,7 @@
   - Mark task complete when tests are written, run, and failures are documented
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 2. Write preservation property tests (BEFORE implementing fix)
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
   - **Property 2: Preservation** - Land-adjacent fit, radius circles, no-coord fallback, recognized templates, and non-Starship text unchanged
   - **IMPORTANT**: Follow observation-first methodology
   - Observe on UNFIXED code and capture as property-based tests:
@@ -33,9 +33,9 @@
   - Mark task complete when tests are written, run, and passing on unfixed code
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
 
-- [ ] 3. Fix map over-zoom (Bug 1) and unsummarized Starship title (Bug 2)
+- [x] 3. Fix map over-zoom (Bug 1) and unsummarized Starship title (Bug 2)
 
-  - [ ] 3.1 Fix Bug 1 — keep ocean NOTAMs fitted in `map_renderer.py`
+  - [x] 3.1 Fix Bug 1 — keep ocean NOTAMs fitted in `map_renderer.py`
     - Neutralize/relax `MAP_EXTENT_SCALE` so it no longer doubles the geometry footprint (set to `1.0`, or a small padding value like `1.1`); preserve existing `lat_pad`/`lon_pad` and cos(lat) aspect-ratio correction applied before scaling; applies to both the polygon and point branches that share the constant
     - Constrain the land-visibility expansion: bound `_expand_extent_until_land` so the extent never grows beyond a small multiple of the fitted geometry span (rather than the absolute `MAX_EXTENT_HALF_SPAN = 90°`); when no land is found within that bounded window, return the fitted extent unchanged so open-ocean NOTAMs stay fitted
     - Keep the ocean fallback graceful: retain the default global extent path for the no-coordinate case and the land-visibility helper's exception handling that returns the original extent
@@ -45,7 +45,7 @@
     - _Preservation: Land-adjacent fit, radius circle, no-coordinate global fallback, cartography (from design)_
     - _Requirements: 2.1, 2.2_
 
-  - [ ] 3.2 Fix Bug 2 — summarize unrecognized Starship titles in `image_composer.py`
+  - [x] 3.2 Fix Bug 2 — summarize unrecognized Starship titles in `image_composer.py`
     - Extend the debris/launch-hazard classification keywords in `extract_starship_template` to include the singular `"TEMPORARY DANGER AREA"`, plus `"SPACE DEBRIS"` and `"DEBRIS RETURN"` (and close variants) so the observed FLT-14 text resolves to the existing debris summary line (`ВОЗМОЖНОЕ ПАДЕНИЕ ОБЛОМКОВ В РЕЗУЛЬТАТЕ ЗАПУСКА SPACEX STARSHIP FLT-{flight}`)
     - Add a safe generic fallback: after all specific classification branches, when a Starship flight number was successfully extracted but no branch matched, return a concise generic flight-referencing summary line instead of `None`; the fallback must apply only when a flight number was found, so non-Starship text still returns `None`
     - Preserve ordering and existing branches: keywords are additive and the generic fallback is reached only after all specific branches fail
@@ -55,7 +55,7 @@
     - _Preservation: Existing template lines unchanged; non-Starship text still returns None (from design)_
     - _Requirements: 2.3, 2.4_
 
-  - [ ] 3.3 Verify bug condition exploration tests now pass
+  - [x] 3.3 Verify bug condition exploration tests now pass
     - **Property 1: Expected Behavior** - Ocean NOTAM stays fitted and Starship title is summarized
     - **IMPORTANT**: Re-run the SAME tests from task 1 - do NOT write new tests
     - The tests from task 1 encode the expected behavior; when they pass, they confirm the expected behavior is satisfied
@@ -63,7 +63,7 @@
     - **EXPECTED OUTCOME**: Tests PASS (map extent bounded to a small multiple of the fitted span; `extract_starship_template` returns a concise non-empty line for the FLT-14 debris wording)
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 3.4 Verify preservation tests still pass
+  - [x] 3.4 Verify preservation tests still pass
     - **Property 2: Preservation** - Non-buggy inputs unchanged
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run the preservation property tests from step 2
@@ -71,7 +71,7 @@
     - Confirm all tests still pass after fix (no regressions)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
 
-- [ ] 4. Checkpoint - Ensure all tests pass
+- [x] 4. Checkpoint - Ensure all tests pass
   - Run the full test suite (exploration, preservation, unit, property-based, and integration tests from the design's Testing Strategy)
   - Integration: full `render_notam_image` for A1237/26 yields a concise details line (no coordinate list) and a map fitted to the polyline; recognized-template and non-Starship cards unchanged; cartography and Starbase marker still render
   - Ensure all tests pass, ask the user if questions arise

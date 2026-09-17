@@ -1,0 +1,96 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Write bug condition exploration tests": [
+      {
+        "executionId": "71fd0146-9331-424f-9cdb-d001f3c90607",
+        "chatSessionId": "sess_e4b06abc-e259-4fbe-9381-6ee6299afd2a",
+        "timestamp": 1789627351603
+      },
+      {
+        "executionId": "71fd0146-9331-424f-9cdb-d001f3c90607",
+        "chatSessionId": "sess_e4b06abc-e259-4fbe-9381-6ee6299afd2a",
+        "timestamp": 1789627900831
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "7ffa1554-0e85-44d1-9bbe-b59d44183037",
+        "chatSessionId": "sess_5361257f-8c90-4ee1-8814-c6e368a5af72",
+        "timestamp": 1789627939090
+      },
+      {
+        "executionId": "7ffa1554-0e85-44d1-9bbe-b59d44183037",
+        "chatSessionId": "sess_5361257f-8c90-4ee1-8814-c6e368a5af72",
+        "timestamp": 1789628652649
+      }
+    ],
+    "3.1 Fix Bug 1 — keep ocean NOTAMs fitted in `map_renderer.py`": [
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789628699164
+      },
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789628835706
+      }
+    ],
+    "3.2 Fix Bug 2 — summarize unrecognized Starship titles in `image_composer.py`": [
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789628841889
+      },
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789628924659
+      }
+    ],
+    "3.3 Verify bug condition exploration tests now pass": [
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789628930679
+      },
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789629011599
+      }
+    ],
+    "3.4 Verify preservation tests still pass": [
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789629018035
+      },
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789629123255
+      }
+    ],
+    "3. Fix map over-zoom (Bug 1) and unsummarized Starship title (Bug 2)": [
+      {
+        "executionId": "b54b2a8a-923c-4100-af19-5ee47248d8f1",
+        "chatSessionId": "sess_35ab7997-9728-4bcc-8b7c-52150c2aeb24",
+        "timestamp": 1789629123805
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "bba98bd9-717f-458b-a860-dafa8cfe0ddd",
+        "chatSessionId": "sess_0128fa56-3fbb-4489-ab1f-d390d97c9541",
+        "timestamp": 1789629173378
+      },
+      {
+        "executionId": "bba98bd9-717f-458b-a860-dafa8cfe0ddd",
+        "chatSessionId": "sess_0128fa56-3fbb-4489-ab1f-d390d97c9541",
+        "timestamp": 1789629599326
+      }
+    ]
+  }
+}
