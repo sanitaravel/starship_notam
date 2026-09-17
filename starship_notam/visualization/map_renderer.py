@@ -43,7 +43,7 @@ MAX_EXTENT_HALF_SPAN = 90.0  # degrees; stop expanding once the view is near-glo
 # near-global view chasing distant, unrelated continents. The land search may
 # grow the extent up to this multiple of the fitted half-spans; if no usable
 # land appears within that window, the fitted extent is returned unchanged.
-LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 3.0
+LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 7.0
 # Minimum on-screen footprint (in pixels) a landmass must occupy within the view
 # to count as a usable visual reference. Tiny sub-pixel islands don't help, so we
 # require land at least this large in either dimension. Tuned to match the

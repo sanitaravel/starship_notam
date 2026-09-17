@@ -176,28 +176,24 @@ def extract_starship_template(notam: str) -> str | None:
     if "HIGH ENERGY TESTING" in text and "SPACEX" in text:
         return "ВЫСОКОЭНЕРГЕТИЧЕСКИЕ ТЕСТИРОВАНИЯ"
 
-    # 0c. Pacific Ocean space vehicle re-entry / splashdown (no flight number)
-    if "RE-ENTRY" in text and (
-        "SPACE VEHICLE" in text
-        or "PACIFIC OCEAN" in text
-        or "SPLASHDOWN" in text
-    ):
-        return (
-            "ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ"
-        )
-
     # ----------------------------
     # Extract flight number
     # ----------------------------
+    # Run flight extraction BEFORE the flight-free branches (0c) so a NOTAM that
+    # carries a recognizable Starship flight number gets the specific, flight-
+    # referencing template rather than the generic flight-free summary. Real
+    # NOTAM feeds contain OCR/transcription quirks, so the patterns tolerate:
+    #   * "SPACE X STARSHIP" (space inside "SPACEX")
+    #   * "FTL-14" (transposed letters for the intended "FLT-14")
     flight = None
 
     patterns = [
-        r"STARSHIP\s+FLT[- ]?(\d+)",
-        r"STARSHIP\s+FLT[-]?(\d+)",
-        r"STARSHIP\s+FLIGHT\s+(\d+)",
-        r"STARSHIP\s+FLIGHT-(\d+)",
-        r"SPACEX\s+STARSHIP\s+FLT[- ]?(\d+)",
-        r"SPACEX\s+STARSHIP\s+FLIGHT\s+(\d+)",
+        # Accept FLT and the transposed-typo FTL, with optional separators, and
+        # the "SPACE X" spacing variant before STARSHIP.
+        r"STARSHIP\s+F(?:LT|TL)[- ]?(\d+)",
+        r"STARSHIP\s+FLIGHT[- ]?(\d+)",
+        r"SPACE\s?X\s+STARSHIP\s+F(?:LT|TL)[- ]?(\d+)",
+        r"SPACE\s?X\s+STARSHIP\s+FLIGHT[- ]?(\d+)",
     ]
 
     for pattern in patterns:
@@ -205,6 +201,19 @@ def extract_starship_template(notam: str) -> str | None:
         if m:
             flight = m.group(1)
             break
+
+    # 0c. Space vehicle re-entry / splashdown with NO recognizable flight number
+    # (e.g. "RE-ENTRY OF SPACE VEHICLE OVER PACIFIC OCEAN WITH SPLASHDOWN").
+    # Only fires when flight extraction above found nothing, so flighted
+    # re-entry NOTAMs fall through to the flight-carrying template (branch 2).
+    if flight is None and "RE-ENTRY" in text and (
+        "SPACE VEHICLE" in text
+        or "PACIFIC OCEAN" in text
+        or "SPLASHDOWN" in text
+    ):
+        return (
+            "ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ"
+        )
 
     if not flight:
         return None
@@ -232,9 +241,8 @@ def extract_starship_template(notam: str) -> str | None:
         and "SPLASHDOWN" in text
     ):
         return (
-            f"ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ "
-            f"КОСМИЧЕСКОГО КОРАБЛЯ SPACEX STARSHIP "
-            f"FLT-{flight}"
+            f"ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ  "
+            f"SPACEX STARSHIP FLT-{flight}"
         )
 
     # 3. Reentry only
