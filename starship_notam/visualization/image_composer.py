@@ -161,6 +161,23 @@ _RU_MONTHS = [
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 ]
 
+# English month tokens (as they appear in FAA NOTAM schedules) -> month number.
+# Both 3-letter abbreviations and full names are accepted.
+_MONTH_TOKENS = {
+    "JAN": 1, "JANUARY": 1,
+    "FEB": 2, "FEBRUARY": 2,
+    "MAR": 3, "MARCH": 3,
+    "APR": 4, "APRIL": 4,
+    "MAY": 5,
+    "JUN": 6, "JUNE": 6,
+    "JUL": 7, "JULY": 7,
+    "AUG": 8, "AUGUST": 8,
+    "SEP": 9, "SEPT": 9, "SEPTEMBER": 9,
+    "OCT": 10, "OCTOBER": 10,
+    "NOV": 11, "NOVEMBER": 11,
+    "DEC": 12, "DECEMBER": 12,
+}
+
 
 def _fmt_hhmm(tok: str) -> str | None:
     """Format a 4-digit ``HHMM`` token as ``HH:MM``; return None if invalid."""
@@ -185,12 +202,16 @@ def _fmt_window(start_tok: str, end_tok: str) -> str | None:
     return f"{a} - {b}"
 
 
-def _day_label(day: int, base: datetime | None) -> str:
-    """Return a ``Месяц DD`` label for a day-of-month using ``base`` month.
+def _day_label(day: int, base: datetime | None, month: int | None = None) -> str:
+    """Return a ``Месяц DD`` label for a day-of-month.
 
-    ``base`` (the NOTAM start datetime) supplies the month/year. When the day
-    number is smaller than the base day the window rolls into the next month.
+    When ``month`` is given (resolved from an explicit month token in the
+    schedule, e.g. ``SEP``/``OCT``), it is used directly. Otherwise ``base``
+    (the NOTAM start datetime) supplies the month and the day is rolled into
+    the next month when it is smaller than the base day.
     """
+    if month is not None:
+        return f"{_RU_MONTHS[month]} {day:02d}"
     if base is None:
         return f"{day:02d}"
     month = base.month
@@ -214,6 +235,10 @@ def parse_notam_windows(raw, base: datetime | None = None) -> list[str]:
     * ``20 0334-0812, 21 0320-0758`` (comma separated, may wrap)
     * ``23-28 BTN 0000-0108 2107-2359`` (day range expands to one line per day,
       each with both windows)
+    * ``SEP 26-29 29-30 BTN 2107-0108`` (month token sets the month; several
+      day ranges on one line share the trailing window)
+    * ``30-OCT 01 01-02 02-03 04-05 DLY BTN 2107-0108`` (month rollover inside
+      the line; each day gets the shared window)
     * ``2245-0241`` (bare window, whole period) -> ``22:45 - 02:41``
 
     Returns an empty list when nothing parseable is found (caller falls back
@@ -228,52 +253,159 @@ def parse_notam_windows(raw, base: datetime | None = None) -> list[str]:
     daily = bool(re.search(r"\b(DLY|DAILY)\b", text, re.IGNORECASE))
 
     # ``entries`` is an ordered list of (kind, key, windows) tuples where:
-    #   * kind "day"   -> key is an int day-of-month
-    #   * kind "range" -> key is a (d1, d2) tuple of day-of-month
+    #   * kind "day"   -> key is a (day, month) tuple; month may be None when
+    #                     no explicit month token was present (falls back to
+    #                     the ``base`` month heuristic in _day_label).
     #   * kind "plain" -> key is None (DLY / bare window with no day)
     # and ``windows`` is a list of formatted "HH:MM–HH:MM" strings for that key.
     entries: list[tuple[str, object, list[str]]] = []
 
     # Split into segments on newlines and commas; each segment describes one
-    # day / day-range and its window(s).
+    # or more days / day-ranges plus their shared window(s).
     segments = [seg.strip() for seg in re.split(r"[\n,]+", text) if seg.strip()]
+
+    # Month context carries across segments: an FAA schedule states the month
+    # once (e.g. "SEP ...") and later lines continue in that month until an
+    # explicit rollover token ("... 30-OCT 01 ...") appears. It stays None
+    # until a month token is seen so that day-only schedules keep using the
+    # ``base.day`` rollover heuristic in _day_label.
+    current_month: int | None = None
 
     for seg in segments:
         # Strip DLY/DAILY tokens; they only signal recurrence, handled below.
         seg_clean = re.sub(r"\b(DLY|DAILY)\b", " ", seg, flags=re.IGNORECASE).strip()
 
-        # Day range: "23-28 BTN <windows>". A day is 1-2 digits; the windows
-        # that follow are 4-digit HHMM tokens, so we require the day tokens to
-        # be followed by whitespace before the schedule body. BTN ("between")
-        # is an optional separator.
-        m_range = re.match(
-            r"^(\d{1,2})\s*-\s*(\d{1,2})\s+(?:BTN\s+)?(\d{4}.*)$",
-            seg_clean, re.IGNORECASE,
-        )
-        # Single day prefix: "28 1223-1447". The day is 1-2 digits followed by
-        # whitespace and then a 4-digit time. Requiring the trailing \d{4}
-        # prevents a bare time token (e.g. "2245-0241") from being read as a
-        # day number.
-        m_day = re.match(
-            r"^(\d{1,2})\s+(?:BTN\s+)?(\d{4}.*)$",
-            seg_clean, re.IGNORECASE,
-        )
+        parsed_month, day_specs, wins = _parse_segment(seg_clean, current_month)
+        if parsed_month is not None:
+            current_month = parsed_month
 
-        if m_range and 1 <= int(m_range.group(1)) <= 31 and 1 <= int(m_range.group(2)) <= 31:
-            d1, d2, rest = int(m_range.group(1)), int(m_range.group(2)), m_range.group(3)
-            entries.append(("range", (d1, d2), _windows_in(rest)))
-            continue
-        if m_day and 1 <= int(m_day.group(1)) <= 31:
-            day, rest = int(m_day.group(1)), m_day.group(2)
-            entries.append(("day", day, _windows_in(rest)))
+        if day_specs:
+            # One or more day specifiers share the trailing window(s). Expand
+            # ranges to individual (day, month) pairs, each with the windows.
+            for day, month in day_specs:
+                entries.append(("day", (day, month), list(wins)))
             continue
 
         # No day prefix: either "DLY HHMM-HHMM"/"HHMM/HHMM" or a bare window.
-        # Support slash separator (e.g. "2045/0100").
-        rest = seg_clean.replace("/", "-")
-        entries.append(("plain", None, _windows_in(rest)))
+        entries.append(("plain", None, wins))
 
     return _format_entries(entries, base, daily)
+
+
+def _parse_segment(seg: str, current_month: int | None):
+    """Parse one schedule segment into (month, day_specs, windows).
+
+    Handles the FAA multi-day layout where several day tokens and day-ranges
+    share the trailing window(s) on a single line, with optional inline month
+    tokens (``SEP``/``OCT``) that set/roll the month context. Examples::
+
+        "SEP 26-29 29-30 BTN 2107-0108"
+        "30-OCT 01 01-02 02-03 03-04 04-05 BTN 2107-0108"
+        "28 1223-1447"           # single day
+        "23-28 BTN 0000-0108 2107-2359"
+
+    Returns:
+        month:     the last month token seen in this segment (or None), so the
+                   caller can carry it forward as context.
+        day_specs: ordered list of (day, month) pairs. ``month`` is the
+                   resolved month for that day (may be None when unknown).
+        windows:   formatted "HH:MM - HH:MM" strings shared by all day_specs.
+                   For a segment with no day tokens this holds the bare/DLY
+                   window(s).
+    """
+    # The window(s) always sit at the tail of the segment as HHMM(-|/)HHMM
+    # pairs, optionally introduced by "BTN". Split the day part from the
+    # window part at the first 4-digit time token.
+    m_split = re.search(r"(?:\bBTN\b\s*)?(\d{4}\s*[-/]\s*\d{4}.*)$", seg, re.IGNORECASE)
+    if m_split:
+        day_part = seg[: m_split.start()].strip()
+        win_part = m_split.group(1)
+    else:
+        day_part = ""
+        win_part = seg
+
+    windows = _windows_in(win_part.replace("/", "-"))
+
+    # No day tokens -> plain/bare/DLY window segment.
+    if not day_part:
+        return None, [], windows
+
+    day_specs: list[tuple[int, int | None]] = []
+    month = current_month
+    last_month_seen: int | None = None
+
+    # Tokenize the day part on whitespace. Each token is one of:
+    #   * a month name          -> updates the running month
+    #   * "DD"                  -> a single day
+    #   * "DD-DD"               -> a same-month day range
+    #   * "DD-MON" / "MON DD"   -> a cross-month boundary (handled via the
+    #                              range logic below)
+    tokens = day_part.split()
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i].upper().strip("-")
+        # Bare month token: set context for following days.
+        if tok in _MONTH_TOKENS:
+            month = _MONTH_TOKENS[tok]
+            last_month_seen = month
+            i += 1
+            continue
+
+        # Range with a month rollover inside it: "DD-MON" followed by "DD".
+        m_dm = re.fullmatch(r"(\d{1,2})-([A-Z]{3,9})", tok)
+        if m_dm and m_dm.group(2) in _MONTH_TOKENS:
+            d1 = int(m_dm.group(1))
+            m2 = _MONTH_TOKENS[m_dm.group(2)]
+            d2 = None
+            if i + 1 < len(tokens) and re.fullmatch(r"\d{1,2}", tokens[i + 1]):
+                d2 = int(tokens[i + 1])
+                i += 1
+            _emit_cross_month(day_specs, d1, month, d2, m2)
+            month = m2
+            last_month_seen = m2
+            i += 1
+            continue
+
+        # Same-month range: "DD-DD".
+        m_rng = re.fullmatch(r"(\d{1,2})-(\d{1,2})", tok)
+        if m_rng:
+            d1, d2 = int(m_rng.group(1)), int(m_rng.group(2))
+            if 1 <= d1 <= 31 and 1 <= d2 <= 31:
+                for d in _expand_day_range(d1, d2):
+                    # A wrap (e.g. 30-02) rolls into the next month.
+                    mo = month
+                    if mo is not None and d < d1:
+                        mo = mo + 1 if mo < 12 else 1
+                    day_specs.append((d, mo))
+            i += 1
+            continue
+
+        # Single day: "DD".
+        m_one = re.fullmatch(r"\d{1,2}", tok)
+        if m_one and 1 <= int(tok) <= 31:
+            day_specs.append((int(tok), month))
+        i += 1
+
+    return last_month_seen if last_month_seen is not None else month, day_specs, windows
+
+
+def _emit_cross_month(day_specs, d1: int, m1: int | None, d2: int | None, m2: int) -> None:
+    """Append days for a range that crosses a month boundary (``DD-MON DD``).
+
+    ``d1`` is in month ``m1`` (the running month) and the range runs up to
+    ``d2`` in month ``m2``. When ``d2`` is unknown only the start day is added.
+    """
+    day_specs.append((d1, m1))
+    if d2 is None:
+        return
+    # Fill the tail of the first month (d1+1 .. up to 31) then the start of the
+    # second month (1 .. d2). We don't know the exact length of month m1, so we
+    # stop the first-month fill once we would exceed a plausible month end; the
+    # de-duplication downstream tolerates a spurious 31 only when it is a real
+    # calendar day, which _day_label renders verbatim. To stay safe we only
+    # bridge directly to the second month's days.
+    for d in range(1, d2 + 1):
+        day_specs.append((d, m2))
 
 
 def _windows_in(rest: str) -> list[str]:
@@ -292,7 +424,8 @@ def _format_entries(entries, base: datetime | None, daily: bool) -> list[str]:
     Each entry produces one line per window in the form
     ``Месяц DD, HH:MM - HH:MM`` (e.g. ``Сентябрь 28, 12:23 - 14:47``). Every
     day is listed on its own line; consecutive identical days are NOT collapsed
-    into ranges. Day-range entries (``DD-DD``) are expanded to a line per day.
+    into ranges. Day ranges are already expanded to individual ``day`` entries
+    upstream (see ``_parse_segment``), each carrying its resolved month.
     """
     lines: list[str] = []
     for kind, key, wins in entries:
@@ -300,15 +433,10 @@ def _format_entries(entries, base: datetime | None, daily: bool) -> list[str]:
             continue
 
         if kind == "day":
-            label = _day_label(key, base)
+            day, month = key
+            label = _day_label(day, base, month)
             for w in wins:
                 lines.append(f"{label}, {w}")
-        elif kind == "range":
-            d1, d2 = key
-            for day in _expand_day_range(d1, d2):
-                label = _day_label(day, base)
-                for w in wins:
-                    lines.append(f"{label}, {w}")
         else:  # plain
             prefix = "Ежедневно " if daily else ""
             for w in wins:
