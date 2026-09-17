@@ -180,7 +180,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 13_
     - _Requirements: 7.3_
 
-- [~] 7. Implement the ELS_Scraper
+- [ ] 7. Implement the ELS_Scraper
   - [x] 7.1 Create date helpers in `scrapers/fcc_els_fetcher.py`
     - Add pure helpers `_receipt_date_to(today=None)` (today as `mm/dd/yyyy`)
       and `_receipt_date_from(today=None)` (today − 1 calendar month, wrapping
@@ -242,7 +242,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
     - _Properties: 6_
     - _Requirements: 1.2, 1.3, 1.6, 1.7, 1.9, 3.2, 3.3, 3.6, 3.7, 4.1, 4.2, 4.4, 4.5, 4.6_
 
-- [~] 8. Wire the new units into package exports
+- [ ] 8. Wire the new units into package exports
   - [x] 8.1 Export the scraper function from `scrapers/__init__.py`
     - Add `from .fcc_els_fetcher import fetch_fcc_els_applications` and append
       `"fetch_fcc_els_applications"` to `__all__`, matching the existing export
@@ -255,7 +255,7 @@ use Hypothesis (`@settings(max_examples=100)`) and are tagged
       `mark_fcc_els_application_posted`, and append the three names to `__all__`
     - _Requirements: 9.5_
 
-- [~] 9. Integrate into the orchestrator
+- [ ] 9. Integrate into the orchestrator
   - [x] 9.1 Add `_process_fcc_els_applications` to `bot/orchestrator.py`
     - Add module-level imports for the three repo functions from
       `starship_notam.data`, `fetch_fcc_els_applications` from

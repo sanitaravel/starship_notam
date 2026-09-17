@@ -597,6 +597,14 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
         except Exception:
             logger.exception("Fallback drawing failed")
 
+    # Draw a uniform 2px frame around the map. The cartopy axes spine renders
+    # unevenly (the right/top edges get clipped at the figure boundary), so we
+    # draw our own border here to guarantee all four sides match. Re-create the
+    # drawing context because the fallback path may have replaced ``img`` via
+    # alpha compositing.
+    draw = ImageDraw.Draw(img)
+    draw.rectangle(map_box, outline=(58, 58, 58), width=2)
+
     img.save(output_path)
     logger.info("Saved NOTAM image to %s", output_path)
     return output_path
