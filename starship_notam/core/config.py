@@ -44,3 +44,31 @@ FCC_ELS_SEARCH_URL: str = "https://apps.fcc.gov/oetcf/els/reports/GenericSearch.
 FCC_ELS_SEARCH_TERM: str = "Space Exploration"
 
 FCC_ELS_RECORD_LIMIT: int = 50
+
+# --- FAA DRS launch-license tracker configuration ---
+
+# Base host used to resolve DRS API/document URLs.
+FAA_LICENSE_BASE_URL: str = "https://drs.faa.gov"
+
+# The DRS document unique id (DRSDOCID...) for the Starship / Super Heavy
+# Vehicle Operator License we track. Overridable via the environment so a
+# different license document can be followed without a code change.
+FAA_LICENSE_DOC_ID: str = os.environ.get(
+    "FAA_LICENSE_DOC_ID",
+    "DRSDOCID173891218620231102140506.0001",
+).strip()
+
+# The human-facing DRS document viewer URL (the page a reader would open). Used
+# both to establish WAF/session cookies in the browser and as the "source"
+# link in Telegram notifications.
+FAA_LICENSE_VIEWER_URL: str = (
+    f"{FAA_LICENSE_BASE_URL}/browse/excelExternalWindow/{FAA_LICENSE_DOC_ID}"
+)
+
+# The DRS JSON summary API returning the document's metadata ("Document
+# Details" panel). Queried from within the browser context after the viewer
+# page has loaded so the Akamai/AWS session cookies are attached.
+FAA_LICENSE_SUMMARY_URL: str = (
+    f"{FAA_LICENSE_BASE_URL}"
+    f"/api/browse/documents/summaryguiddocview/{FAA_LICENSE_DOC_ID}"
+)

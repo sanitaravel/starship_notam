@@ -38,6 +38,7 @@ from starship_notam.bot.formatting import (
     build_notam_caption,
     format_beach_alert,
     format_faa_activity,
+    format_faa_license,
     format_fcc_els_application,
     format_road_alert,
 )
@@ -56,17 +57,20 @@ from starship_notam.bot.reloader import (
 from starship_notam.data import (
     get_beach_alerts_needing_post,
     get_faa_activities_needing_post,
+    get_faa_licenses_needing_post,
     get_fcc_els_applications_needing_post,
     get_notams_needing_images,
     get_road_alerts_needing_post,
     init_db,
     mark_beach_posted,
     mark_faa_activity_posted,
+    mark_faa_license_posted,
     mark_fcc_els_application_posted,
     mark_image_generated,
     mark_road_posted,
     save_beach_alert,
     save_faa_activity,
+    save_faa_license,
     save_fcc_els_application,
     save_notam,
     save_road_alert,
@@ -77,6 +81,7 @@ from starship_notam.parsers.notam_parser import parse_notam
 
 from starship_notam.scrapers import (
     fetch_faa_advisory,
+    fetch_faa_license,
     fetch_fcc_els_applications,
     fetch_starbase_status,
     search_notams,
@@ -350,6 +355,78 @@ async def _process_fcc_els_applications(chat_list: list[str]) -> None:
             logger.exception(f"Failed to send FCC ELS application {app}")
 
 
+async def _process_faa_licenses(chat_list: list[str]) -> None:
+    """Fetch the FAA DRS launch license, persist it, and post any changes.
+
+    Mirrors ``_process_fcc_els_applications``: the (blocking, Selenium-backed)
+    fetch is offloaded to a worker thread; the record is persisted through the
+    data layer (which performs SHA-256 change detection and re-flags changed
+    records for posting); and any license needing a post is formatted and sent
+    to every chat, then marked posted only if at least one send succeeded.
+    """
+    logger.info("Refreshing FAA DRS launch license needing Telegram post")
+    try:
+        logger.info("Getting FAA DRS launch license")
+        record = await asyncio.to_thread(fetch_faa_license)
+        if record:
+            try:
+                save_faa_license(record, config.DB_PATH)
+            except Exception:
+                logger.exception(
+                    f"Failed to save FAA DRS license {record}"
+                )
+    except Exception:
+        logger.exception("Failed to fetch and parse FAA DRS launch license")
+
+    lic_pending = get_faa_licenses_needing_post(config.DB_PATH)
+    if len(lic_pending) == 0:
+        logger.info("No FAA DRS license needing Telegram post at this time")
+        return
+
+    logger.info(
+        f"Found {len(lic_pending)} FAA DRS license(s) needing post to Telegram"
+    )
+    for lic in lic_pending:
+        try:
+            text = format_faa_license(lic)
+
+            message_ids = []
+            for chat_id in chat_list:
+                message_id = await send_message(chat_id, text)
+                if message_id:
+                    logger.info(f"Sent FAA DRS license to chat {chat_id}")
+                    message_ids.append(message_id)
+                else:
+                    logger.warning(
+                        f"Failed to send FAA DRS license to chat {chat_id}"
+                    )
+
+                await asyncio.sleep(5)
+
+            if message_ids:
+                logger.info(f"Marking FAA DRS license as posted: {lic}")
+                try:
+                    mark_faa_license_posted(
+                        lic["doc_unique_id"],
+                        ",".join(str(mid) for mid in message_ids),
+                        config.DB_PATH,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        f"Failed to mark FAA DRS license as posted: {lic}, "
+                        f"reason: {e}"
+                    )
+            else:
+                logger.error(
+                    "Failed to send FAA DRS license to any configured chat; "
+                    "keeping unposted for retry: %s",
+                    lic.get("doc_unique_id", "<unknown>"),
+                )
+
+        except Exception:
+            logger.exception(f"Failed to send FAA DRS license {lic}")
+
+
 def _ingest_starbase_alerts() -> None:
     """Fetch Starbase status and persist beach/road alerts."""
     logger.info("Refreshing Starbase alerts needing Telegram post")
@@ -458,6 +535,7 @@ async def generate_and_send(chat_list: Optional[list[str]] = None) -> None:
     await _process_notam_images(chat_list)
     await _process_faa_activities(chat_list)
     await _process_fcc_els_applications(chat_list)
+    await _process_faa_licenses(chat_list)
     _ingest_starbase_alerts()
     await _process_beach_alerts(chat_list)
     await _process_road_alerts(chat_list)

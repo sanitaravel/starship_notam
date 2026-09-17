@@ -9,6 +9,11 @@ from starship_notam.data.faa_repo import (
     mark_faa_activity_posted,
     save_faa_activity,
 )
+from starship_notam.data.faa_license_repo import (
+    get_faa_licenses_needing_post,
+    mark_faa_license_posted,
+    save_faa_license,
+)
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,
     mark_fcc_els_application_posted,
@@ -42,6 +47,9 @@ __all__ = [
     "save_fcc_els_application",
     "get_fcc_els_applications_needing_post",
     "mark_fcc_els_application_posted",
+    "save_faa_license",
+    "get_faa_licenses_needing_post",
+    "mark_faa_license_posted",
     "save_beach_alert",
     "save_road_alert",
     "get_beach_alerts_needing_post",

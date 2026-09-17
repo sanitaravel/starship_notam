@@ -49,8 +49,8 @@ def init_db(db_path: Optional[str] = None) -> None:
     """Create the database tables if they don't exist and run migrations.
 
     Ensures that all required tables (notams, faa_activities, starbase_beach,
-    starbase_road, fcc_els_applications) exist and that their schemas are
-    up-to-date. Legacy columns are migrated and removed as needed.
+    starbase_road, fcc_els_applications, faa_licenses) exist and that their
+    schemas are up-to-date. Legacy columns are migrated and removed as needed.
 
     On failure, any pending transaction is rolled back so the database is never
     left in a partially committed state.
@@ -216,6 +216,71 @@ def init_db(db_path: Optional[str] = None) -> None:
                 )
                 cur.execute(
                     f"ALTER TABLE fcc_els_applications ADD COLUMN {col_name} {col_def}"
+                )
+        conn.commit()
+
+        # --- faa_licenses table ---
+        # Tracks a single FAA DRS launch (Vehicle Operator) license document.
+        # ``doc_unique_id`` is the stable DRSDOCID identifier (UNIQUE key);
+        # ``content_guid`` is the underlying content object id which changes
+        # when the file is re-uploaded; ``details_json`` holds the ordered
+        # "Document Details" panel. Change detection uses ``payload_hash`` and
+        # resets ``telegram_posted`` to 0 on any change (see faa_license_repo).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS faa_licenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                doc_unique_id TEXT UNIQUE NOT NULL,
+
+                content_guid TEXT,
+                doc_number TEXT,
+                doc_name TEXT,
+                doc_type_label TEXT,
+
+                status TEXT,
+                revision_number TEXT,
+                issue_date TEXT,
+                expiration_date TEXT,
+
+                details_json TEXT,
+
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+
+                payload_hash TEXT,
+
+                telegram_posted INTEGER DEFAULT 0,
+                telegram_posted_at TEXT,
+                telegram_message_id TEXT
+            )
+        """)
+        conn.commit()
+
+        # Additive migration: add any missing columns without recreating.
+        cur.execute("PRAGMA table_info(faa_licenses)")
+        lic_cols = [r['name'] for r in cur.fetchall()]
+        lic_expected_cols = {
+            'content_guid': 'TEXT',
+            'doc_number': 'TEXT',
+            'doc_name': 'TEXT',
+            'doc_type_label': 'TEXT',
+            'status': 'TEXT',
+            'revision_number': 'TEXT',
+            'issue_date': 'TEXT',
+            'expiration_date': 'TEXT',
+            'details_json': 'TEXT',
+            'payload_hash': 'TEXT',
+            'telegram_posted': 'INTEGER DEFAULT 0',
+            'telegram_posted_at': 'TEXT',
+            'telegram_message_id': 'TEXT',
+        }
+        for col_name, col_def in lic_expected_cols.items():
+            if col_name not in lic_cols:
+                logger.info(
+                    'Adding %s column to faa_licenses table', col_name
+                )
+                cur.execute(
+                    f"ALTER TABLE faa_licenses ADD COLUMN {col_name} {col_def}"
                 )
         conn.commit()
 

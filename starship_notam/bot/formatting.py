@@ -12,6 +12,7 @@ Public functions:
     format_road_alert(alert) -> str
     format_beach_alert(alert) -> str
     format_fcc_els_application(app) -> str
+    format_faa_license(item) -> str
 """
 
 from __future__ import annotations
@@ -27,6 +28,33 @@ from urllib.parse import urljoin
 # into absolute, clickable URLs. Kept local so this module stays stdlib-only
 # and free of the config/network layer.
 _FCC_ELS_BASE_URL = "https://apps.fcc.gov/oetcf/els/reports/"
+
+
+# Base used to build a clickable link to the FAA DRS document viewer from a
+# license record's ``doc_unique_id``. Kept local so this module stays
+# stdlib-only and free of the config/network layer.
+_FAA_DRS_VIEWER_BASE_URL = "https://drs.faa.gov/browse/excelExternalWindow/"
+
+
+# Ordered "Document Details" labels (left column) mapped to their Russian
+# display labels for the launch-license notification. Order controls the
+# rendered order. Labels match the keys produced by the license parser.
+_FAA_LICENSE_FIELD_LABELS: list[tuple[str, str]] = [
+    ("License Number", "Номер лицензии"),
+    ("Status", "Статус"),
+    ("Revision Number", "Номер редакции"),
+    ("Document Issue Date", "Дата выдачи"),
+    ("Document Expiration Date", "Дата окончания"),
+    ("Company", "Компания"),
+    ("Vehicles", "Аппараты"),
+    ("Location", "Место"),
+    ("Document Type", "Тип документа"),
+    ("Service/Office", "Служба/офис"),
+    ("Office of Primary Responsibility", "Ответственный офис"),
+    ("CFR Part Reference", "Ссылка на CFR (Part)"),
+    ("CFR Subpart/Appendix Reference", "Ссылка на CFR (Subpart/Appendix)"),
+    ("CFR Section Reference", "Ссылка на CFR (Section)"),
+]
 
 
 # Translation table for Starbase place names (used by road alert formatting).
@@ -301,3 +329,67 @@ def build_notam_caption(name: str, parsed: dict) -> str:
             return truncated + closing
         return caption[:1024]
     return caption
+
+
+def format_faa_license(item: dict) -> str:
+    """Format a FAA DRS launch-license record into a Russian HTML string.
+
+    Renders the tracked "Document Details" panel: the header reflects whether
+    this is a newly tracked license or an update to an existing one (via the
+    ``is_new`` flag set by the repository), followed by the detail fields (only
+    those with a value) in a fixed, readable order, and a link to the source
+    DRS document viewer.
+
+    All user-supplied text is passed through ``html.escape``. The ``details``
+    field may be a dict or a JSON string (mirroring how ``format_beach_alert``
+    and ``format_fcc_els_application`` tolerate serialized sub-payloads).
+    Performs no network I/O; uses the standard library only.
+    """
+    details = item.get("details")
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except Exception:
+            details = {}
+    if not isinstance(details, dict):
+        details = {}
+
+    # Fall back to the flat columns for the headline fields when ``details`` is
+    # missing an entry (both are populated by the parser, but stay defensive).
+    def _field(label: str, fallback_key: str = "") -> str:
+        value = details.get(label)
+        if (value is None or str(value).strip() == "") and fallback_key:
+            value = item.get(fallback_key)
+        return "" if value is None else str(value).strip()
+
+    is_new = bool(item.get("is_new", True))
+    parts = []
+    if is_new:
+        parts.append("<b>🚀 Лицензия на запуск (FAA)</b>")
+    else:
+        parts.append("<b>🚀 Изменения в лицензии на запуск (FAA)</b>")
+
+    _column_fallbacks = {
+        "License Number": "doc_number",
+        "Status": "status",
+        "Revision Number": "revision_number",
+        "Document Issue Date": "issue_date",
+        "Document Expiration Date": "expiration_date",
+    }
+
+    for label, ru_label in _FAA_LICENSE_FIELD_LABELS:
+        value = _field(label, _column_fallbacks.get(label, ""))
+        if not value:
+            continue
+        parts.append(f"<b>{ru_label}:</b> {html.escape(value)}")
+
+    # Link to the source DRS document viewer, built from the stable document id.
+    doc_id = str(item.get("doc_unique_id") or "").strip()
+    if doc_id:
+        viewer_url = urljoin(_FAA_DRS_VIEWER_BASE_URL, doc_id)
+        parts.append(
+            f'<a href="{html.escape(viewer_url, quote=True)}">'
+            "Открыть документ</a>"
+        )
+
+    return "\n\n".join(parts)
