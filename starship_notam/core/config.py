@@ -24,18 +24,23 @@ if not TELEGRAM_BOT_TOKEN:
         "Please set it in your .env file or system environment."
     )
 
-# --- Optional configuration with defaults ---
+# The single Telegram channel the bot posts to. Set only in .env. Use the
+# channel's numeric id (typically the -100... form) or its public @username.
+# The bot must be an administrator of the channel with permission to post.
+TELEGRAM_CHANNEL_ID: str = os.environ.get("TELEGRAM_CHANNEL_ID", "").strip().strip('"')
+if not TELEGRAM_CHANNEL_ID:
+    raise RuntimeError(
+        "Required environment variable TELEGRAM_CHANNEL_ID is not set or is empty. "
+        "Please set it in your .env file or system environment."
+    )
 
-_raw_chat_ids = os.environ.get("TELEGRAM_CHAT_ID", "")
-CHAT_IDS: list[str] = [c.strip() for c in _raw_chat_ids.split(",") if c.strip()]
+# --- Optional configuration with defaults ---
 
 DB_PATH: str = os.environ.get("NOTAM_DB_PATH", "notams.db")
 
 KEYWORD: str = os.environ.get("KEYWORD", "STARSHIP")
 
 RUNS_PER_HOUR: int = int(os.environ.get("RUNS_PER_HOUR", "2"))
-
-STATE_PATH: str = str(_PROJECT_ROOT / "telegram_chats.json")
 
 # --- FCC ELS scraper configuration ---
 

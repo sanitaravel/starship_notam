@@ -20,7 +20,7 @@ Design constraints:
 
 Public entry points:
     async main_loop() -> None
-    async generate_and_send(chat_list=None) -> None
+    async generate_and_send() -> None
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from starship_notam.core import config
 from starship_notam.core.logging import logger
@@ -43,7 +42,6 @@ from starship_notam.bot.formatting import (
     format_road_alert,
 )
 from starship_notam.bot.transport import (
-    refresh_known_chats,
     send_message,
     send_photo,
 )
@@ -144,17 +142,6 @@ async def _refresh_notams_from_source() -> None:
         _persist_notam_results(results_reentry)
     except Exception:
         logger.exception("NOTAM request failed")
-
-
-async def _get_chat_list_with_fallback() -> list[str]:
-    """Refresh known chats, falling back to configured chat ids on failure."""
-    try:
-        return await refresh_known_chats()
-    except Exception:
-        logger.exception(
-            "Failed to refresh known chats; falling back to env chat ids"
-        )
-        return config.CHAT_IDS
 
 
 async def _process_notam_images(chat_list: list[str]) -> None:
@@ -523,15 +510,16 @@ async def _process_road_alerts(chat_list: list[str]) -> None:
 # --- Orchestration ----------------------------------------------------------
 
 
-async def generate_and_send(chat_list: Optional[list[str]] = None) -> None:
+async def generate_and_send() -> None:
     """Run one full ingestion + delivery cycle.
 
     Each step is independently wrapped in try/except (inside the helper
     functions), so a failure in one step does not prevent the others from
-    running.
+    running. All content is delivered to the single configured Telegram
+    channel (``config.TELEGRAM_CHANNEL_ID``).
     """
     await _refresh_notams_from_source()
-    chat_list = await _get_chat_list_with_fallback()
+    chat_list = [config.TELEGRAM_CHANNEL_ID]
     await _process_notam_images(chat_list)
     await _process_faa_activities(chat_list)
     await _process_fcc_els_applications(chat_list)
@@ -583,7 +571,7 @@ async def sleep_until_next_run() -> None:
 
 
 async def main_loop() -> None:
-    """Start the bot: initialize, announce startup, and loop forever.
+    """Start the bot: initialize and loop forever.
 
     The loop wraps ``generate_and_send`` in try/except so a transient failure
     never terminates monitoring. ``asyncio.CancelledError`` is handled to log a
@@ -595,29 +583,11 @@ async def main_loop() -> None:
     # Snapshot our own source files so we can detect code updates on disk
     # and restart in place to pick them up (see bot.reloader).
     source_snapshot = snapshot_sources()
-    # refresh known chats (discover groups the bot was added to)
-    try:
-        chat_list = await refresh_known_chats()
-    except Exception:
-        logger.exception(
-            "Failed to refresh known chats; falling back to env chat ids"
-        )
-        chat_list = config.CHAT_IDS
-
-    for chat_id in chat_list:
-        message_id = await send_message(
-            chat_id,
-            "NOTAM bot has started and is monitoring for updates.",
-        )
-        if message_id is None:
-            logger.info(f"Sent startup message to chat {chat_id}")
-        # pause between activities to reduce likelihood of rate limiting
-        await asyncio.sleep(5)
 
     try:
         while True:
             try:
-                await generate_and_send(chat_list)
+                await generate_and_send()
             except Exception:
                 logger.exception("Error in generate_and_send")
 

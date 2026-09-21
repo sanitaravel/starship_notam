@@ -82,11 +82,10 @@ OLD_MODULE_EXPORTS: dict[str, dict[str, str]] = {
     # notam_logging -> starship_notam.core
     "notam_logging": {
         "TELEGRAM_BOT_TOKEN": "starship_notam.core",
-        "CHAT_IDS": "starship_notam.core",
+        "TELEGRAM_CHANNEL_ID": "starship_notam.core",
         "DB_PATH": "starship_notam.core",
         "KEYWORD": "starship_notam.core",
         "RUNS_PER_HOUR": "starship_notam.core",
-        "STATE_PATH": "starship_notam.core",
         "logger": "starship_notam.core",
         "console": "starship_notam.core",
     },
@@ -100,7 +99,6 @@ OLD_MODULE_EXPORTS: dict[str, dict[str, str]] = {
         "generate_and_send": "starship_notam.bot.orchestrator",
         "send_photo": "starship_notam.bot.transport",
         "send_message": "starship_notam.bot.transport",
-        "refresh_known_chats": "starship_notam.bot.transport",
     },
     # visualize_notams -> starship_notam.visualization (+ parser coord helper)
     "visualize_notams": {

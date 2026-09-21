@@ -63,11 +63,10 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "fetch_starbase_status": ("starship_notam.scrapers", "fetch_starbase_status"),
     # notam_logging -> core
     "TELEGRAM_BOT_TOKEN": ("starship_notam.core", "TELEGRAM_BOT_TOKEN"),
-    "CHAT_IDS": ("starship_notam.core", "CHAT_IDS"),
+    "TELEGRAM_CHANNEL_ID": ("starship_notam.core", "TELEGRAM_CHANNEL_ID"),
     "DB_PATH": ("starship_notam.core", "DB_PATH"),
     "KEYWORD": ("starship_notam.core", "KEYWORD"),
     "RUNS_PER_HOUR": ("starship_notam.core", "RUNS_PER_HOUR"),
-    "STATE_PATH": ("starship_notam.core", "STATE_PATH"),
     "logger": ("starship_notam.core", "logger"),
     "console": ("starship_notam.core", "console"),
     # telegram_bot -> bot
@@ -79,7 +78,6 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "generate_and_send": ("starship_notam.bot.orchestrator", "generate_and_send"),
     "send_photo": ("starship_notam.bot.transport", "send_photo"),
     "send_message": ("starship_notam.bot.transport", "send_message"),
-    "refresh_known_chats": ("starship_notam.bot.transport", "refresh_known_chats"),
     # visualize_notams -> visualization
     "render_map": ("starship_notam.visualization", "render_map"),
     "render_notam_image": ("starship_notam.visualization", "render_notam_image"),
