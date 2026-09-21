@@ -109,7 +109,10 @@ def test_build_notam_caption_full(sample_parsed_notam):
     assert "Подробности:" in caption
     assert "<blockquote expandable>" in caption
     assert "STARSHIP SUPER HEAVY LAUNCH OPERATIONS." in caption
-    assert caption.rstrip().endswith("</blockquote>")
+    # the details blockquote is closed before the trailing hashtag line
+    assert "</blockquote>" in caption
+    # hashtags close out the caption for channel search
+    assert caption.rstrip().endswith("#Starship #NOTAM #06123")
 
 
 def test_build_notam_caption_strips_json_suffix_and_underscores():
@@ -154,7 +157,9 @@ def test_build_notam_caption_truncates_to_1024_with_blockquote_close():
 
     assert len(caption) <= 1024
     # blockquote must still be closed after truncation
-    assert caption.endswith("</blockquote>")
+    assert "</blockquote>" in caption
+    # the hashtag line survives truncation and closes the caption
+    assert caption.rstrip().endswith("#Starship #NOTAM #x")
 
 
 # ---------------------------------------------------------------------------
@@ -325,3 +330,99 @@ def test_format_beach_alert_invalid_json_string_is_tolerated():
     assert "<b>🏖️ Перекрытие пляжа</b>" in msg
     # no valid period data -> no period lines
     assert "<b>Основной период:</b>" not in msg
+
+
+# ---------------------------------------------------------------------------
+# build_notam_caption — per-day schedule breakdown (field D)
+# ---------------------------------------------------------------------------
+def test_build_notam_caption_lists_per_day_schedule_from_d_field():
+    """When D holds a schedule, dates render as one line per active day.
+
+    Mirrors the image layout: an interleaved ``<day> BTN <window>`` schedule
+    (W3078/26) becomes a ``Даты (UTC):`` block, not a single ``B → C`` line.
+    """
+    parsed = {
+        "B": "2026-09-26T13:43:00Z",
+        "C": "2026-10-02T15:58:00Z",
+        "D": (
+            "SEP 26 BTN 1343-1721  27 BTN 1436-1707  28 BTN 1315-1653  \n"
+            "29 BTN 1301-1639  30 BTN 1247-1625\n"
+            "OCT 01 BTN 1234-1612  02 BTN 1220-1558"
+        ),
+    }
+    caption = formatting.build_notam_caption("W3078_26", parsed)
+
+    assert "<b>Даты (UTC):</b>" in caption
+    assert "Сентябрь 26, 13:43 - 17:21" in caption
+    assert "Октябрь 02, 12:20 - 15:58" in caption
+    # The single-span arrow line is not used when a schedule breakdown exists.
+    assert "<b>Даты:</b>" not in caption
+
+
+def test_build_notam_caption_daily_schedule_expands_across_period():
+    """A ``DLY`` schedule lists every day of the B..C period (B1882/26)."""
+    parsed = {
+        "B": "2026-09-28T12:15:00Z",
+        "C": "2026-10-04T14:14:00Z",
+        "D": "DLY 1215-1414",
+    }
+    caption = formatting.build_notam_caption("B1882_26", parsed)
+
+    assert "<b>Даты (UTC):</b>" in caption
+    assert "Сентябрь 28, 12:15 - 14:14" in caption
+    assert "Октябрь 04, 12:15 - 14:14" in caption
+
+
+def test_build_notam_caption_falls_back_to_span_without_d_field():
+    """Without a parseable D field the caption keeps the ``B → C`` line."""
+    parsed = {"B": "2026-07-08T00:00:00Z", "C": "2026-07-16T00:00:00Z"}
+    caption = formatting.build_notam_caption("X0001_26", parsed)
+
+    assert "<b>Даты:</b>" in caption
+    assert "08.07.2026" in caption
+    assert "16.07.2026" in caption
+    assert "→" in caption
+
+
+# ---------------------------------------------------------------------------
+# Hashtags — every message type carries category tags for channel search
+# ---------------------------------------------------------------------------
+def test_notam_caption_includes_hashtags_with_code_tag():
+    """The NOTAM caption ends with common + NOTAM tags and a code-derived tag."""
+    caption = formatting.build_notam_caption(
+        "B1882_26", {"B": "2026-09-28T12:15:00Z", "C": "2026-10-04T14:14:00Z"}
+    )
+
+    assert caption.rstrip().endswith("#Starship #NOTAM #B188226")
+
+
+def test_faa_activity_includes_hashtags():
+    msg = formatting.format_faa_activity({"mission": "Flight"})
+
+    assert msg.rstrip().endswith("#Starship #FAA #Запуск")
+
+
+def test_road_alert_includes_hashtags():
+    msg = formatting.format_road_alert({"origin": "Pad", "destination": "Port"})
+
+    assert msg.rstrip().endswith("#Starship #Дорога #Перекрытие")
+
+
+def test_beach_alert_includes_hashtags():
+    msg = formatting.format_beach_alert({"raw_date": "July 8"})
+
+    assert msg.rstrip().endswith("#Starship #Пляж #Перекрытие")
+
+
+def test_fcc_application_includes_hashtags():
+    msg = formatting.format_fcc_els_application(
+        {"applicant_name": "SpaceX", "file_number": "1", "status": "Granted"}
+    )
+
+    assert msg.rstrip().endswith("#Starship #FCC #Заявка")
+
+
+def test_faa_license_includes_hashtags():
+    msg = formatting.format_faa_license({"is_new": True, "doc_number": "X"})
+
+    assert msg.rstrip().endswith("#Starship #FAA #Лицензия")

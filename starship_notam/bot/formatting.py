@@ -22,6 +22,38 @@ import json
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
+from starship_notam.parsers.schedule import parse_notam_windows
+
+
+# Hashtags appended to each message so the channel can be filtered by category.
+# Every post carries the shared ``#Starship`` tag plus one category-specific tag
+# (Telegram treats each whitespace-separated ``#word`` as a searchable tag).
+_TAG_COMMON = "#SpaceUpdates"
+_TAGS_NOTAM = (_TAG_COMMON, "#NOTAM")
+_TAGS_FAA_ACTIVITY = (_TAG_COMMON, "#FAA", "#Запуск")
+_TAGS_ROAD = (_TAG_COMMON, "#Дорога", "#Перекрытие")
+_TAGS_BEACH = (_TAG_COMMON, "#Пляж", "#Перекрытие")
+_TAGS_FCC = (_TAG_COMMON, "#FCC", "#Заявка")
+_TAGS_FAA_LICENSE = (_TAG_COMMON, "#FAA", "#Лицензия")
+
+
+def _hashtag_line(*tags: str) -> str:
+    """Join hashtags into a single space-separated line, dropping blanks."""
+    return " ".join(t for t in tags if t)
+
+
+def _sanitize_tag(value: str) -> str:
+    """Turn arbitrary text into a single ``#Tag`` token.
+
+    Keeps letters and digits, drops everything else (Telegram hashtags cannot
+    contain spaces or punctuation). Returns an empty string when nothing usable
+    remains, so callers can filter it out.
+    """
+    if not value:
+        return ""
+    cleaned = "".join(ch for ch in str(value) if ch.isalnum())
+    return f"#{cleaned}" if cleaned else ""
+
 
 # Base used to resolve the root-relative FCC ELS detail links (e.g.
 # "/oetcf/els/reports/STA_Print.cfm?..") scraped into ``current_detail_url``
@@ -105,6 +137,8 @@ def format_faa_activity(activity: dict) -> str:
         parts.append(
             f"<b>Запасное окно:</b> {html.escape(convert_faa_time(backup))}")
 
+    parts.append(_hashtag_line(*_TAGS_FAA_ACTIVITY))
+
     return "\n\n".join(parts)
 
 
@@ -127,6 +161,8 @@ def format_road_alert(alert: dict) -> str:
         parts.append(
             f"<b>Время:</b> {html.escape(fmt_time(alert['start_utc']))} – {html.escape(fmt_time(alert['end_utc']))}"
         )
+
+    parts.append(_hashtag_line(*_TAGS_ROAD))
 
     return "\n\n".join(parts)
 
@@ -175,6 +211,8 @@ def format_beach_alert(alert: dict) -> str:
         secondary_text = period_text(secondary_period)
         if secondary_text:
             parts.append(f"<b>Запасной период:</b> {secondary_text}")
+
+    parts.append(_hashtag_line(*_TAGS_BEACH))
 
     return "\n\n".join(parts)
 
@@ -272,6 +310,8 @@ def format_fcc_els_application(app: dict) -> str:
             "Открыть заявку</a>"
         )
 
+    parts.append(_hashtag_line(*_TAGS_FCC))
+
     return "\n\n".join(parts)
 
 
@@ -286,31 +326,50 @@ def build_notam_caption(name: str, parsed: dict) -> str:
     display_name = raw_name.replace('_', '/')
     parts.append(f"<b>Код NOTAM:</b> {html.escape(display_name)}")
 
-    def _fmt_dt(s):
+    def _parse_dt(s):
+        """Parse a NOTAM B/C timestamp into a UTC-naive-ish datetime or None."""
         if not s:
-            return ''
+            return None
         try:
             s_str = str(s).strip()
             if s_str.endswith('Z'):
                 s_str = s_str[:-1]
             s_iso = s_str.replace('T', ' ')
-            try:
-                dt = datetime.fromisoformat(s_iso)
-                if dt.tzinfo is not None:
-                    dt_utc = dt.astimezone(timezone.utc)
-                else:
-                    dt_utc = dt
-                return dt_utc.strftime('%d.%m.%Y %H:%M UTC')
-            except Exception:
-                return s_iso
+            dt = datetime.fromisoformat(s_iso)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
         except Exception:
-            return str(s)
+            return None
 
-    # Dates (B and C)
-    b_fmt = _fmt_dt(parsed.get('B') or '')
-    c_fmt = _fmt_dt(parsed.get('C') or '')
-    if b_fmt or c_fmt:
-        parts.append(f"<b>Даты:</b> {html.escape(b_fmt)} → {html.escape(c_fmt)}")
+    def _fmt_dt(s):
+        dt = _parse_dt(s)
+        if dt is not None:
+            return dt.strftime('%d.%m.%Y %H:%M UTC')
+        if not s:
+            return ''
+        s_str = str(s).strip()
+        if s_str.endswith('Z'):
+            s_str = s_str[:-1]
+        return s_str.replace('T', ' ')
+
+    # Dates. Prefer the same per-day schedule breakdown used on the image
+    # (parsed from field D), so daily/multi-day NOTAMs list each active date
+    # with its window instead of a single "B → C" span. Fall back to the
+    # B → C line when D is empty or unparseable.
+    start_dt = _parse_dt(parsed.get('B'))
+    end_dt = _parse_dt(parsed.get('C'))
+    windows = parse_notam_windows(parsed.get('D'), start_dt, end_dt)
+    if windows:
+        window_lines = "\n".join(html.escape(w) for w in windows)
+        parts.append(f"<b>Даты (UTC):</b>\n{window_lines}")
+    else:
+        b_fmt = _fmt_dt(parsed.get('B') or '')
+        c_fmt = _fmt_dt(parsed.get('C') or '')
+        if b_fmt or c_fmt:
+            parts.append(
+                f"<b>Даты:</b> {html.escape(b_fmt)} → {html.escape(c_fmt)}"
+            )
 
     # Details (E) as blockquote
     if parsed.get('E'):
@@ -321,14 +380,27 @@ def build_notam_caption(name: str, parsed: dict) -> str:
         expandable_bq = f"<blockquote expandable>{details_escaped}</blockquote>"
         parts.append(expandable_bq)
 
-    caption = '\n\n'.join(parts)
-    if len(caption) > 1024:
-        closing = '</blockquote>'
-        if '<blockquote' in caption:
-            truncated = caption[:1024 - len(closing)]
-            return truncated + closing
-        return caption[:1024]
-    return caption
+    # Hashtags for channel search: the common + NOTAM tags plus a tag derived
+    # from the NOTAM code (e.g. "B1882/26" -> "#B188226") so a specific NOTAM
+    # is searchable. Kept out of the truncation body below so it always
+    # survives (Telegram caption hard limit is 1024 characters).
+    tag_line = _hashtag_line(*_TAGS_NOTAM, _sanitize_tag(display_name))
+
+    body = '\n\n'.join(parts)
+    caption = f"{body}\n\n{tag_line}"
+    if len(caption) <= 1024:
+        return caption
+
+    # Too long: trim the body so the caption plus the hashtag line fits, then
+    # re-append the tags. Close any open blockquote left dangling by the cut.
+    tag_suffix = f"\n\n{tag_line}"
+    budget = 1024 - len(tag_suffix)
+    closing = '</blockquote>'
+    if '<blockquote' in body:
+        trimmed = body[:budget - len(closing)] + closing
+    else:
+        trimmed = body[:budget]
+    return f"{trimmed}{tag_suffix}"
 
 
 def format_faa_license(item: dict) -> str:
@@ -391,5 +463,7 @@ def format_faa_license(item: dict) -> str:
             f'<a href="{html.escape(viewer_url, quote=True)}">'
             "Открыть документ</a>"
         )
+
+    parts.append(_hashtag_line(*_TAGS_FAA_LICENSE))
 
     return "\n\n".join(parts)

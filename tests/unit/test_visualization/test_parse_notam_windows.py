@@ -87,3 +87,54 @@ def test_regression_bare_window():
 def test_regression_empty():
     assert parse_notam_windows("", BASE) == []
     assert parse_notam_windows(None, BASE) == []
+
+
+def test_daily_window_expands_across_period_when_end_given():
+    """B1882/26 regression: ``DLY 1215-1414`` over B..C must list each day.
+
+    Field B = 2026-09-28 12:15, field C = 2026-10-04 14:14. With both bounds
+    known, a bare daily schedule expands to one line per active day instead of
+    a single ``Ежедневно`` line.
+    """
+    start = datetime(2026, 9, 28, 12, 15, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 4, 14, 14, tzinfo=timezone.utc)
+    assert parse_notam_windows("DLY 1215-1414", start, end) == [
+        "Сентябрь 28, 12:15 - 14:14",
+        "Сентябрь 29, 12:15 - 14:14",
+        "Сентябрь 30, 12:15 - 14:14",
+        "Октябрь 01, 12:15 - 14:14",
+        "Октябрь 02, 12:15 - 14:14",
+        "Октябрь 03, 12:15 - 14:14",
+        "Октябрь 04, 12:15 - 14:14",
+    ]
+
+
+def test_daily_window_without_end_stays_single_line():
+    """Without an end bound the daily window keeps the compact fallback."""
+    start = datetime(2026, 9, 28, 12, 15, tzinfo=timezone.utc)
+    assert parse_notam_windows("DLY 1215-1414", start) == ["Ежедневно 12:15 - 14:14"]
+
+
+def test_interleaved_per_day_windows_pair_each_day_with_own_window():
+    """W3078/26 regression: each day carries its OWN window on one line.
+
+    Field D interleaves ``<day> BTN <window>`` groups, so day 26 must pair with
+    1343-1721, day 27 with 1436-1707, and so on -- not every day sharing every
+    window.
+    """
+    start = datetime(2026, 9, 26, 13, 43, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 2, 15, 58, tzinfo=timezone.utc)
+    d = (
+        "SEP 26 BTN 1343-1721  27 BTN 1436-1707  28 BTN 1315-1653  \n"
+        "29 BTN 1301-1639  30 BTN 1247-1625\n"
+        "OCT 01 BTN 1234-1612  02 BTN 1220-1558"
+    )
+    assert parse_notam_windows(d, start, end) == [
+        "Сентябрь 26, 13:43 - 17:21",
+        "Сентябрь 27, 14:36 - 17:07",
+        "Сентябрь 28, 13:15 - 16:53",
+        "Сентябрь 29, 13:01 - 16:39",
+        "Сентябрь 30, 12:47 - 16:25",
+        "Октябрь 01, 12:34 - 16:12",
+        "Октябрь 02, 12:20 - 15:58",
+    ]
