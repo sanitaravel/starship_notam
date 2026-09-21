@@ -43,7 +43,19 @@ MAX_EXTENT_HALF_SPAN = 90.0  # degrees; stop expanding once the view is near-glo
 # near-global view chasing distant, unrelated continents. The land search may
 # grow the extent up to this multiple of the fitted half-spans; if no usable
 # land appears within that window, the fitted extent is returned unchanged.
-LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 15.0
+#
+# Kept deliberately small: a large multiple (previously 15x) let a polygon in
+# the open South Pacific balloon its view all the way to continental South
+# America, shrinking the NOTAM shape to a tiny sliver on a near-continental map.
+# For open-ocean NOTAMs the polygon and graticule are the geographic reference,
+# so we only allow a modest zoom-out to catch nearby land, not distant coasts.
+LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE = 3.0
+
+# Geometries that already span at least this many degrees (in either dimension)
+# are large enough to be self-referential on the map, so the land-visibility
+# zoom-out is skipped entirely for them. This prevents big multi-hundred-mile
+# hazard polygons from being zoomed out to chase distant continents.
+LAND_ZOOM_OUT_SKIP_SPAN_DEG = 8.0
 # Minimum on-screen footprint (in pixels) a landmass must occupy within the view
 # to count as a usable visual reference. Tiny sub-pixel islands don't help, so we
 # require land at least this large in either dimension. Tuned to match the
@@ -429,8 +441,27 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
     # Ensure at least one landmass is visible for geographic reference. NOTAMs
     # in the open ocean can otherwise produce a featureless dark rectangle, so
     # zoom out (keeping the NOTAM centered) until some land enters the view.
+    #
+    # Skip this for geometries that already span a large area: a big polygon is
+    # its own geographic reference, and zooming out to reach a distant coast
+    # would shrink it to an unreadable sliver (as happened for open-ocean
+    # South Pacific hazard areas).
     if coords:
-        extent = _expand_extent_until_land(extent, size)
+        geom_span_deg = 0.0
+        try:
+            if isinstance(coords, list) and coords:
+                _lats = [p[0] for p in coords]
+                _lons = [p[1] for p in coords]
+                geom_span_deg = max(max(_lats) - min(_lats), max(_lons) - min(_lons))
+        except Exception:
+            geom_span_deg = 0.0
+        if geom_span_deg >= LAND_ZOOM_OUT_SKIP_SPAN_DEG:
+            logger.info(
+                "Geometry spans %.1f deg (>= %.1f); skipping land-visibility zoom-out",
+                geom_span_deg, LAND_ZOOM_OUT_SKIP_SPAN_DEG,
+            )
+        else:
+            extent = _expand_extent_until_land(extent, size)
 
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
