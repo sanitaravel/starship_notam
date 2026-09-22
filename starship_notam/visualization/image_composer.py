@@ -177,6 +177,15 @@ def extract_starship_template(notam: str) -> str | None:
     if "HIGH ENERGY TESTING" in text and "SPACEX" in text:
         return "ВЫСОКОЭНЕРГЕТИЧЕСКИЕ ТЕСТИРОВАНИЯ"
 
+    # 0b-2. Space launch rehearsal TFR (SpaceX, no flight number). The real FAA
+    # feed misspells "REHEARSAL" as "REHERSAL", so match both spellings. Guarded
+    # by SPACEX so it only fires for SpaceX rehearsal restrictions.
+    if (
+        ("LAUNCH REHERSAL" in text or "LAUNCH REHEARSAL" in text)
+        and "SPACEX" in text
+    ):
+        return "РЕПЕТИЦИЯ ЗАПУСКА SPACEX"
+
     # ----------------------------
     # Extract flight number
     # ----------------------------
