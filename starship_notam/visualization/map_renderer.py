@@ -292,6 +292,100 @@ def _format_lat(lat: float) -> str:
     return f"{_format_degrees(lat)}\u00b0{hemi}"
 
 
+def _segments_intersect(p1, p2, p3, p4) -> bool:
+    """Return True if open segment ``p1-p2`` properly crosses ``p3-p4``.
+
+    Points are ``(lat, lon)`` tuples. Uses an orientation (CCW) test. Segments
+    that merely share an endpoint are not treated as intersecting, so adjacent
+    polygon edges don't count as crossings.
+    """
+    def ccw(a, b, c):
+        return (c[0] - a[0]) * (b[1] - a[1]) - (b[0] - a[0]) * (c[1] - a[1])
+
+    # Ignore pairs that share an endpoint (adjacent edges of the ring).
+    if p1 in (p3, p4) or p2 in (p3, p4):
+        return False
+
+    d1 = ccw(p3, p4, p1)
+    d2 = ccw(p3, p4, p2)
+    d3 = ccw(p1, p2, p3)
+    d4 = ccw(p1, p2, p4)
+    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0))
+
+
+def _polygon_self_intersects(pts) -> bool:
+    """Return True if the closed polygon through ``pts`` has crossing edges.
+
+    ``pts`` is a list of ``(lat, lon)`` vertices (open ring; the closing edge
+    back to the first point is tested implicitly). Fewer than 4 vertices can
+    never self-intersect.
+    """
+    n = len(pts)
+    if n < 4:
+        return False
+    edges = [(pts[i], pts[(i + 1) % n]) for i in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            a1, a2 = edges[i]
+            b1, b2 = edges[j]
+            if _segments_intersect(a1, a2, b1, b2):
+                return True
+    return False
+
+
+def _order_by_centroid_angle(pts):
+    """Return ``pts`` reordered counter-clockwise around their centroid.
+
+    This untangles a vertex list whose given order self-intersects, producing a
+    simple (non-self-crossing) polygon for convex and mildly-concave shapes,
+    which covers NOTAM hazard areas. ``pts`` is a list of ``(lat, lon)`` tuples.
+    """
+    import math
+
+    n = len(pts)
+    cy = sum(p[0] for p in pts) / n  # centroid latitude
+    cx = sum(p[1] for p in pts) / n  # centroid longitude
+    return sorted(pts, key=lambda p: math.atan2(p[0] - cy, p[1] - cx))
+
+
+def _normalize_polygon_order(coords):
+    """Return polygon vertices in a non-self-intersecting order.
+
+    Only reorders when the vertices as given produce a self-intersecting
+    ("bowtie") polygon; otherwise the original order is preserved verbatim so
+    NOTAMs that already describe a simple polygon are drawn exactly as listed.
+
+    ``coords`` is a list of ``(lat, lon)`` tuples. Returns a (possibly new) list.
+    """
+    try:
+        if not isinstance(coords, list) or len(coords) < 4:
+            return coords
+        # Work on the distinct ring vertices, dropping an explicit closing point
+        # (first == last) if present so it doesn't skew the centroid or the
+        # intersection test.
+        ring = coords[:-1] if len(coords) > 1 and coords[0] == coords[-1] else list(coords)
+        if len(ring) < 4:
+            return coords
+        if not _polygon_self_intersects(ring):
+            return coords
+        reordered = _order_by_centroid_angle(ring)
+        if _polygon_self_intersects(reordered):
+            # Reordering didn't help (unusual concave case); keep original.
+            logger.info(
+                "Polygon self-intersects but centroid-angle reorder did not "
+                "resolve it; keeping original vertex order"
+            )
+            return coords
+        logger.info(
+            "Polygon vertices self-intersected in listed order; reordered by "
+            "centroid angle to form a simple polygon"
+        )
+        return reordered
+    except Exception:
+        logger.exception("Failed to normalize polygon vertex order; using original")
+        return coords
+
+
 def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float | None = None) -> "Image.Image":
     """Render a map image (PIL.Image) showing the given coords polygon or point using Cartopy.
 
@@ -327,6 +421,13 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
             "cartopy and matplotlib are required for map rendering; "
             "install project dependencies via 'pip install .'"
         ) from e
+
+    # Untangle polygon vertices whose listed order self-intersects (some NOTAMs
+    # list boundary points out of geometric order, producing a "bowtie"). This
+    # only reorders when the given order actually crosses; simple polygons are
+    # left exactly as provided. Done before extent/drawing so both stay in sync.
+    if isinstance(coords, list) and coords:
+        coords = _normalize_polygon_order(coords)
 
     fig_dpi = 100
     fig_w = size[0] / fig_dpi
