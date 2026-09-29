@@ -12,14 +12,10 @@ The scraper performs no persistence: it returns the scraped results to the
 caller and raises an exception (or returns an empty list) on failure.
 """
 
-import os
 import time
 
 from starship_notam.core.logging import logger
-
-# Whether to run a local Chrome instance (DEBUG_MODE) or connect to a remote
-# Selenium grid. Read once at import time to preserve prior behavior.
-DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
+from starship_notam.scrapers.driver import create_driver
 
 
 def search_notams(keyword: str) -> list[dict]:
@@ -39,35 +35,11 @@ def search_notams(keyword: str) -> list[dict]:
     """
     # Lazy imports — selenium is an optional heavy dependency only needed at
     # call time, not at module import time.
-    from selenium import webdriver
-    from selenium.webdriver import Remote
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import WebDriverWait
 
-    options = webdriver.ChromeOptions()
-    # run Chrome in headless mode for automated runs
-    options.add_argument("--headless")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--window-position=-2400,-2400")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    # make headless less detectable
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    # set a common user-agent to avoid headless detection
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-    )
-
-    if DEBUG_MODE:
-        driver = webdriver.Chrome(options=options)
-    else:
-        driver = Remote(
-            command_executor="http://selenium:4444/wd/hub",
-            options=options,
-        )
+    driver = create_driver()
 
     results = []
 

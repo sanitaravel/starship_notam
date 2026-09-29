@@ -21,21 +21,17 @@ caller and is fail-safe (returns ``[]`` and never raises to the caller on any
 search/navigation failure).
 """
 
-import os
 import time
 from datetime import date
 from urllib.parse import urljoin
 
 from starship_notam.core import config
 from starship_notam.core.logging import logger
+from starship_notam.scrapers.driver import create_driver
 from starship_notam.parsers.fcc_els_parser import (
     parse_fcc_els_detail_html,
     parse_fcc_els_results_html,
 )
-
-# Whether to run a local Chrome instance (DEBUG_MODE) or connect to a remote
-# Selenium grid. Read once at import time to match the NOTAM scraper.
-DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
 
 # --- Form field locators -------------------------------------------------
 #
@@ -132,8 +128,6 @@ def fetch_fcc_els_applications() -> list[dict]:
     # call time, not at module import time (keeps the scrapers package
     # importable without selenium installed).
     try:
-        from selenium import webdriver
-        from selenium.webdriver import Remote
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.ui import WebDriverWait
@@ -141,29 +135,7 @@ def fetch_fcc_els_applications() -> list[dict]:
         logger.error(f"Selenium is not available for FCC ELS scrape: {e}")
         return []
 
-    options = webdriver.ChromeOptions()
-    # run Chrome in headless mode for automated runs
-    options.add_argument("--headless")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--window-position=-2400,-2400")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    # make headless less detectable
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    # set a common user-agent to avoid headless detection
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-    )
-
-    if DEBUG_MODE:
-        driver = webdriver.Chrome(options=options)
-    else:
-        driver = Remote(
-            command_executor="http://selenium:4444/wd/hub",
-            options=options,
-        )
+    driver = create_driver()
 
     results: list[dict] = []
 

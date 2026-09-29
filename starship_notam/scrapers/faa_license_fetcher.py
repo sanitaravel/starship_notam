@@ -24,15 +24,11 @@ the pure function in :mod:`starship_notam.parsers.faa_license_parser`.
 """
 
 import json
-import os
 
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.parsers.faa_license_parser import parse_faa_license_summary
-
-# Whether to run a local Chrome instance (DEBUG_MODE) or connect to a remote
-# Selenium grid. Read once at import time to match the other scrapers.
-DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
+from starship_notam.scrapers.driver import create_driver
 
 # Seconds to wait for the viewer page (and its Angular app) to load and set the
 # edge/session cookies before we call the summary API.
@@ -89,35 +85,10 @@ def fetch_faa_license() -> dict | None:
     # Lazy imports -- selenium is an optional heavy dependency only needed at
     # call time (keeps the scrapers package importable without selenium).
     try:
-        from selenium import webdriver
-        from selenium.webdriver import Remote
+        driver = create_driver()
     except Exception as e:  # pragma: no cover - environment-dependent
         logger.error(f"Selenium is not available for FAA DRS license scrape: {e}")
         return None
-
-    options = webdriver.ChromeOptions()
-    # run Chrome in headless mode for automated runs
-    options.add_argument("--headless")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--window-position=-2400,-2400")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    # make headless less detectable (the DRS edge blocks obvious bots)
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-    )
-
-    if DEBUG_MODE:
-        driver = webdriver.Chrome(options=options)
-    else:
-        driver = Remote(
-            command_executor="http://selenium:4444/wd/hub",
-            options=options,
-        )
 
     try:
         viewer_url = config.FAA_LICENSE_VIEWER_URL

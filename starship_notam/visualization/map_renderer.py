@@ -348,6 +348,20 @@ def _order_by_centroid_angle(pts):
     return sorted(pts, key=lambda p: math.atan2(p[0] - cy, p[1] - cx))
 
 
+def _is_multi_polygon(coords) -> bool:
+    """True when ``coords`` is a list of coordinate groups (list-of-lists).
+
+    A multi-polygon shape is ``[[(lat, lon), ...], [(lat, lon), ...], ...]`` -
+    each inner list is one polygon. A single polygon (``[(lat, lon), ...]``) or
+    a single point (``(lat, lon)``) returns False.
+    """
+    return (
+        isinstance(coords, list)
+        and len(coords) > 0
+        and all(isinstance(g, list) and g for g in coords)
+    )
+
+
 def _normalize_polygon_order(coords):
     """Return polygon vertices in a non-self-intersecting order.
 
@@ -426,7 +440,18 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
     # list boundary points out of geometric order, producing a "bowtie"). This
     # only reorders when the given order actually crosses; simple polygons are
     # left exactly as provided. Done before extent/drawing so both stay in sync.
-    if isinstance(coords, list) and coords:
+    #
+    # ``coords`` may describe multiple distinct areas as a list-of-lists (e.g. a
+    # NOTAM defining two AND-separated debris-response-area boundaries). Detect
+    # that shape up front: keep each group intact for drawing, but build a flat
+    # point list so the existing extent/land-zoom logic (which only needs the
+    # overall bounding box) works unchanged.
+    polygon_groups: list[list] | None = None
+    if _is_multi_polygon(coords):
+        polygon_groups = [_normalize_polygon_order(list(g)) for g in coords if g]
+        # Flat combined point list drives extent fitting below.
+        coords = [pt for g in polygon_groups for pt in g]
+    elif isinstance(coords, list) and coords:
         coords = _normalize_polygon_order(coords)
 
     fig_dpi = 100
@@ -929,8 +954,25 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
     except Exception:
         # drawing labels is non-critical; do not fail the whole rendering if shapereader/patheffects unavailable
         logger.debug("Shapereader or patheffects not available; skipping labels")
-    # Draw polygon, circle, or point
-    if isinstance(coords, list) and coords:
+    # Draw polygon(s), circle, or point
+    if polygon_groups is not None:
+        # Multiple distinct areas (e.g. two AND-separated DRA boundaries):
+        # draw each group as its own polygon so they stay visually separate.
+        logger.info("Drawing %d polygon group(s) on cartopy map", len(polygon_groups))
+        for gi, group in enumerate(polygon_groups):
+            if not group:
+                continue
+            poly_coords = [(lon, lat) for lat, lon in group]
+            try:
+                poly = Polygon(poly_coords)
+                ax.add_geometries(
+                    [poly], crs=ccrs.PlateCarree(),
+                    facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95),
+                    linewidth=1.6,
+                )
+            except Exception:
+                logger.exception("Failed to draw polygon group %d on cartopy map", gi)
+    elif isinstance(coords, list) and coords:
         poly_coords = [(lon, lat) for lat, lon in coords]
         try:
             poly = Polygon(poly_coords)

@@ -22,7 +22,10 @@ import json
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
-from starship_notam.parsers.schedule import parse_notam_windows
+from starship_notam.parsers.schedule import (
+    parse_notam_windows,
+    parse_notam_windows_with_dates,
+)
 
 
 # Hashtags appended to each message so the channel can be filtered by category.
@@ -359,7 +362,9 @@ def build_notam_caption(name: str, parsed: dict) -> str:
     # B → C line when D is empty or unparseable.
     start_dt = _parse_dt(parsed.get('B'))
     end_dt = _parse_dt(parsed.get('C'))
-    windows = parse_notam_windows(parsed.get('D'), start_dt, end_dt)
+    windows = parse_notam_windows_with_dates(
+        parsed.get('D'), parsed.get('E'), start_dt, end_dt
+    )
     if windows:
         window_lines = "\n".join(html.escape(w) for w in windows)
         parts.append(f"<b>Даты (UTC):</b>\n{window_lines}")

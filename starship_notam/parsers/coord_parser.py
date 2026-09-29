@@ -127,27 +127,32 @@ def _parse_coords(raw: str) -> list[tuple[float, float]] | None:
                 if res:
                     return res
 
-    # 4) Try to find explicit decimal coordinate pairs like 'lat, lon' or 'lat lon'
+    # 4) Try to find explicit decimal coordinate pairs like 'lat, lon' or 'lat lon'.
+    #    Reject pairs outside real geographic ranges (|lat|<=90, |lon|<=180) so
+    #    unrelated numbers in the prose - e.g. NOTAM backup dates like
+    #    "260929, 260930" - are not mistaken for coordinates.
     pair_re = re.compile(r"([-+]?[0-9]*\.?[0-9]+)\s*,\s*([-+]?[0-9]*\.?[0-9]+)")
     for m in pair_re.finditer(s):
         try:
             lat = float(m.group(1))
             lon = float(m.group(2))
-            coords_out.append((lat, lon))
         except Exception:
             continue
+        if abs(lat) <= 90.0 and abs(lon) <= 180.0:
+            coords_out.append((lat, lon))
     if coords_out:
         return coords_out
 
-    # also try whitespace-separated decimal pairs (less strict)
+    # also try whitespace-separated decimal pairs (less strict), same range guard
     ws_pair_re = re.compile(r"([-+]?[0-9]*\.?[0-9]+)\s+([-+]?[0-9]*\.?[0-9]+)")
     for m in ws_pair_re.finditer(s):
         try:
             lat = float(m.group(1))
             lon = float(m.group(2))
-            coords_out.append((lat, lon))
         except Exception:
             continue
+        if abs(lat) <= 90.0 and abs(lon) <= 180.0:
+            coords_out.append((lat, lon))
     if coords_out:
         return coords_out
 
@@ -176,3 +181,43 @@ def parse_coords_from_text(
         return res
     except Exception:
         return None
+
+
+def parse_coord_groups_from_text(
+    raw: str,
+) -> Union[list[list[tuple[float, float]]], None]:
+    """Parse one or more coordinate groups (polygons) from free-form text.
+
+    Some NOTAMs describe multiple distinct areas in a single field, separated
+    by the word ``AND`` (e.g. two debris-response-area boundaries)::
+
+        DRA BOUNDED BY: 1700N07140W-1626N07140W-...-1700N07300W
+        AND 1600N07029W-1548N06956W-...-1600N06813W.
+
+    Each ``AND``-separated chunk is parsed independently so its vertices form
+    their own polygon instead of being fused into one self-intersecting ring.
+
+    Returns:
+        - A list of groups, where each group is a list of ``(lat, lon)`` pairs.
+          A group with a single pair is still returned as a one-element list.
+        - ``None`` when no coordinates could be parsed at all.
+
+    Callers that only need the legacy flat/tuple shape should keep using
+    :func:`parse_coords_from_text`.
+    """
+    if not raw:
+        return None
+
+    # Split on a standalone "AND" token (word boundaries) so it doesn't match
+    # substrings like "LAND" or "COMMAND". Only whitespace-delimited AND counts.
+    chunks = re.split(r"\bAND\b", str(raw), flags=re.IGNORECASE)
+
+    groups: list[list[tuple[float, float]]] = []
+    for chunk in chunks:
+        res = _parse_coords(chunk)
+        if res:
+            groups.append([tuple(p) for p in res])
+
+    if not groups:
+        return None
+    return groups

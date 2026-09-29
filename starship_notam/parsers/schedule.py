@@ -5,8 +5,9 @@ image composer (``starship_notam.visualization.image_composer``) and the
 Telegram caption builder (``starship_notam.bot.formatting``) without pulling in
 Pillow or any other heavy visualization dependency.
 
-Public entry point:
+Public entry points:
     parse_notam_windows(raw, base=None, end=None) -> list[str]
+    parse_notam_windows_with_dates(d_raw, e_raw, base=None, end=None) -> list[str]
 
 Everything else is an implementation helper.
 """
@@ -407,3 +408,105 @@ def _expand_day_range(d1: int, d2: int) -> list[int]:
     # month length here, so include 31 as an upper bound; _day_label rolls the
     # month over for days smaller than the base day.
     return list(range(d1, 32)) + list(range(1, d2 + 1))
+
+
+# --- E-field activation-date extraction ---------------------------------
+#
+# Some NOTAMs (notably SpaceX Starship debris-response-area notices) keep the
+# real set of active dates in the free-text E-field rather than in the D
+# schedule column. The B/C span then covers the whole primary-plus-backup
+# range while D carries only the daily time window, e.g.::
+#
+#     B = 2026-09-28T12:15Z, C = 2026-10-04T14:45Z, D = "1215-1445"
+#     E = "... MAY OCCUR ON 260928. SHOULD THE LAUNCH BE POSTPONED, DRA MAY
+#          BE ACTIVATED, IF REQUIRED, ON ANY OF THE FOLLOWING BACKUP DATES:
+#          260929, 260930, 261001, 261002, 261003, OR 261004."
+#
+# Parsing the D field alone yields only "12:15 - 14:45". To surface the actual
+# activation dates we pull the ``YYMMDD`` tokens out of the E text and pair each
+# with the D-field time window(s).
+
+# ``YYMMDD`` date token (two-digit year, month, day) used in the E-field.
+_YYMMDD_RE = re.compile(r"\b(\d{2})(\d{2})(\d{2})\b")
+
+# Phrases that introduce activation dates in the E-field. We only harvest
+# YYMMDD tokens that appear after one of these anchors so we don't accidentally
+# pick up unrelated 6-digit numbers elsewhere in the prose.
+_DATE_ANCHOR_RE = re.compile(
+    r"(?:MAY\s+OCCUR\s+ON|BACKUP\s+DATE[S]?)\b(.*?)(?:\.|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _extract_e_field_dates(e_raw) -> list[tuple[int, int, int]]:
+    """Extract activation dates from the NOTAM E-field free text.
+
+    Looks for ``YYMMDD`` tokens that follow an activation anchor phrase
+    (``MAY OCCUR ON`` for the primary date, ``BACKUP DATES:`` for the backups)
+    and returns them as ``(year, month, day)`` tuples in text order with
+    duplicates removed. Two-digit years are expanded to ``2000+YY``.
+
+    Returns an empty list when the E-field is missing or contains no
+    anchored date tokens (caller then falls back to the D-field windows).
+    """
+    if not e_raw:
+        return []
+    text = str(e_raw)
+
+    out: list[tuple[int, int, int]] = []
+    seen: set[tuple[int, int, int]] = set()
+    for anchor in _DATE_ANCHOR_RE.finditer(text):
+        segment = anchor.group(1)
+        for yy, mm, dd in _YYMMDD_RE.findall(segment):
+            year = 2000 + int(yy)
+            month = int(mm)
+            day = int(dd)
+            if not (1 <= month <= 12 and 1 <= day <= 31):
+                continue
+            key = (year, month, day)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
+    return out
+
+
+def parse_notam_windows_with_dates(
+    d_raw,
+    e_raw,
+    base: datetime | None = None,
+    end: datetime | None = None,
+) -> list[str]:
+    """Build display window lines, preferring E-field activation dates.
+
+    When the E-field lists explicit activation dates (primary + backups, e.g.
+    a Starship DRA notice), each date is paired with the D-field time window(s)
+    to produce ``Месяц DD, HH:MM - HH:MM`` lines - so the reader sees every
+    concrete active date instead of a bare ``12:15 - 14:45`` window.
+
+    Falls back to :func:`parse_notam_windows` (D-field only) when the E-field
+    has no anchored dates, preserving the existing behaviour for all other
+    NOTAM shapes.
+    """
+    dates = _extract_e_field_dates(e_raw)
+    if not dates:
+        return parse_notam_windows(d_raw, base, end)
+
+    # Time window(s) come from the D field. Reuse the plain-window extraction so
+    # formats like "1215-1445" or "2107-0108" are handled consistently.
+    windows = _windows_in(str(d_raw or "").replace("/", "-"))
+    if not windows:
+        # No usable time window in D: fall back so we don't emit date-only lines
+        # that the rest of the pipeline doesn't expect.
+        return parse_notam_windows(d_raw, base, end)
+
+    lines: list[str] = []
+    seen: set[str] = set()
+    for _year, month, day in dates:
+        label = f"{_RU_MONTHS[month]} {day:02d}"
+        for w in windows:
+            line = f"{label}, {w}"
+            if line not in seen:
+                seen.add(line)
+                lines.append(line)
+    return lines

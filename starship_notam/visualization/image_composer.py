@@ -25,8 +25,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from starship_notam.core.logging import logger
-from starship_notam.parsers.coord_parser import parse_coords_from_text
-from starship_notam.parsers.schedule import parse_notam_windows
+from starship_notam.parsers.coord_parser import (
+    parse_coord_groups_from_text,
+    parse_coords_from_text,
+)
+from starship_notam.parsers.schedule import (
+    parse_notam_windows,  # noqa: F401  (re-exported for tests / callers)
+    parse_notam_windows_with_dates,
+)
 from starship_notam.visualization.map_renderer import MAP_H, MAP_W, render_map
 
 # Canvas and layout constants
@@ -325,13 +331,27 @@ def _notam_from_db_row(name: str, parsed: dict) -> dict:
             details = raw.replace('\n', ' ').strip()
 
         q = parsed.get('Q') if isinstance(parsed.get('Q'), dict) else None
-        # Coordinates: always derive polygon/point from the E/D text (raw), not from Q
-        coords = parse_coords_from_text(raw)
+        # Coordinates: always derive polygon/point from the E/D text (raw), not
+        # from Q. First check for multiple AND-separated areas (e.g. a NOTAM
+        # that defines two debris-response-area boundaries); when there are 2+
+        # groups pass them through as a list-of-polygons so each is drawn
+        # separately instead of being fused into one self-intersecting ring.
         radius_nm = None
+        groups = parse_coord_groups_from_text(raw)
+        if groups and len(groups) > 1:
+            coords = [list(g) for g in groups]
+            logger.info(
+                "Parsed %d coordinate groups from E field/text (%s points)",
+                len(groups), ", ".join(str(len(g)) for g in groups),
+            )
+        else:
+            coords = parse_coords_from_text(raw)
         # extract zone code and upper limit (top height) if available
         zone_code = None
         top_limit = None
-        if isinstance(coords, list) and coords:
+        if isinstance(coords, list) and coords and isinstance(coords[0], list):
+            logger.info("Parsed %d coordinate groups from E field/text", len(coords))
+        elif isinstance(coords, list) and coords:
             logger.info("Parsed %d coordinates from E field/text", len(coords))
         elif isinstance(coords, tuple) and coords:
             logger.info("Parsed center coordinate from E field/text")
@@ -384,12 +404,16 @@ def _notam_from_db_row(name: str, parsed: dict) -> dict:
     start_str = start_dt.strftime('%d.%m.%Y, %H:%M UTC') if start_dt else None
     end_str = end_dt.strftime('%d.%m.%Y, %H:%M UTC') if end_dt else None
 
-    # Active windows come from the D field (schedule). The day-prefixed formats
-    # only give a day-of-month, so we anchor them to the start datetime (B) to
-    # recover the correct month/year. When D is empty/unparseable, the list is
-    # empty and the renderer falls back to the start/end display.
+    # Active windows come from the D field (schedule), or - for NOTAMs that
+    # keep their activation dates in the E-field prose (e.g. Starship DRA
+    # notices with primary + backup dates) - from the E-field dates paired with
+    # the D-field time window. The day-prefixed D formats only give a
+    # day-of-month, so we anchor them to the start datetime (B) to recover the
+    # correct month/year. When neither yields anything the list is empty and the
+    # renderer falls back to the start/end display.
     schedule_raw = parsed.get('D') if isinstance(parsed, dict) else None
-    windows = parse_notam_windows(schedule_raw, start_dt, end_dt)
+    e_raw = parsed.get('E') if isinstance(parsed, dict) else None
+    windows = parse_notam_windows_with_dates(schedule_raw, e_raw, start_dt, end_dt)
 
     return {
         'number': number,
@@ -588,8 +612,16 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
         draw.rectangle(map_box, fill=BG_COLOR)
         try:
             if isinstance(coords, list) and coords:
-                lats = [p[0] for p in coords]
-                lons = [p[1] for p in coords]
+                # Normalize to a list of polygon groups so a multi-area NOTAM
+                # (list-of-lists) and a single polygon (flat list of points)
+                # share one drawing path. Each group is drawn separately.
+                if isinstance(coords[0], list):
+                    groups = [g for g in coords if g]
+                else:
+                    groups = [coords]
+                all_pts = [pt for g in groups for pt in g]
+                lats = [p[0] for p in all_pts]
+                lons = [p[1] for p in all_pts]
                 min_lat, max_lat = min(lats), max(lats)
                 min_lon, max_lon = min(lons), max(lons)
                 pad = 16
@@ -600,14 +632,16 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
                 scale = min(avail_w / lon_span, avail_h / lat_span)
                 center_lat = (max_lat + min_lat) / 2.0
                 center_lon = (max_lon + min_lon) / 2.0
-                pts = []
-                for lat, lon in coords:
-                    x = int(map_x + pad + avail_w / 2.0 + (lon - center_lon) * scale)
-                    y = int(map_y + pad + avail_h / 2.0 - (lat - center_lat) * scale)
-                    pts.append((x, y))
                 overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
                 od = ImageDraw.Draw(overlay)
-                od.polygon(pts, fill=(207, 0, 0, 80), outline=(255, 80, 80, 200))
+                for group in groups:
+                    pts = []
+                    for lat, lon in group:
+                        x = int(map_x + pad + avail_w / 2.0 + (lon - center_lon) * scale)
+                        y = int(map_y + pad + avail_h / 2.0 - (lat - center_lat) * scale)
+                        pts.append((x, y))
+                    if len(pts) >= 2:
+                        od.polygon(pts, fill=(207, 0, 0, 80), outline=(255, 80, 80, 200))
                 img = Image.alpha_composite(img, overlay)
                 draw = ImageDraw.Draw(img)
             elif isinstance(coords, tuple) and coords:
