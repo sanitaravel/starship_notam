@@ -322,11 +322,8 @@ def build_notam_caption(name: str, parsed: dict) -> str:
     """Build an HTML caption for a NOTAM image from a parsed NOTAM dict."""
     parts = []
     parts.append('<b>Новый NOTAM</b>')
-    # display name/title: strip any trailing .json then replace underscores
-    raw_name = str(name or '')
-    if raw_name.lower().endswith('.json'):
-        raw_name = raw_name[:-5]
-    display_name = raw_name.replace('_', '/')
+    # Stored names use '_' in place of '/' (A0669_26 -> A0669/26).
+    display_name = str(name or '').replace('_', '/')
     parts.append(f"<b>Код NOTAM:</b> {html.escape(display_name)}")
 
     def _parse_dt(s):

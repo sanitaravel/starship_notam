@@ -15,7 +15,7 @@ and keeps the visualization layer independently importable.
 
 Public entry points:
     render_notam_image(notam_dict, output_path) -> str
-    plot_single_notam(name, parsed, coords, out_path, _unused=None) -> str
+    plot_single_notam(name, parsed, out_path) -> str
 """
 
 from __future__ import annotations
@@ -365,22 +365,8 @@ def _notam_from_db_row(name: str, parsed: dict) -> dict:
         coords = None
         radius_nm = None
 
-    # Normalize number: strip trailing .json (if present), then replace
-    # underscore with slash (A0669_26 -> A0669/26). This guards against
-    # legacy or malformed names like 'E1777_26.json' that would otherwise
-    # become 'E1777/26.json' when only replacing underscores.
-    number = name
-    try:
-        if isinstance(name, str):
-            raw_name = name.strip()
-            if raw_name.lower().endswith('.json'):
-                raw_name = raw_name[:-5]
-            number = raw_name.replace('_', '/')
-    except Exception:
-        number = name
-
-    if number != name:
-        logger.info("Normalized NOTAM name '%s' -> '%s'", name, number)
+    # Stored names use '_' in place of '/' (A0669_26 -> A0669/26).
+    number = str(name).strip().replace('_', '/')
 
     # Strip trailing punctuation from details
     if details:
@@ -691,33 +677,19 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
     return output_path
 
 
-def plot_single_notam(name: str, parsed: dict, coords, out_path: str, _unused=None) -> str:
+def plot_single_notam(name: str, parsed: dict, out_path: str) -> str:
     """Blocking helper used by external callers to generate a NOTAM image.
 
     This function is suitable for running in a thread (e.g. via
     ``asyncio.to_thread``) and simply wraps existing helpers to produce
     the file at ``out_path`` and return that path.
+
+    Coordinates are always derived from ``parsed`` by
+    :func:`_notam_from_db_row`, which keeps AND-separated areas as separate
+    polygon groups.
     """
     try:
-        # Prefer converting the DB row into the renderer's expected dict.
-        try:
-            notam = _notam_from_db_row(name, parsed) if isinstance(parsed, dict) else {
-                'number': name,
-                'details': str(parsed or ''),
-                'coords': coords,
-            }
-        except Exception:
-            notam = {
-                'number': name,
-                'details': str(parsed or ''),
-                'coords': coords,
-            }
-
-        # If coords were passed explicitly, prefer those.
-        if coords:
-            notam['coords'] = coords
-
-        return render_notam_image(notam, output_path=out_path)
+        return render_notam_image(_notam_from_db_row(name, parsed), output_path=out_path)
     except Exception:
         logger.exception("plot_single_notam failed for %s", name)
         raise

@@ -168,20 +168,10 @@ async def _process_notam_images(chat_list: list[str]) -> None:
 
             outpath = str(_MAPS_DIR / f"{name}_map.png")
             try:
-                # plot_single_notam is blocking (matplotlib) — run in a thread
-                fname_display = (
-                    f"{name}.json"
-                    if not str(name).lower().endswith(".json")
-                    else name
-                )
-                await asyncio.to_thread(
-                    plot_single_notam,
-                    fname_display,
-                    parsed,
-                    coords,
-                    outpath,
-                    None,
-                )
+                # plot_single_notam is blocking (matplotlib) — run in a thread.
+                # It derives the coordinates itself so multi-area NOTAMs keep
+                # their separate polygons.
+                await asyncio.to_thread(plot_single_notam, name, parsed, outpath)
                 logger.info(f"Generated image for {name} -> {outpath}")
             except Exception:
                 logger.exception(f"Failed to generate image for {name}")
