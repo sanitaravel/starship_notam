@@ -20,6 +20,7 @@ Public entry points:
 
 from __future__ import annotations
 
+import functools
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,11 +61,13 @@ RED_CF = (207, 0, 0)
 _FONTS_DIR = Path(__file__).resolve().parents[2] / "fonts"
 
 
+@functools.lru_cache(maxsize=None)
 def load_font(name: str, size: int, weight: str | None = None):
     """Load a TrueType font, preferring the project's ``fonts/`` directory.
 
     Falls back to common system font locations and finally to PIL's default
-    font if nothing suitable can be loaded.
+    font if nothing suitable can be loaded. Cached: each image needs seven
+    fonts, and the lookup searches the fonts folder every time.
     """
     from PIL import ImageFont
 
