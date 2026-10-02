@@ -33,7 +33,12 @@ from starship_notam.parsers.schedule import (
     parse_notam_windows,  # noqa: F401  (re-exported for tests / callers)
     parse_notam_windows_with_dates,
 )
-from starship_notam.visualization.map_renderer import MAP_H, MAP_W, render_map
+from starship_notam.visualization.map_renderer import (
+    MAP_H,
+    MAP_W,
+    _unwrap_groups,
+    render_map,
+)
 
 # Canvas and layout constants
 CANVAS_W = 1316
@@ -601,10 +606,12 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
                 # Normalize to a list of polygon groups so a multi-area NOTAM
                 # (list-of-lists) and a single polygon (flat list of points)
                 # share one drawing path. Each group is drawn separately.
+                # Unwrap longitudes so an area crossing the 180° meridian is
+                # drawn in one piece rather than stretched across the map.
                 if isinstance(coords[0], list):
-                    groups = [g for g in coords if g]
+                    groups = _unwrap_groups(coords)
                 else:
-                    groups = [coords]
+                    groups = _unwrap_groups([coords])
                 all_pts = [pt for g in groups for pt in g]
                 lats = [p[0] for p in all_pts]
                 lons = [p[1] for p in all_pts]

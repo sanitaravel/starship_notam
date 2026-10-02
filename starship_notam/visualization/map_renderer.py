@@ -120,24 +120,31 @@ def _extent_has_visible_land(extent, size) -> bool:
         lat_span = max(max_lat - min_lat, 1e-9)
         px_per_lon = size[0] / lon_span
         px_per_lat = size[1] / lat_span
-        view = box(min_lon, min_lat, max_lon, max_lat)
+        # Land data is in [-180, 180]; an extent unwrapped past the antimeridian
+        # is tested as up to three shifted views so land on either side counts.
+        views = [
+            box(min_lon + shift, min_lat, max_lon + shift, max_lat)
+            for shift in (0.0, -360.0, 360.0)
+            if max_lon + shift >= -180.0 and min_lon + shift <= 180.0
+        ]
         for geom in geoms:
-            try:
-                if not geom.intersects(view):
+            for view in views:
+                try:
+                    if not geom.intersects(view):
+                        continue
+                    # Measure the visible portion, not the whole geometry, so a
+                    # big country only just entering the frame still counts once
+                    # enough of it is on screen.
+                    clipped = geom.intersection(view)
+                    if clipped.is_empty:
+                        continue
+                    cminx, cminy, cmaxx, cmaxy = clipped.bounds
+                    pixel_w = (cmaxx - cminx) * px_per_lon
+                    pixel_h = (cmaxy - cminy) * px_per_lat
+                    if max(pixel_w, pixel_h) >= MIN_LAND_PIXELS:
+                        return True
+                except Exception:
                     continue
-                # Measure the visible portion, not the whole geometry, so a big
-                # country only just entering the frame still counts once enough
-                # of it is on screen.
-                clipped = geom.intersection(view)
-                if clipped.is_empty:
-                    continue
-                cminx, cminy, cmaxx, cmaxy = clipped.bounds
-                pixel_w = (cmaxx - cminx) * px_per_lon
-                pixel_h = (cmaxy - cminy) * px_per_lat
-                if max(pixel_w, pixel_h) >= MIN_LAND_PIXELS:
-                    return True
-            except Exception:
-                continue
         return False
     except Exception:
         logger.exception("Land-visibility measurement failed")
@@ -362,6 +369,77 @@ def _is_multi_polygon(coords) -> bool:
     )
 
 
+def _unwrap_longitudes(pts):
+    """Return ``pts`` with longitudes made continuous across the 180° meridian.
+
+    NOTAM vertices are always given in [-180, 180], so a polygon that crosses
+    the antimeridian jumps from e.g. 179°E to -175°W between two vertices.
+    Whenever consecutive longitudes differ by more than 180° the following
+    longitudes are shifted by ±360 so the ring stays continuous (179 -> 185).
+    ``pts`` is a list of ``(lat, lon)`` tuples; other shapes are returned as-is.
+    """
+    if not isinstance(pts, list) or len(pts) < 2:
+        return pts
+    out = [tuple(pts[0])]
+    offset = 0.0
+    prev = pts[0][1]
+    for lat, lon in pts[1:]:
+        delta = lon - prev
+        if delta > 180.0:
+            offset -= 360.0
+        elif delta < -180.0:
+            offset += 360.0
+        prev = lon
+        out.append((lat, lon + offset))
+    return out
+
+
+def _unwrap_groups(groups):
+    """Unwrap each polygon group and put all groups in the same ±360 frame.
+
+    Each group is unwrapped on its own (see :func:`_unwrap_longitudes`), then
+    shifted by a multiple of 360° so its mean longitude is within 180° of the
+    first group's, keeping groups on either side of the antimeridian together.
+    """
+    unwrapped = [_unwrap_longitudes(list(g)) for g in groups if g]
+    if not unwrapped:
+        return unwrapped
+    ref = sum(p[1] for p in unwrapped[0]) / len(unwrapped[0])
+    aligned = [unwrapped[0]]
+    for group in unwrapped[1:]:
+        mean = sum(p[1] for p in group) / len(group)
+        shift = 360.0 * round((ref - mean) / 360.0)
+        aligned.append([(lat, lon + shift) for lat, lon in group])
+    return aligned
+
+
+def _lon_shift_into(lon: float, lo: float, hi: float) -> float | None:
+    """Return ``lon`` shifted by a multiple of 360° to lie in ``[lo, hi]``.
+
+    Used to place labels for [-180, 180] data on a map whose extent was
+    unwrapped past ±180. Returns None when no shift lands inside the range.
+    """
+    for shift in (0.0, -360.0, 360.0):
+        if lo <= lon + shift <= hi:
+            return lon + shift
+    return None
+
+
+def _bounds_visible(bounds, extent) -> bool:
+    """True when a ``(minx, miny, maxx, maxy)`` box overlaps ``extent``.
+
+    ``extent`` is ``[min_lon, max_lon, min_lat, max_lat]`` and may extend past
+    ±180, so the box is also tested shifted by ±360°.
+    """
+    minx, miny, maxx, maxy = bounds
+    if maxy < extent[2] or miny > extent[3]:
+        return False
+    return any(
+        maxx + shift >= extent[0] and minx + shift <= extent[1]
+        for shift in (0.0, -360.0, 360.0)
+    )
+
+
 def _normalize_polygon_order(coords):
     """Return polygon vertices in a non-self-intersecting order.
 
@@ -446,30 +524,18 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
     # that shape up front: keep each group intact for drawing, but build a flat
     # point list so the existing extent/land-zoom logic (which only needs the
     # overall bounding box) works unchanged.
+    #
+    # Longitudes are unwrapped first so a polygon crossing the 180° meridian is
+    # one continuous ring (e.g. 165..215 instead of jumping 179 -> -175). The
+    # wrap-around edges would otherwise look like self-intersections, blow the
+    # extent up to the whole globe, and draw the area the long way round.
     polygon_groups: list[list] | None = None
     if _is_multi_polygon(coords):
-        polygon_groups = [_normalize_polygon_order(list(g)) for g in coords if g]
+        polygon_groups = [_normalize_polygon_order(g) for g in _unwrap_groups(coords)]
         # Flat combined point list drives extent fitting below.
         coords = [pt for g in polygon_groups for pt in g]
     elif isinstance(coords, list) and coords:
-        coords = _normalize_polygon_order(coords)
-
-    fig_dpi = 100
-    fig_w = size[0] / fig_dpi
-    fig_h = size[1] / fig_dpi
-    logger.info("Creating map figure with size %dx%d pixels (%.2fx%.2f inches at %d DPI)", size[0], size[1], fig_w, fig_h, fig_dpi)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=fig_dpi, subplot_kw=dict(projection=ccrs.PlateCarree()))
-    # fill background
-    # Match figure and axes background to the canvas ocean color (#262626)
-    fig.patch.set_facecolor('#262626')
-    ax.set_facecolor('#262626')
-    # Some GeoAxes implementations may not have outline_patch; guard access
-    try:
-        if hasattr(ax, 'outline_patch') and ax.outline_patch is not None:
-            ax.outline_patch.set_visible(False)
-    except Exception:
-        logger.exception("Failed to hide axes outline, map may have unexpected border")
-        pass
+        coords = _normalize_polygon_order(_unwrap_longitudes(coords))
 
     # compute extent
     radius_value = None
@@ -589,7 +655,37 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         else:
             extent = _expand_extent_until_land(extent, size)
 
-    ax.set_extent(extent, crs=ccrs.PlateCarree())
+    # When the (unwrapped) extent leaves [-180, 180], centre the projection on
+    # it so the area is drawn in one piece. All geometry and text below is then
+    # placed in the axes' own CRS, with x = lon - central_lon. For every other
+    # NOTAM central_lon is 0 and this is identical to plain PlateCarree.
+    central_lon = 0.0
+    if extent[0] < -180.0 or extent[1] > 180.0:
+        central_lon = (extent[0] + extent[1]) / 2.0
+        logger.info("Extent crosses the antimeridian; centring map on %.1f deg", central_lon)
+    proj = ccrs.PlateCarree(central_longitude=central_lon)
+
+    def _x(lon: float) -> float:
+        """Map an (unwrapped) longitude to the axes' x coordinate."""
+        return lon - central_lon
+
+    fig_dpi = 100
+    fig_w = size[0] / fig_dpi
+    fig_h = size[1] / fig_dpi
+    logger.info("Creating map figure with size %dx%d pixels (%.2fx%.2f inches at %d DPI)", size[0], size[1], fig_w, fig_h, fig_dpi)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=fig_dpi, subplot_kw=dict(projection=proj))
+    # fill background
+    # Match figure and axes background to the canvas ocean color (#262626)
+    fig.patch.set_facecolor('#262626')
+    ax.set_facecolor('#262626')
+    # Some GeoAxes implementations may not have outline_patch; guard access
+    try:
+        if hasattr(ax, 'outline_patch') and ax.outline_patch is not None:
+            ax.outline_patch.set_visible(False)
+    except Exception:
+        logger.exception("Failed to hide axes outline, map may have unexpected border")
+
+    ax.set_extent([_x(extent[0]), _x(extent[1]), extent[2], extent[3]], crs=proj)
 
     # Cartopy GeoAxes enforce an equal ('box') aspect by default, which
     # letterboxes the map inside the axes and leaves dark bands at the top and
@@ -652,7 +748,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
 
         # Draw the grid lines themselves (no edge labels).
         gl = ax.gridlines(
-            crs=ccrs.PlateCarree(),
+            crs=proj,
             draw_labels=False,
             linewidth=0.5,
             color='#3a3a3a',
@@ -660,7 +756,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
             linestyle=(0, (4, 4)),
             zorder=6,
         )
-        gl.xlocator = mticker.FixedLocator(lon_ticks)
+        gl.xlocator = mticker.FixedLocator([_x(t) for t in lon_ticks])
         gl.ylocator = mticker.FixedLocator(lat_ticks)
 
         # Resolve the bundled JetBrains Mono font for inline labels when present.
@@ -683,7 +779,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         lon_inset = extent[0] + lon_span * 0.012  # left inset for latitude labels
         lat_inset = extent[2] + lat_span * 0.018  # bottom inset for longitude labels
         text_kwargs = dict(
-            transform=ccrs.PlateCarree(),
+            transform=proj,
             color=label_color,
             fontsize=8,
             zorder=9,
@@ -698,7 +794,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
             if lon_v < extent[0] or lon_v > extent[1]:
                 continue
             ax.text(
-                lon_v, lat_inset, _format_lon(lon_v),
+                _x(lon_v), lat_inset, _format_lon(lon_v),
                 ha='center', va='bottom', **text_kwargs,
             )
         # Latitude labels: one per horizontal line, along the left edge.
@@ -706,7 +802,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
             if lat_v < extent[2] or lat_v > extent[3]:
                 continue
             ax.text(
-                lon_inset, lat_v, _format_lat(lat_v),
+                _x(lon_inset), lat_v, _format_lat(lat_v),
                 ha='left', va='center', **text_kwargs,
             )
     except Exception:
@@ -761,7 +857,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                         continue
                     minx, miny, maxx, maxy = geom.bounds
                     # quick intersection test against current extent
-                    if maxx < ext_min_lon or minx > ext_max_lon or maxy < ext_min_lat or miny > ext_max_lat:
+                    if not _bounds_visible((minx, miny, maxx, maxy), extent):
                         continue
                     # approximate pixel span of this feature within current extent
                     pixel_w = (maxx - minx) / ext_lon_span * size[0]
@@ -775,9 +871,9 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                         label_pt = geom.representative_point()
                     except Exception:
                         label_pt = geom.centroid
-                    lx, ly = label_pt.x, label_pt.y
+                    lx, ly = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin), label_pt.y
                     # ensure label point is comfortably inside the visible extent
-                    if not (ext_min_lon + lon_margin <= lx <= ext_max_lon - lon_margin and ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
+                    if lx is None or not (ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
                         continue
                     # slightly reduce label size for readability and compactness
                     fontsize = max(7, min(12, int(maxpix / 18)))
@@ -785,7 +881,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                         font_prop = fm.FontProperties(fname=jet_font_path, size=fontsize)
                     else:
                         font_prop = fm.FontProperties(family='monospace', size=fontsize)
-                    txt = ax.text(lx, ly, name, fontproperties=font_prop, fontweight='bold', color=label_color, transform=ccrs.PlateCarree(), ha='center', va='center', zorder=11, clip_on=True)
+                    txt = ax.text(_x(lx), ly, name, fontproperties=font_prop, fontweight='bold', color=label_color, transform=proj, ha='center', va='center', zorder=11, clip_on=True)
                     txt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
                     try:
                         txt.set_clip_path(ax.patch)
@@ -825,7 +921,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                             continue
                         minx, miny, maxx, maxy = wgeom.bounds
                         # quick intersection test
-                        if maxx < ext_min_lon or minx > ext_max_lon or maxy < ext_min_lat or miny > ext_max_lat:
+                        if not _bounds_visible((minx, miny, maxx, maxy), extent):
                             continue
                         pixel_w = (maxx - minx) / ext_lon_span * size[0]
                         pixel_h = (maxy - miny) / ext_lat_span * size[1]
@@ -837,8 +933,8 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                             wlabel_pt = wgeom.representative_point()
                         except Exception:
                             wlabel_pt = wgeom.centroid
-                        wx, wy = wlabel_pt.x, wlabel_pt.y
-                        if not (ext_min_lon + lon_margin <= wx <= ext_max_lon - lon_margin and ext_min_lat + lat_margin <= wy <= ext_max_lat - lat_margin):
+                        wx, wy = _lon_shift_into(wlabel_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin), wlabel_pt.y
+                        if wx is None or not (ext_min_lat + lat_margin <= wy <= ext_max_lat - lat_margin):
                             continue
                         # fontsize tuned to feature size
                         wfontsize = max(8, min(18, int(maxpix / 22)))
@@ -846,7 +942,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                             wfont_prop = fm.FontProperties(fname=jet_font_path, size=wfontsize)
                         else:
                             wfont_prop = fm.FontProperties(family='monospace', size=wfontsize)
-                        wtxt = ax.text(wx, wy, wname, fontproperties=wfont_prop, color=label_color, transform=ccrs.PlateCarree(), ha='center', va='center', zorder=10, clip_on=True)
+                        wtxt = ax.text(_x(wx), wy, wname, fontproperties=wfont_prop, color=label_color, transform=proj, ha='center', va='center', zorder=10, clip_on=True)
                         wtxt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
                         try:
                             wtxt.set_clip_path(ax.patch)
@@ -884,7 +980,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                         if geom is None:
                             continue
                         minx, miny, maxx, maxy = geom.bounds
-                        if maxx < ext_min_lon or minx > ext_max_lon or maxy < ext_min_lat or miny > ext_max_lat:
+                        if not _bounds_visible((minx, miny, maxx, maxy), extent):
                             continue
                         pixel_w = (maxx - minx) / ext_lon_span * size[0]
                         pixel_h = (maxy - miny) / ext_lat_span * size[1]
@@ -896,9 +992,9 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                             label_pt = geom.representative_point()
                         except Exception:
                             label_pt = geom.centroid
-                        lx, ly = label_pt.x, label_pt.y
+                        lx, ly = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin), label_pt.y
                         # ensure label point is inside visible area with margin
-                        if not (ext_min_lon + lon_margin <= lx <= ext_max_lon - lon_margin and ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
+                        if lx is None or not (ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
                             continue
                         # reduce feature label size slightly
                         fontsize = max(6, min(10, int(maxpix / 24)))
@@ -906,7 +1002,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                             font_prop = fm.FontProperties(fname=jet_font_path, size=fontsize)
                         else:
                             font_prop = fm.FontProperties(family='monospace', size=fontsize)
-                        txt = ax.text(lx, ly, fname, fontproperties=font_prop, fontsize=fontsize, color=label_color, transform=ccrs.PlateCarree(), ha='center', va='center', zorder=11, clip_on=True)
+                        txt = ax.text(_x(lx), ly, fname, fontproperties=font_prop, fontsize=fontsize, color=label_color, transform=proj, ha='center', va='center', zorder=11, clip_on=True)
                         txt.set_path_effects([patheffects.withStroke(linewidth=1.8, foreground='black')])
                         try:
                             txt.set_clip_path(ax.patch)
@@ -921,13 +1017,14 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         try:
             star_lat = 25.9896
             star_lon = -97.1849
-            if ext_min_lon <= star_lon <= ext_max_lon and ext_min_lat <= star_lat <= ext_max_lat:
+            star_lon = _lon_shift_into(star_lon, ext_min_lon, ext_max_lon)
+            if star_lon is not None and ext_min_lat <= star_lat <= ext_max_lat:
                 # marker
                 try:
-                    ax.scatter([star_lon], [star_lat], s=70, color='#FF8014', edgecolors='black', linewidths=0.8, transform=ccrs.PlateCarree(), zorder=13)
+                    ax.scatter([_x(star_lon)], [star_lat], s=70, color='#FF8014', edgecolors='black', linewidths=0.8, transform=proj, zorder=13)
                 except Exception:
                     try:
-                        ax.plot(star_lon, star_lat, marker='o', markersize=6, color='#FF8014', transform=ccrs.PlateCarree(), zorder=13)
+                        ax.plot(_x(star_lon), star_lat, marker='o', markersize=6, color='#FF8014', transform=proj, zorder=13)
                     except Exception:
                         pass
                 # label offset a bit to the right and up
@@ -940,7 +1037,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                         sfont_prop = fm.FontProperties(fname=jet_font_path, size=sfontsize)
                     else:
                         sfont_prop = fm.FontProperties(family='monospace', size=sfontsize)
-                    stxt = ax.text(star_lon + dx, star_lat + dy, sname, fontproperties=sfont_prop, color=label_color, transform=ccrs.PlateCarree(), ha='left', va='bottom', zorder=13, clip_on=True)
+                    stxt = ax.text(_x(star_lon) + dx, star_lat + dy, sname, fontproperties=sfont_prop, color=label_color, transform=proj, ha='left', va='bottom', zorder=13, clip_on=True)
                     stxt.set_path_effects([patheffects.withStroke(linewidth=1.8, foreground='black')])
                     try:
                         stxt.set_clip_path(ax.patch)
@@ -962,22 +1059,22 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         for gi, group in enumerate(polygon_groups):
             if not group:
                 continue
-            poly_coords = [(lon, lat) for lat, lon in group]
+            poly_coords = [(_x(lon), lat) for lat, lon in group]
             try:
                 poly = Polygon(poly_coords)
                 ax.add_geometries(
-                    [poly], crs=ccrs.PlateCarree(),
+                    [poly], crs=proj,
                     facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95),
                     linewidth=1.6,
                 )
             except Exception:
                 logger.exception("Failed to draw polygon group %d on cartopy map", gi)
     elif isinstance(coords, list) and coords:
-        poly_coords = [(lon, lat) for lat, lon in coords]
+        poly_coords = [(_x(lon), lat) for lat, lon in coords]
         try:
             poly = Polygon(poly_coords)
             logger.info("Drawing polygon on cartopy map")
-            ax.add_geometries([poly], crs=ccrs.PlateCarree(), facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95), linewidth=1.6)
+            ax.add_geometries([poly], crs=proj, facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95), linewidth=1.6)
         except Exception:
             logger.exception("Failed to draw polygon on cartopy map")
     elif isinstance(coords, tuple) and coords:
@@ -993,10 +1090,10 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                 ang = 2.0 * math.pi * (i / 72.0)
                 p_lat = lat + lat_deg * math.sin(ang)
                 p_lon = lon + lon_deg * math.cos(ang)
-                circle_pts.append((p_lon, p_lat))
+                circle_pts.append((_x(p_lon), p_lat))
             try:
                 circle = Polygon(circle_pts)
-                ax.add_geometries([circle], crs=ccrs.PlateCarree(), facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95), linewidth=1.6)
+                ax.add_geometries([circle], crs=proj, facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95), linewidth=1.6)
             except Exception:
                 logger.exception("Failed to draw circle geometry on cartopy map")
         else:
