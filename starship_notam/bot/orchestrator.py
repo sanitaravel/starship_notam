@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -97,13 +98,39 @@ _MAPS_DIR = _PROJECT_ROOT / "maps"
 # --- Individual processing steps -------------------------------------------
 
 
-def _persist_notam_results(results: list[dict]) -> None:
+# Free-text keywords searched on the FAA NOTAM site, in order.
+_NOTAM_KEYWORDS = ("starship", "spacex brownsville", "re-entry")
+
+
+def _keyword_patterns(keyword: str) -> list[re.Pattern]:
+    """Return one whole-word pattern per word of ``keyword``.
+
+    Hyphens are optional, so ``re-entry`` matches RE-ENTRY, REENTRY and
+    RE ENTRY, but not the ENTRY in "VFR ENTRY".
+    """
+    patterns = []
+    for term in keyword.split():
+        body = re.escape(term).replace(r"\-", r"-?\s?")
+        patterns.append(re.compile(rf"\b{body}\b", re.IGNORECASE))
+    return patterns
+
+
+def _matches_keyword(text: str, keyword: str) -> bool:
+    """True when every word of ``keyword`` appears in ``text`` (any order)."""
+    return all(p.search(text) for p in _keyword_patterns(keyword))
+
+
+def _persist_notam_results(results: list[dict], keyword: str) -> None:
     """Parse and persist each scraped NOTAM result dict.
 
     The scraper returns dicts with a ``number`` field (e.g. ``A0669/26``) and
     an ``icao_message`` field containing the raw NOTAM text. We parse the text
     and derive the persisted ``name`` from ``number`` by replacing ``/`` with
     ``_`` (captions reverse this mapping).
+
+    The FAA free-text search is fuzzy (``re-entry`` also returns unrelated
+    "VFR ENTRY" notices), so a result is only saved when its message actually
+    contains ``keyword``.
     """
     for result in results or []:
         try:
@@ -111,6 +138,12 @@ def _persist_notam_results(results: list[dict]) -> None:
             if not icao_message.strip():
                 logger.info(
                     f"Skipping NOTAM {result.get('number', '<no-number>')}: empty ICAO message"
+                )
+                continue
+            if not _matches_keyword(icao_message, keyword):
+                logger.info(
+                    f"Skipping NOTAM {result.get('number', '<no-number>')}: "
+                    f"message does not contain '{keyword}'"
                 )
                 continue
             parsed = parse_notam(icao_message)
@@ -128,20 +161,13 @@ def _persist_notam_results(results: list[dict]) -> None:
 
 async def _refresh_notams_from_source() -> None:
     """Scrape NOTAMs for the configured keywords and persist the results."""
-    try:
-        logger.info("Running NOTAM request for keyword: starship")
-        results_starship = await asyncio.to_thread(search_notams, "starship")
-        _persist_notam_results(results_starship)
-
-        logger.info("Running NOTAM request for keyword: spacex brownsville")
-        results_spacex = await asyncio.to_thread(search_notams, "spacex brownsville")
-        _persist_notam_results(results_spacex)
-
-        logger.info("Running NOTAM request for keyword: re-entry")
-        results_reentry = await asyncio.to_thread(search_notams, "re-entry")
-        _persist_notam_results(results_reentry)
-    except Exception:
-        logger.exception("NOTAM request failed")
+    for keyword in _NOTAM_KEYWORDS:
+        try:
+            logger.info(f"Running NOTAM request for keyword: {keyword}")
+            results = await asyncio.to_thread(search_notams, keyword)
+            _persist_notam_results(results, keyword)
+        except Exception:
+            logger.exception(f"NOTAM request failed for keyword: {keyword}")
 
 
 async def _process_notam_images(chat_list: list[str]) -> None:
