@@ -40,6 +40,10 @@ _TAGS_FCC = (_TAG_COMMON, "#FCC", "#Заявка")
 _TAGS_FAA_LICENSE = (_TAG_COMMON, "#FAA", "#Лицензия")
 
 
+# Telegram's maximum photo caption length.
+_CAPTION_LIMIT = 1024
+
+
 def _hashtag_line(*tags: str) -> str:
     """Join hashtags into a single space-separated line, dropping blanks."""
     return " ".join(t for t in tags if t)
@@ -373,36 +377,59 @@ def build_notam_caption(name: str, parsed: dict) -> str:
                 f"<b>Даты:</b> {html.escape(b_fmt)} → {html.escape(c_fmt)}"
             )
 
-    # Details (E) as blockquote
-    if parsed.get('E'):
-        details_raw = parsed.get('E')
-        details_clean = str(details_raw).replace('%0', ' ')
-        details_escaped = html.escape(details_clean)
-        parts.append('Подробности:')
-        expandable_bq = f"<blockquote expandable>{details_escaped}</blockquote>"
-        parts.append(expandable_bq)
-
     # Hashtags for channel search: the common + NOTAM tags plus a tag derived
     # from the NOTAM code (e.g. "B1882/26" -> "#B188226") so a specific NOTAM
-    # is searchable. Kept out of the truncation body below so it always
-    # survives (Telegram caption hard limit is 1024 characters).
+    # is searchable. Always kept, even when the details are trimmed.
     tag_line = _hashtag_line(*_TAGS_NOTAM, _sanitize_tag(display_name))
+    head = '\n\n'.join(parts)
 
-    body = '\n\n'.join(parts)
-    caption = f"{body}\n\n{tag_line}"
-    if len(caption) <= 1024:
+    details = str(parsed.get('E') or '').replace('%0', ' ')
+    if not details:
+        return _fit_caption(f"{head}\n\n{tag_line}")
+
+    def with_details(text: str) -> str:
+        return (
+            f"{head}\n\nПодробности:\n\n"
+            f"<blockquote expandable>{html.escape(text)}</blockquote>"
+            f"\n\n{tag_line}"
+        )
+
+    caption = with_details(details)
+    if len(caption) <= _CAPTION_LIMIT:
         return caption
 
-    # Too long: trim the body so the caption plus the hashtag line fits, then
-    # re-append the tags. Close any open blockquote left dangling by the cut.
-    tag_suffix = f"\n\n{tag_line}"
-    budget = 1024 - len(tag_suffix)
-    closing = '</blockquote>'
-    if '<blockquote' in body:
-        trimmed = body[:budget - len(closing)] + closing
-    else:
-        trimmed = body[:budget]
-    return f"{trimmed}{tag_suffix}"
+    # Too long (Telegram caption limit): trim the *unescaped* details so the
+    # cut never lands inside an HTML entity like "&amp;" or a tag, then escape
+    # and wrap them again. Binary search for the longest prefix that fits.
+    lo, hi = 0, len(details)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if len(with_details(details[:mid].rstrip() + '…')) <= _CAPTION_LIMIT:
+            lo = mid
+        else:
+            hi = mid - 1
+    if lo == 0:
+        return _fit_caption(f"{head}\n\n{tag_line}")
+    return with_details(details[:lo].rstrip() + '…')
+
+
+def _fit_caption(caption: str) -> str:
+    """Hard-trim a caption that has no blockquote to the Telegram limit.
+
+    Only reached when the header alone is too long, which needs a name or
+    schedule of hundreds of characters; the cut happens on a line boundary so
+    no tag or entity is split.
+    """
+    if len(caption) <= _CAPTION_LIMIT:
+        return caption
+    lines = caption.split('\n')
+    tag_line = lines[-1]
+    kept: list[str] = []
+    for line in lines[:-1]:
+        if len('\n'.join(kept + [line])) + len('\n\n') + len(tag_line) > _CAPTION_LIMIT:
+            break
+        kept.append(line)
+    return '\n'.join(kept).rstrip() + '\n\n' + tag_line
 
 
 def format_faa_license(item: dict) -> str:
