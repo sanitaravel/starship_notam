@@ -15,8 +15,8 @@ Design constraints:
       terminate due to a transient error.
     - Scrapers return data without persisting; this module is responsible for
       persistence via the ``data`` layer.
-    - Blocking work (Selenium scraping, matplotlib rendering) is delegated to
-      worker threads via ``asyncio.to_thread``.
+    - Blocking work (Selenium scraping, HTTP fetches, matplotlib rendering) is
+      delegated to worker threads via ``asyncio.to_thread``.
 
 Public entry points:
     async main_loop() -> None
@@ -300,7 +300,7 @@ async def _process_faa_activities(chat_list: list[str]) -> None:
     logger.info("Refreshing FAA activities needing Telegram post")
     try:
         logger.info("Getting FAA activities")
-        activities = fetch_faa_advisory()
+        activities = await asyncio.to_thread(fetch_faa_advisory)
         for activity in activities or []:
             try:
                 save_faa_activity(activity, config.DB_PATH)
@@ -372,12 +372,12 @@ async def _process_faa_licenses(chat_list: list[str]) -> None:
     )
 
 
-def _ingest_starbase_alerts() -> None:
+async def _ingest_starbase_alerts() -> None:
     """Fetch Starbase status and persist beach/road alerts."""
     logger.info("Refreshing Starbase alerts needing Telegram post")
     try:
         logger.info("Fetching Starbase status")
-        data = fetch_starbase_status()
+        data = await asyncio.to_thread(fetch_starbase_status)
         # ingest into DB
         if data.get("beach"):
             save_beach_alert(data["beach"], config.DB_PATH)
@@ -428,7 +428,7 @@ async def generate_and_send() -> None:
     await _process_faa_activities(chat_list)
     await _process_fcc_els_applications(chat_list)
     await _process_faa_licenses(chat_list)
-    _ingest_starbase_alerts()
+    await _ingest_starbase_alerts()
     await _process_beach_alerts(chat_list)
     await _process_road_alerts(chat_list)
 
