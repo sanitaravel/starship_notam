@@ -16,6 +16,10 @@ from starship_notam.data.faa_repo import (
     save_faa_activity,
 )
 
+# The schema is created once at startup in production (ensure_setup), not by
+# the repository functions, so every test here starts from an initialized DB.
+pytestmark = pytest.mark.usefixtures("initialized_db")
+
 
 def _activity(mission="Starship Flight Test", primary="08 JUL 25 1350-2359Z",
               backup="09 JUL 25 1350-2359Z"):

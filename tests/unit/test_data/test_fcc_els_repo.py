@@ -28,12 +28,17 @@ _DB_SETTINGS = settings(
     suppress_health_check=[HealthCheck.too_slow],
 )
 
+from starship_notam.data.connection import init_db
 from starship_notam.data import fcc_els_repo
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,
     mark_fcc_els_application_posted,
     save_fcc_els_application,
 )
+
+# The schema is created once at startup in production (ensure_setup), not by
+# the repository functions, so every test here starts from an initialized DB.
+pytestmark = pytest.mark.usefixtures("initialized_db")
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +158,9 @@ def test_payload_hash_is_key_order_independent(tmp_path_factory, data):
     }
 
     db1 = str(tmp_path_factory.mktemp("h1") / "notams.db")
+    init_db(db1)
     db2 = str(tmp_path_factory.mktemp("h2") / "notams.db")
+    init_db(db2)
 
     save_fcc_els_application(data, db1)
     save_fcc_els_application(reordered, db2)
@@ -171,6 +178,7 @@ def test_resaving_unchanged_application_never_reflags(tmp_path_factory, data):
     """After marking posted, saving an identical app leaves telegram_posted=1
     and every stored field + payload_hash unchanged (Req 5.4)."""
     db = str(tmp_path_factory.mktemp("unchanged") / "notams.db")
+    init_db(db)
 
     save_fcc_els_application(data, db)
     mark_fcc_els_application_posted(data["file_number"], "msg-1", db)
@@ -193,6 +201,7 @@ def test_changed_application_is_reflagged(tmp_path_factory, data):
     """Saving a variant with any changed field (including inside detail) resets
     telegram_posted to 0, refreshes updated_at, and stores a new hash (Req 5.5)."""
     db = str(tmp_path_factory.mktemp("changed") / "notams.db")
+    init_db(db)
 
     save_fcc_els_application(data, db)
     mark_fcc_els_application_posted(data["file_number"], "msg-1", db)
@@ -226,6 +235,7 @@ def test_file_number_uniqueness(tmp_path_factory, apps):
     """After any sequence of saves with the same file_number, exactly one row
     exists for that file_number (Req 5.1, 6.4)."""
     db = str(tmp_path_factory.mktemp("uniq") / "notams.db")
+    init_db(db)
 
     file_number = "SAME-FILE-NUMBER"
     for app in apps:
@@ -247,6 +257,7 @@ def test_needing_post_query_returns_exactly_unposted_set(
     """Given saved apps with an arbitrary subset marked posted, the needing-post
     query returns exactly those with telegram_posted=0 (Req 7.1)."""
     db = str(tmp_path_factory.mktemp("needing") / "notams.db")
+    init_db(db)
 
     expected_unposted = set()
     for i, is_posted in enumerate(posted_mask):

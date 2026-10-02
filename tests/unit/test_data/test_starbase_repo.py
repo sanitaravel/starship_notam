@@ -21,6 +21,10 @@ from starship_notam.data.starbase_repo import (
     save_road_alert,
 )
 
+# The schema is created once at startup in production (ensure_setup), not by
+# the repository functions, so every test here starts from an initialized DB.
+pytestmark = pytest.mark.usefixtures("initialized_db")
+
 
 def _beach_alert(start="2026-07-08T18:00:00Z", end="2026-07-09T05:00:00Z"):
     return {

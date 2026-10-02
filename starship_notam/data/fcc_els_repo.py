@@ -12,7 +12,7 @@ import json
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db, utc_now_iso
+from starship_notam.data.connection import get_connection, utc_now_iso
 
 
 def _is_empty_detail_json(value: Optional[str]) -> bool:
@@ -40,7 +40,6 @@ def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> None:
     have all fields refreshed, ``updated_at`` bumped, and ``telegram_posted``
     reset to 0 so they are re-posted.
     """
-    init_db(db_path)
 
     detail_json = json.dumps(
         app.get("detail") or {}, sort_keys=True, ensure_ascii=False

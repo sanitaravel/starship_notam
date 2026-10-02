@@ -23,6 +23,7 @@ from starship_notam.data.notam_repo import (
 )
 
 
+@pytest.mark.usefixtures("initialized_db")
 def test_save_notam_then_load_all_round_trip(db_path, sample_parsed_notam):
     """A saved NOTAM is returned verbatim (structured fields) by load_all_notams."""
     save_notam("NOTAM-1", sample_parsed_notam, db_path)
@@ -39,6 +40,7 @@ def test_save_notam_then_load_all_round_trip(db_path, sample_parsed_notam):
     assert parsed["Q"] == sample_parsed_notam["Q"]
 
 
+@pytest.mark.usefixtures("initialized_db")
 def test_load_all_notams_orders_by_name(db_path, sample_parsed_notam):
     """load_all_notams returns records ordered by name."""
     save_notam("BBB", sample_parsed_notam, db_path)
@@ -56,6 +58,7 @@ def test_load_all_notams_missing_db_returns_empty(db_path):
     assert load_all_notams(db_path) == []
 
 
+@pytest.mark.usefixtures("initialized_db")
 def test_new_notam_needs_image(db_path, sample_parsed_notam):
     """A freshly saved NOTAM has image_generated == 0 and needs an image."""
     save_notam("NOTAM-IMG", sample_parsed_notam, db_path)
@@ -65,6 +68,7 @@ def test_new_notam_needs_image(db_path, sample_parsed_notam):
     assert [name for name, _ in needing] == ["NOTAM-IMG"]
 
 
+@pytest.mark.usefixtures("initialized_db")
 def test_mark_image_generated_removes_from_needing_list(db_path, sample_parsed_notam):
     """After marking the image generated, the NOTAM no longer needs an image."""
     save_notam("NOTAM-IMG", sample_parsed_notam, db_path)
@@ -83,6 +87,7 @@ def test_get_notams_needing_images_missing_db_returns_empty(db_path):
     assert result == []
 
 
+@pytest.mark.usefixtures("initialized_db")
 def test_save_notam_update_resets_image_generated(db_path, sample_parsed_notam):
     """Re-saving a NOTAM with changed content resets image_generated to 0."""
     save_notam("NOTAM-CHG", sample_parsed_notam, db_path)
@@ -97,6 +102,7 @@ def test_save_notam_update_resets_image_generated(db_path, sample_parsed_notam):
     assert [name for name, _ in needing] == ["NOTAM-CHG"]
 
 
+@pytest.mark.usefixtures("initialized_db")
 def test_save_notam_is_idempotent_for_identical_payload(db_path, sample_parsed_notam):
     """Saving the same NOTAM twice does not create a duplicate row."""
     save_notam("NOTAM-DUP", sample_parsed_notam, db_path)

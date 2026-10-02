@@ -13,7 +13,7 @@ import json
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db, utc_now_iso
+from starship_notam.data.connection import get_connection, utc_now_iso
 
 
 def make_beach_key(start_utc, end_utc) -> str:
@@ -35,7 +35,6 @@ def save_beach_alert(alert: Dict, db_path: Optional[str] = None) -> None:
     maintains ``created_at`` / ``updated_at`` timestamps. The alert is keyed by
     a stable hash of its start/end UTC window.
     """
-    init_db(db_path)
 
     now = utc_now_iso()
 
@@ -142,7 +141,6 @@ def save_road_alert(alert: Dict, db_path: Optional[str] = None) -> None:
     maintains ``created_at`` / ``updated_at`` timestamps. The alert is keyed by
     a stable hash of its route and start/end UTC window.
     """
-    init_db(db_path)
 
     now = utc_now_iso()
 

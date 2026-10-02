@@ -12,7 +12,7 @@ import json
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db, utc_now_iso
+from starship_notam.data.connection import get_connection, utc_now_iso
 
 
 def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
@@ -21,7 +21,6 @@ def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
     Uses a SHA-256 hash of the JSON-serialised payload to detect changes and
     maintains ``created_at`` / ``updated_at`` timestamps.
     """
-    init_db(db_path)
     payload_hash = hashlib.sha256(
         json.dumps(activity, sort_keys=True).encode("utf-8")
     ).hexdigest()
