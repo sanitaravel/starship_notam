@@ -9,6 +9,10 @@ from datetime import datetime
 from typing import Dict, Optional, List, Any
 
 from starship_notam.core.logging import logger
+from starship_notam.parsers.coord_parser import _dms_token_to_decimal
+
+# Compact coordinate token, e.g. 1700N07140W or 260000N0955500W.
+_COORD_RE = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
 
 
 def _find_fields(text: str) -> Dict[str, str]:
@@ -196,40 +200,20 @@ def parse_notam(text: str) -> Dict[str, str]:
     return parsed
 
 
-def _dms_to_decimal(dms: str) -> Optional[float]:
-    """Convert a compact DMS string (e.g. 260000 -> 26°00'00") to decimal degrees."""
-    if not dms or not dms.isdigit():
-        return None
-    # handle variable-length degree portions (lat may be 4-6 digits, lon 5-7)
-    L = len(dms)
-    if L < 4:
-        return None
-    # degrees are the leading digits before the last 4 (mmss)
-    deg_part = dms[:-4]
-    min_part = dms[-4:-2]
-    sec_part = dms[-2:]
-    try:
-        deg = int(deg_part) if deg_part else 0
-        minu = int(min_part)
-        sec = int(sec_part)
-    except Exception:
-        return None
-    return deg + minu / 60.0 + sec / 3600.0
-
-
 def _parse_coord_pair(token: str) -> Optional[Dict[str, float]]:
-    """Parse a single compact coordinate token like 260000N0955500W into decimal lat/lon."""
-    m = re.match(r'(?P<lat>\d{4,6})(?P<latdir>[NS])(?P<lon>\d{5,7})(?P<londir>[EW])', token)
+    """Parse a compact coordinate token into decimal lat/lon.
+
+    Accepts every NOTAM precision: ``DDMMN``/``DDDMMW`` (e.g. 1700N07140W) and
+    ``DDMMSSN``/``DDDMMSSW`` (e.g. 260000N0955500W). Conversion is delegated to
+    :func:`coord_parser._dms_token_to_decimal`, which also applies the sign.
+    """
+    m = re.match(r'(?P<lat>\d{4,6}[NS])(?P<lon>\d{5,7}[EW])', token)
     if not m:
         return None
-    lat = _dms_to_decimal(m.group('lat'))
-    lon = _dms_to_decimal(m.group('lon'))
+    lat = _dms_token_to_decimal(m.group('lat'))
+    lon = _dms_token_to_decimal(m.group('lon'))
     if lat is None or lon is None:
         return None
-    if m.group('latdir') == 'S':
-        lat = -lat
-    if m.group('londir') == 'W':
-        lon = -lon
     return {'raw': token, 'lat': lat, 'lon': lon}
 
 
@@ -237,8 +221,7 @@ def _parse_polygon_from_chain(chain: str) -> List[Dict[str, float]]:
     """Given a coordinate chain like '260000N0955500W TO 255900N0954800W',
     return a list of parsed point dicts.
     """
-    coord_re = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
-    matches = coord_re.findall(chain)
+    matches = _COORD_RE.findall(chain)
     out = []
     for t in matches:
         p = _parse_coord_pair(t)
@@ -253,10 +236,9 @@ def _extract_coord_chain(text: str) -> Optional[str]:
     The chain may contain annotations in parentheses after each coordinate and
     may end before a validity window like ``2607081350-2607160500``.
     """
-    coord_re = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
     window_re = re.compile(r'\d{10,12}-\d{10,12}')
 
-    first = coord_re.search(text)
+    first = _COORD_RE.search(text)
     if not first:
         return None
 
@@ -265,7 +247,7 @@ def _extract_coord_chain(text: str) -> Optional[str]:
     if window:
         tail = tail[:window.start()]
 
-    coords = coord_re.findall(tail)
+    coords = _COORD_RE.findall(tail)
     if not coords:
         return None
 
@@ -465,7 +447,7 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
         out['polygon'] = []
         out['Q'] = {}
     else:
-        first_coord = re.search(r'\d{4,6}[NS]\d{5,7}[EW]', remainder)
+        first_coord = _COORD_RE.search(remainder)
         op_text = remainder[:first_coord.start()] if first_coord else remainder
         out['operation'] = ' '.join(op_text.split()).strip(' ,.;')
 
