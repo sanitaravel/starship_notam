@@ -238,6 +238,63 @@ async def _process_notam_images(chat_list: list[str]) -> None:
             logger.exception(f"Unhandled error while processing {name}")
 
 
+# Pause after each Telegram send to stay clear of rate limits.
+_SEND_PAUSE_SECONDS = 5
+
+
+async def _post_pending(
+    items: list[dict],
+    chat_list: list[str],
+    *,
+    label: str,
+    format_fn,
+    key_fn,
+    mark_fn,
+) -> None:
+    """Send each pending item to every chat and mark it posted on success.
+
+    ``format_fn(item)`` builds the message text, ``key_fn(item)`` returns the
+    item's identifier and ``mark_fn(key, message_ids)`` records the post.
+    An item is marked posted only when at least one send succeeded; otherwise
+    it stays pending and is retried on the next cycle.
+    """
+    if not items:
+        logger.info(f"No {label} needing Telegram post at this time")
+        return
+
+    logger.info(f"Found {len(items)} {label} needing post to Telegram")
+    for item in items:
+        key = key_fn(item)
+        try:
+            text = format_fn(item)
+
+            message_ids = []
+            for chat_id in chat_list:
+                message_id = await send_message(chat_id, text)
+                if message_id:
+                    logger.info(f"Sent {label} {key} to chat {chat_id}")
+                    message_ids.append(message_id)
+                else:
+                    logger.warning(f"Failed to send {label} {key} to chat {chat_id}")
+                await asyncio.sleep(_SEND_PAUSE_SECONDS)
+
+            if not message_ids:
+                logger.error(
+                    f"Failed to send {label} {key} to any configured chat; "
+                    "keeping unposted for retry"
+                )
+                continue
+
+            logger.info(f"Marking {label} {key} as posted")
+            try:
+                mark_fn(key, ",".join(str(mid) for mid in message_ids))
+            except Exception:
+                logger.exception(f"Failed to mark {label} {key} as posted")
+
+        except Exception:
+            logger.exception(f"Failed to send {label} {key}")
+
+
 async def _process_faa_activities(chat_list: list[str]) -> None:
     """Fetch FAA advisories, persist them, and post any that need posting."""
     logger.info("Refreshing FAA activities needing Telegram post")
@@ -248,51 +305,18 @@ async def _process_faa_activities(chat_list: list[str]) -> None:
             try:
                 save_faa_activity(activity, config.DB_PATH)
             except Exception:
-                logger.exception(
-                    f"Failed to save FAA activity {activity}"
-                )
+                logger.exception(f"Failed to save FAA activity {activity}")
     except Exception:
         logger.exception("Failed to fetch and parse FAA advisory")
 
-    faa_pending = get_faa_activities_needing_post(config.DB_PATH)
-    if len(faa_pending) == 0:
-        logger.info("No FAA activities needing Telegram post at this time")
-        return
-
-    logger.info(
-        f"Found {len(faa_pending)} FAA activities needing post to Telegram"
+    await _post_pending(
+        get_faa_activities_needing_post(config.DB_PATH),
+        chat_list,
+        label="FAA activity",
+        format_fn=format_faa_activity,
+        key_fn=lambda a: a["mission"],
+        mark_fn=lambda key, ids: mark_faa_activity_posted(key, ids, config.DB_PATH),
     )
-    for activity in faa_pending:
-        try:
-            text = format_faa_activity(activity)
-
-            message_ids = []
-            for chat_id in chat_list:
-                message_id = await send_message(chat_id, text)
-                if message_id:
-                    logger.info(f"Sent FAA activity to chat {chat_id}")
-                    message_ids.append(message_id)
-                else:
-                    logger.warning(
-                        f"Failed to send FAA activity to chat {chat_id}"
-                    )
-
-                await asyncio.sleep(5)
-
-            logger.info(f"Marking FAA activity as posted: {activity}")
-            try:
-                mark_faa_activity_posted(
-                    activity["mission"],
-                    ",".join(str(mid) for mid in message_ids),
-                    config.DB_PATH,
-                )
-            except Exception as e:
-                logger.exception(
-                    f"Failed to mark FAA activity as posted: {activity}, reason: {e}"
-                )
-
-        except Exception:
-            logger.exception(f"Failed to send FAA activity {activity}")
 
 
 async def _process_fcc_els_applications(chat_list: list[str]) -> None:
@@ -305,67 +329,26 @@ async def _process_fcc_els_applications(chat_list: list[str]) -> None:
             try:
                 save_fcc_els_application(app, config.DB_PATH)
             except Exception:
-                logger.exception(
-                    f"Failed to save FCC ELS application {app}"
-                )
+                logger.exception(f"Failed to save FCC ELS application {app}")
     except Exception:
         logger.exception("Failed to fetch and parse FCC ELS applications")
 
-    fcc_pending = get_fcc_els_applications_needing_post(config.DB_PATH)
-    if len(fcc_pending) == 0:
-        logger.info("No FCC ELS applications needing Telegram post at this time")
-        return
-
-    logger.info(
-        f"Found {len(fcc_pending)} FCC ELS applications needing post to Telegram"
+    await _post_pending(
+        get_fcc_els_applications_needing_post(config.DB_PATH),
+        chat_list,
+        label="FCC ELS application",
+        format_fn=format_fcc_els_application,
+        key_fn=lambda a: a["file_number"],
+        mark_fn=lambda key, ids: mark_fcc_els_application_posted(key, ids, config.DB_PATH),
     )
-    for app in fcc_pending:
-        try:
-            text = format_fcc_els_application(app)
-
-            message_ids = []
-            for chat_id in chat_list:
-                message_id = await send_message(chat_id, text)
-                if message_id:
-                    logger.info(f"Sent FCC ELS application to chat {chat_id}")
-                    message_ids.append(message_id)
-                else:
-                    logger.warning(
-                        f"Failed to send FCC ELS application to chat {chat_id}"
-                    )
-
-                await asyncio.sleep(5)
-
-            if message_ids:
-                logger.info(f"Marking FCC ELS application as posted: {app}")
-                try:
-                    mark_fcc_els_application_posted(
-                        app["file_number"],
-                        ",".join(str(mid) for mid in message_ids),
-                        config.DB_PATH,
-                    )
-                except Exception as e:
-                    logger.exception(
-                        f"Failed to mark FCC ELS application as posted: {app}, reason: {e}"
-                    )
-            else:
-                logger.error(
-                    f"Failed to send FCC ELS application to any configured chat; "
-                    f"keeping unposted for retry: {app.get('file_number', '<unknown>')}"
-                )
-
-        except Exception:
-            logger.exception(f"Failed to send FCC ELS application {app}")
 
 
 async def _process_faa_licenses(chat_list: list[str]) -> None:
     """Fetch the FAA DRS launch license, persist it, and post any changes.
 
-    Mirrors ``_process_fcc_els_applications``: the (blocking, Selenium-backed)
-    fetch is offloaded to a worker thread; the record is persisted through the
-    data layer (which performs SHA-256 change detection and re-flags changed
-    records for posting); and any license needing a post is formatted and sent
-    to every chat, then marked posted only if at least one send succeeded.
+    The (blocking, Selenium-backed) fetch is offloaded to a worker thread; the
+    record is persisted through the data layer (which performs SHA-256 change
+    detection and re-flags changed records for posting).
     """
     logger.info("Refreshing FAA DRS launch license needing Telegram post")
     try:
@@ -375,59 +358,18 @@ async def _process_faa_licenses(chat_list: list[str]) -> None:
             try:
                 save_faa_license(record, config.DB_PATH)
             except Exception:
-                logger.exception(
-                    f"Failed to save FAA DRS license {record}"
-                )
+                logger.exception(f"Failed to save FAA DRS license {record}")
     except Exception:
         logger.exception("Failed to fetch and parse FAA DRS launch license")
 
-    lic_pending = get_faa_licenses_needing_post(config.DB_PATH)
-    if len(lic_pending) == 0:
-        logger.info("No FAA DRS license needing Telegram post at this time")
-        return
-
-    logger.info(
-        f"Found {len(lic_pending)} FAA DRS license(s) needing post to Telegram"
+    await _post_pending(
+        get_faa_licenses_needing_post(config.DB_PATH),
+        chat_list,
+        label="FAA DRS license",
+        format_fn=format_faa_license,
+        key_fn=lambda lic: lic["doc_unique_id"],
+        mark_fn=lambda key, ids: mark_faa_license_posted(key, ids, config.DB_PATH),
     )
-    for lic in lic_pending:
-        try:
-            text = format_faa_license(lic)
-
-            message_ids = []
-            for chat_id in chat_list:
-                message_id = await send_message(chat_id, text)
-                if message_id:
-                    logger.info(f"Sent FAA DRS license to chat {chat_id}")
-                    message_ids.append(message_id)
-                else:
-                    logger.warning(
-                        f"Failed to send FAA DRS license to chat {chat_id}"
-                    )
-
-                await asyncio.sleep(5)
-
-            if message_ids:
-                logger.info(f"Marking FAA DRS license as posted: {lic}")
-                try:
-                    mark_faa_license_posted(
-                        lic["doc_unique_id"],
-                        ",".join(str(mid) for mid in message_ids),
-                        config.DB_PATH,
-                    )
-                except Exception as e:
-                    logger.exception(
-                        f"Failed to mark FAA DRS license as posted: {lic}, "
-                        f"reason: {e}"
-                    )
-            else:
-                logger.error(
-                    "Failed to send FAA DRS license to any configured chat; "
-                    "keeping unposted for retry: %s",
-                    lic.get("doc_unique_id", "<unknown>"),
-                )
-
-        except Exception:
-            logger.exception(f"Failed to send FAA DRS license {lic}")
 
 
 def _ingest_starbase_alerts() -> None:
@@ -447,80 +389,26 @@ def _ingest_starbase_alerts() -> None:
 
 async def _process_beach_alerts(chat_list: list[str]) -> None:
     """Post beach alerts that still need posting."""
-    beach_pending = get_beach_alerts_needing_post(config.DB_PATH)
-
-    if len(beach_pending) == 0:
-        logger.info("No beach alerts needing Telegram post")
-        return
-
-    logger.info(f"Found {len(beach_pending)} beach alerts to post")
-
-    for alert in beach_pending:
-        try:
-            text = format_beach_alert(alert)
-            message_ids = []
-            for chat_id in chat_list:
-                message_id = await send_message(chat_id, text)
-                if message_id:
-                    logger.info(f"Sent beach alert to chat {chat_id}")
-                    message_ids.append(message_id)
-                else:
-                    logger.warning(
-                        f"Failed to send beach alert to chat {chat_id}"
-                    )
-
-                await asyncio.sleep(5)
-
-            logger.info(f"Marking beach alert as posted: {alert}")
-
-            try:
-                mark_beach_posted(alert["alert_key"], config.DB_PATH)
-            except Exception as e:
-                logger.exception(
-                    f"Failed to mark beach alert: {alert}, reason: {e}"
-                )
-
-        except Exception:
-            logger.exception(f"Failed to send beach alert {alert}")
+    await _post_pending(
+        get_beach_alerts_needing_post(config.DB_PATH),
+        chat_list,
+        label="beach alert",
+        format_fn=format_beach_alert,
+        key_fn=lambda a: a["alert_key"],
+        mark_fn=lambda key, _ids: mark_beach_posted(key, config.DB_PATH),
+    )
 
 
 async def _process_road_alerts(chat_list: list[str]) -> None:
     """Post road alerts that still need posting."""
-    road_pending = get_road_alerts_needing_post(config.DB_PATH)
-
-    if len(road_pending) == 0:
-        logger.info("No road alerts needing Telegram post")
-        return
-
-    logger.info(f"Found {len(road_pending)} road alerts to post")
-
-    for alert in road_pending:
-        try:
-            text = format_road_alert(alert)
-            message_ids = []
-            for chat_id in chat_list:
-                message_id = await send_message(chat_id, text)
-                if message_id:
-                    logger.info(f"Sent road alert to chat {chat_id}")
-                    message_ids.append(message_id)
-                else:
-                    logger.warning(
-                        f"Failed to send road alert to chat {chat_id}"
-                    )
-
-                await asyncio.sleep(5)
-
-            logger.info(f"Marking road alert as posted: {alert}")
-
-            try:
-                mark_road_posted(alert["alert_key"], config.DB_PATH)
-            except Exception as e:
-                logger.exception(
-                    f"Failed to mark road alert: {alert}, reason: {e}"
-                )
-
-        except Exception:
-            logger.exception(f"Failed to send road alert {alert}")
+    await _post_pending(
+        get_road_alerts_needing_post(config.DB_PATH),
+        chat_list,
+        label="road alert",
+        format_fn=format_road_alert,
+        key_fn=lambda a: a["alert_key"],
+        mark_fn=lambda key, _ids: mark_road_posted(key, config.DB_PATH),
+    )
 
 
 # --- Orchestration ----------------------------------------------------------
