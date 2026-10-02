@@ -83,7 +83,7 @@ from starship_notam.scrapers import (
     fetch_faa_license,
     fetch_fcc_els_applications,
     fetch_starbase_status,
-    search_notams,
+    search_notams_many,
 )
 
 from starship_notam.visualization.image_composer import plot_single_notam
@@ -160,14 +160,19 @@ def _persist_notam_results(results: list[dict], keyword: str) -> None:
 
 
 async def _refresh_notams_from_source() -> None:
-    """Scrape NOTAMs for the configured keywords and persist the results."""
+    """Scrape NOTAMs for the configured keywords and persist the results.
+
+    All keywords run in one browser session (see ``search_notams_many``);
+    a failure for one keyword does not stop the others.
+    """
+    try:
+        logger.info(f"Running NOTAM requests for keywords: {', '.join(_NOTAM_KEYWORDS)}")
+        results = await asyncio.to_thread(search_notams_many, _NOTAM_KEYWORDS)
+    except Exception:
+        logger.exception("NOTAM request failed: could not start the browser")
+        return
     for keyword in _NOTAM_KEYWORDS:
-        try:
-            logger.info(f"Running NOTAM request for keyword: {keyword}")
-            results = await asyncio.to_thread(search_notams, keyword)
-            _persist_notam_results(results, keyword)
-        except Exception:
-            logger.exception(f"NOTAM request failed for keyword: {keyword}")
+        _persist_notam_results(results.get(keyword), keyword)
 
 
 async def _process_notam_images(chat_list: list[str]) -> None:
