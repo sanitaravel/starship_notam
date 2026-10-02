@@ -14,7 +14,7 @@ These produce incorrect images or irrelevant posts in production today.
 Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 4 are independent.
 
-### 1. Multi-area NOTAMs are drawn as one fused polygon `[ ]`
+### 1. Multi-area NOTAMs are drawn as one fused polygon `[x]`
 
 - **Where:** `bot/orchestrator.py:160`, `visualization/image_composer.py:717`
 - **Problem:** the orchestrator passes a flat point list from
@@ -30,7 +30,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 - **Test:** call `plot_single_notam` (with `render_map` mocked) on the
   two-area E-field and assert `render_map` receives a list of 2 groups.
 
-### 2. Polygons crossing the 180° meridian are drawn around the whole globe `[ ]`
+### 2. Polygons crossing the 180° meridian are drawn around the whole globe `[x]`
 
 - **Affected:** `09/338`, `09/339`, `09/342`, `09/343` (Starship FLT 14
   ascent/reentry area, ZAK/ZHN). Same 21-vertex polygon in all four.
@@ -65,7 +65,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 - **Already posted:** the four NOTAMs were posted with the wrong map.
   Decision (2026-10-02): do not re-post them after the fix.
 
-### 3. Short coordinates parsed wrong in CARF messages `[ ]`
+### 3. Short coordinates parsed wrong in CARF messages `[x]`
 
 - **Where:** `parsers/notam_parser.py` (`_dms_to_decimal`, `_parse_coord_pair`)
 - **Problem:** `1700N07140W` becomes `lat=0.28, lon=-1.19`; it should be
@@ -77,7 +77,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 - **Test:** `parse_carf_message` with a `DDMM`/`DDDMM` polygon and a
   `DDMMSS`/`DDDMMSS` polygon; assert decimal values.
 
-### 4. Irrelevant NOTAMs saved and posted (`A6286/26`) `[ ]`
+### 4. Irrelevant NOTAMs saved and posted (`A6286/26`) `[x]`
 
 - **Why `A6286/26` was saved:** it is a French VFR notice ("VFR ENTRY WI LA
   ROCHELLE CTR AND TMA…", location LFBH). The log for 2026-09-28 09:02 shows
@@ -217,6 +217,11 @@ Existing tests must pass unchanged.
 - `[?]` Remove the legacy flat-module re-export layer in
   `starship_notam/__init__.py` once nothing outside the package needs it
   (and its test, `tests/integration/test_backward_compat.py`).
+- `[ ]` Fix the 10 tests that already fail on `main`: 8 in
+  `tests/unit/test_bot/test_formatting.py` still expect the old `#Starship`
+  hashtag (now `#SpaceUpdates`), `test_recognized_templates_unchanged`
+  fails, and the Hypothesis test
+  `test_formatter_output_is_well_formed_and_escaped` fails on some runs.
 - `[ ]` Check the `lock` extras in `pyproject.toml` for unused packages
   (`bs4`, `dotenv`, `xdk`, `pydantic`).
 - `[ ]` `_emit_cross_month` in `parsers/schedule.py` skips the remaining days
