@@ -13,6 +13,7 @@ an :class:`ImportError` with a clear message identifying the missing dependency
 is raised.
 """
 
+import functools
 import io
 from pathlib import Path
 
@@ -93,6 +94,52 @@ def _get_land_geometries():
         geoms = []
     _LAND_GEOMS_CACHE = geoms
     return geoms
+
+
+@functools.lru_cache(maxsize=None)
+def _natural_earth_records(resolution: str, category: str, name: str) -> tuple:
+    """Return ``(attributes, geometry)`` pairs for a Natural Earth layer.
+
+    Loaded once per process and cached; reading the shapefiles on every render
+    was a large part of render time. A layer that cannot be loaded yields an
+    empty tuple, which is cached too, so it is not re-downloaded each render.
+    """
+    try:
+        from cartopy.io import shapereader
+
+        path = shapereader.natural_earth(resolution=resolution, category=category, name=name)
+        return tuple(
+            (rec.attributes, rec.geometry)
+            for rec in shapereader.Reader(path).records()
+            if rec.geometry is not None
+        )
+    except Exception:
+        logger.exception("Could not load Natural Earth layer %s/%s/%s", resolution, category, name)
+        return ()
+
+
+@functools.lru_cache(maxsize=None)
+def _jetbrains_font_path() -> str | None:
+    """Path of the bundled JetBrains Mono font, or None if it is missing."""
+    if _FONTS_DIR.exists():
+        for f in sorted(_FONTS_DIR.glob("*.ttf")):
+            if "jetbrains" in f.name.lower():
+                return str(f)
+    return None
+
+
+@functools.lru_cache(maxsize=None)
+def _label_font(size: float | None):
+    """Cached FontProperties for map labels (JetBrains Mono, else monospace).
+
+    Matplotlib copies the properties into each Text, so sharing is safe.
+    """
+    import matplotlib.font_manager as fm
+
+    path = _jetbrains_font_path()
+    if path:
+        return fm.FontProperties(fname=path, size=size)
+    return fm.FontProperties(family="monospace", size=size)
 
 
 def _extent_has_visible_land(extent, size) -> bool:
@@ -759,18 +806,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         gl.xlocator = mticker.FixedLocator([_x(t) for t in lon_ticks])
         gl.ylocator = mticker.FixedLocator(lat_ticks)
 
-        # Resolve the bundled JetBrains Mono font for inline labels when present.
-        _grid_font = None
-        try:
-            import matplotlib.font_manager as _fm
-
-            if _FONTS_DIR.exists():
-                for _f in _FONTS_DIR.glob('*.ttf'):
-                    if 'jetbrains' in _f.name.lower():
-                        _grid_font = _fm.FontProperties(fname=str(_f))
-                        break
-        except Exception:
-            logger.exception("Failed to resolve JetBrains Mono for gridline labels")
+        _grid_font = _label_font(None)
 
         label_color = '#8a8a8a'
         # Subtle dark outline keeps labels readable over land or the NOTAM shape.
@@ -786,7 +822,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
             clip_on=True,
             path_effects=stroke,
         )
-        if _grid_font is not None:
+        if _jetbrains_font_path() is not None:
             text_kwargs['fontproperties'] = _grid_font
 
         # Longitude labels: one per vertical line, along the bottom edge.
@@ -808,52 +844,28 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
     except Exception:
         logger.exception("Failed to draw coordinate gridlines")
 
-    # Label visible countries and large named geographic features (islands, peninsulas)
+    # Label visible countries and large named water bodies
     try:
         # imports localized so failure here doesn't break map drawing
-        from cartopy.io import shapereader
         import matplotlib.patheffects as patheffects
-        import matplotlib.font_manager as fm
         # choose a label color lighter than the ocean (#262626 -> #858585)
         label_color = "#858585"
-        # prefer JetBrains Mono bundled in project's fonts/ directory when available
-        jet_font_path = None
-        project_fonts = _FONTS_DIR
-        if project_fonts.exists():
-            for f in project_fonts.glob("*.ttf"):
-                fn = f.name.lower()
-                if 'jetbrains' in fn or 'jetbrainsmono' in fn or 'jetbrains-mono' in fn:
-                    jet_font_path = str(f)
-                    break
 
         # Precompute extent and margins used by multiple labelers
         ext_min_lon, ext_max_lon, ext_min_lat, ext_max_lat = extent[0], extent[1], extent[2], extent[3]
         ext_lon_span = max(ext_max_lon - ext_min_lon, 1e-6)
         ext_lat_span = max(ext_max_lat - ext_min_lat, 1e-6)
+        # small margin so labels don't sit right on the border
         margin_factor = 0.03
         lon_margin = ext_lon_span * margin_factor
         lat_margin = ext_lat_span * margin_factor
 
-        # Helper: label countries from Natural Earth admin_0_countries
-        try:
-            countries_shp = shapereader.natural_earth(resolution='50m', category='cultural', name='admin_0_countries')
-            reader = shapereader.Reader(countries_shp)
-            # extent = [min_lon, max_lon, min_lat, max_lat]
-            ext_min_lon, ext_max_lon, ext_min_lat, ext_max_lat = extent[0], extent[1], extent[2], extent[3]
-            ext_lon_span = max(ext_max_lon - ext_min_lon, 1e-6)
-            ext_lat_span = max(ext_max_lat - ext_min_lat, 1e-6)
-            # small margin so labels don't sit right on the border
-            margin_factor = 0.03
-            lon_margin = ext_lon_span * margin_factor
-            lat_margin = ext_lat_span * margin_factor
-            for rec in reader.records():
+        def label_features(records, name_keys, min_pixels, font_size, zorder, bold=False):
+            """Label each visible, large-enough feature at a point inside it."""
+            for attrs, geom in records:
                 try:
-                    attrs = rec.attributes
-                    name = attrs.get('ADMIN') or attrs.get('NAME') or attrs.get('NAME_LONG') or attrs.get('SOVEREIGNT')
+                    name = next((attrs.get(k) for k in name_keys if attrs.get(k)), None)
                     if not name:
-                        continue
-                    geom = rec.geometry
-                    if geom is None:
                         continue
                     minx, miny, maxx, maxy = geom.bounds
                     # quick intersection test against current extent
@@ -863,25 +875,21 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                     pixel_w = (maxx - minx) / ext_lon_span * size[0]
                     pixel_h = (maxy - miny) / ext_lat_span * size[1]
                     maxpix = max(pixel_w, pixel_h)
-                    # skip small countries to avoid clutter; threshold tuned for readability
-                    if maxpix < 60:
+                    # skip small features to avoid clutter
+                    if maxpix < min_pixels:
                         continue
                     # choose a point guaranteed to lie within the geometry for label placement
                     try:
                         label_pt = geom.representative_point()
                     except Exception:
                         label_pt = geom.centroid
-                    lx, ly = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin), label_pt.y
+                    lx = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin)
+                    ly = label_pt.y
                     # ensure label point is comfortably inside the visible extent
                     if lx is None or not (ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
                         continue
-                    # slightly reduce label size for readability and compactness
-                    fontsize = max(7, min(12, int(maxpix / 18)))
-                    if jet_font_path:
-                        font_prop = fm.FontProperties(fname=jet_font_path, size=fontsize)
-                    else:
-                        font_prop = fm.FontProperties(family='monospace', size=fontsize)
-                    txt = ax.text(_x(lx), ly, name, fontproperties=font_prop, fontweight='bold', color=label_color, transform=proj, ha='center', va='center', zorder=11, clip_on=True)
+                    extra = {'fontweight': 'bold'} if bold else {}
+                    txt = ax.text(_x(lx), ly, name, fontproperties=_label_font(font_size(maxpix)), color=label_color, transform=proj, ha='center', va='center', zorder=zorder, clip_on=True, **extra)
                     txt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
                     try:
                         txt.set_clip_path(ax.patch)
@@ -890,128 +898,26 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                 except Exception:
                     # continue labeling other features even if one fails
                     continue
-        except Exception:
-            logger.exception("Failed to load admin_0_countries shapefile for labeling")
 
-        # Label visible large water bodies (oceans, named lakes) using physical layers
-        try:
-            water_candidates = [
-                ('ocean', 'physical', '50m'),
-                ('lakes', 'physical', '50m'),
-                ('ocean', 'physical', '10m'),
-                ('lakes', 'physical', '10m'),
-            ]
-            for name, category, res in water_candidates:
-                try:
-                    path = shapereader.natural_earth(resolution=res, category=category, name=name)
-                    wreader = shapereader.Reader(path)
-                except Exception:
-                    wreader = None
-                if not wreader:
-                    continue
-                for wrec in wreader.records():
-                    try:
-                        wattr = wrec.attributes
-                        # common name keys
-                        wname = (wattr.get('name') or wattr.get('NAME') or wattr.get('NAME_EN') or wattr.get('NAME_LONG') or wattr.get('NAME_HI') or '')
-                        if not wname:
-                            continue
-                        wgeom = wrec.geometry
-                        if wgeom is None:
-                            continue
-                        minx, miny, maxx, maxy = wgeom.bounds
-                        # quick intersection test
-                        if not _bounds_visible((minx, miny, maxx, maxy), extent):
-                            continue
-                        pixel_w = (maxx - minx) / ext_lon_span * size[0]
-                        pixel_h = (maxy - miny) / ext_lat_span * size[1]
-                        maxpix = max(pixel_w, pixel_h)
-                        # only label sufficiently large water bodies
-                        if maxpix < 60:
-                            continue
-                        try:
-                            wlabel_pt = wgeom.representative_point()
-                        except Exception:
-                            wlabel_pt = wgeom.centroid
-                        wx, wy = _lon_shift_into(wlabel_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin), wlabel_pt.y
-                        if wx is None or not (ext_min_lat + lat_margin <= wy <= ext_max_lat - lat_margin):
-                            continue
-                        # fontsize tuned to feature size
-                        wfontsize = max(8, min(18, int(maxpix / 22)))
-                        if jet_font_path:
-                            wfont_prop = fm.FontProperties(fname=jet_font_path, size=wfontsize)
-                        else:
-                            wfont_prop = fm.FontProperties(family='monospace', size=wfontsize)
-                        wtxt = ax.text(_x(wx), wy, wname, fontproperties=wfont_prop, color=label_color, transform=proj, ha='center', va='center', zorder=10, clip_on=True)
-                        wtxt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
-                        try:
-                            wtxt.set_clip_path(ax.patch)
-                        except Exception:
-                            pass
-                    except Exception:
-                        continue
-        except Exception:
-            logger.debug("Water-body labeling failed or not available")
-
-        # Try to label named geographic features (islands, peninsulas) from available geographic names
-        try:
-            geo_reader = None
-            for candidate in ('geographic_names', 'ne_10m_geographic_names', '10m_geographic_names'):
-                try:
-                    path = shapereader.natural_earth(resolution='10m', category='cultural', name=candidate)
-                    geo_reader = shapereader.Reader(path)
-                    break
-                except Exception:
-                    geo_reader = None
-            if geo_reader:
-                # reuse label margins
-                for rec in geo_reader.records():
-                    try:
-                        attrs = rec.attributes
-                        fname = (attrs.get('NAME') or attrs.get('name') or attrs.get('NAME_EN') or attrs.get('NAME_LONG') or '')
-                        featclass = (attrs.get('FEATURECLA') or attrs.get('featurecla') or '')
-                        if not fname:
-                            continue
-                        lower_n = str(fname).lower()
-                        lower_fc = str(featclass).lower()
-                        if 'island' not in lower_n and 'island' not in lower_fc and 'isle' not in lower_n and 'peninsula' not in lower_n and 'peninsula' not in lower_fc:
-                            continue
-                        geom = rec.geometry
-                        if geom is None:
-                            continue
-                        minx, miny, maxx, maxy = geom.bounds
-                        if not _bounds_visible((minx, miny, maxx, maxy), extent):
-                            continue
-                        pixel_w = (maxx - minx) / ext_lon_span * size[0]
-                        pixel_h = (maxy - miny) / ext_lat_span * size[1]
-                        maxpix = max(pixel_w, pixel_h)
-                        # allow slightly smaller threshold for named features
-                        if maxpix < 30:
-                            continue
-                        try:
-                            label_pt = geom.representative_point()
-                        except Exception:
-                            label_pt = geom.centroid
-                        lx, ly = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin), label_pt.y
-                        # ensure label point is inside visible area with margin
-                        if lx is None or not (ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
-                            continue
-                        # reduce feature label size slightly
-                        fontsize = max(6, min(10, int(maxpix / 24)))
-                        if jet_font_path:
-                            font_prop = fm.FontProperties(fname=jet_font_path, size=fontsize)
-                        else:
-                            font_prop = fm.FontProperties(family='monospace', size=fontsize)
-                        txt = ax.text(_x(lx), ly, fname, fontproperties=font_prop, fontsize=fontsize, color=label_color, transform=proj, ha='center', va='center', zorder=11, clip_on=True)
-                        txt.set_path_effects([patheffects.withStroke(linewidth=1.8, foreground='black')])
-                        try:
-                            txt.set_clip_path(ax.patch)
-                        except Exception:
-                            pass
-                    except Exception:
-                        continue
-        except Exception:
-            logger.debug("No geographic-names layer available or labeling failed")
+        # Countries from Natural Earth admin_0_countries.
+        label_features(
+            _natural_earth_records('50m', 'cultural', 'admin_0_countries'),
+            ('ADMIN', 'NAME', 'NAME_LONG', 'SOVEREIGNT'),
+            min_pixels=60,
+            font_size=lambda px: max(7, min(12, int(px / 18))),
+            zorder=11,
+            bold=True,
+        )
+        # Large named water bodies. Only the 50m layers are used, matching the
+        # rest of the map; also loading 10m labelled the same lakes twice.
+        for layer in ('ocean', 'lakes'):
+            label_features(
+                _natural_earth_records('50m', 'physical', layer),
+                ('name', 'NAME', 'NAME_EN', 'NAME_LONG', 'NAME_HI'),
+                min_pixels=60,
+                font_size=lambda px: max(8, min(18, int(px / 22))),
+                zorder=10,
+            )
 
         # Draw Starbase, TX marker and label if visible
         try:
@@ -1033,11 +939,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
                     dy = ext_lat_span * 0.01
                     sname = 'Starbase, TX'
                     sfontsize = max(8, min(12, int(min(size) / 60)))
-                    if jet_font_path:
-                        sfont_prop = fm.FontProperties(fname=jet_font_path, size=sfontsize)
-                    else:
-                        sfont_prop = fm.FontProperties(family='monospace', size=sfontsize)
-                    stxt = ax.text(_x(star_lon) + dx, star_lat + dy, sname, fontproperties=sfont_prop, color=label_color, transform=proj, ha='left', va='bottom', zorder=13, clip_on=True)
+                    stxt = ax.text(_x(star_lon) + dx, star_lat + dy, sname, fontproperties=_label_font(sfontsize), color=label_color, transform=proj, ha='left', va='bottom', zorder=13, clip_on=True)
                     stxt.set_path_effects([patheffects.withStroke(linewidth=1.8, foreground='black')])
                     try:
                         stxt.set_clip_path(ax.patch)
