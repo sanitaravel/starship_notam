@@ -156,7 +156,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 
 ## Phase 3 — Performance quick wins
 
-### 10. Stop running `init_db()` on every DB call `[ ]`
+### 10. Stop running `init_db()` on every DB call `[x]`
 
 - **Where:** every `save_*`, `mark_image_generated`,
   `get_notams_needing_images` in `data/`
@@ -164,15 +164,17 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
   at startup. Remove the now-pointless "does the DB file exist" check in
   `get_notams_needing_images`. Tests that use a fresh temp DB must call
   `init_db` in their fixture.
+- **Done differently:** the "file exists" check in `get_notams_needing_images`
+  was kept. Without `init_db` it is what stops the call creating an empty file.
 
-### 11. Fewer Selenium sessions per cycle `[ ]`
+### 11. Fewer Selenium sessions per cycle `[x]`
 
 - **Where:** `scrapers/notam_scraper.py`, `bot/orchestrator.py:129`
 - **Fix:** remove the unconditional `time.sleep(5)` before `driver.quit()`.
   Let `search_notams` accept a list of keywords and reuse one driver for all
   three. Shorten the per-XPath fallback waits (currently 5s each attempt).
 
-### 12. Cache map data and fonts; stop per-render downloads `[ ]`
+### 12. Cache map data and fonts; stop per-render downloads `[x]`
 
 - **Where:** `visualization/map_renderer.py`, `visualization/image_composer.py`
 - **Fix:** cache the country, water and geographic-name shapefile records in
@@ -185,13 +187,24 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
   failure (or remove that labeller) so it is not retried on each image.
 - **Optional:** shapely `STRtree` for the land-visibility check.
 
-### 13. Don't block the event loop `[ ]`
+### 13. Don't block the event loop `[x]`
 
 - **Where:** `bot/orchestrator.py`
 - **Fix:** wrap `fetch_faa_advisory` and `fetch_starbase_status` in
   `asyncio.to_thread`, like the other scrapers.
 
 ---
+
+### Found and fixed during phase 3 `[x]`
+
+- Tests wrote into the bot's real `logs/notam.log`, rotating real logs
+  towards deletion. `core.logging` now honours `NOTAM_LOG_DIR`, which
+  `tests/conftest.py` points at a temporary folder.
+- The virtualenv held a non-editable copy of the package from 2026-09-10,
+  used when the bot was started via `starship-notam` or from another folder.
+  Reinstalled with `pip install -e . --no-deps` on 2026-10-02.
+- A Hypothesis test helper read map extents in the projection's coordinates;
+  it now converts them to degrees near the 180° meridian.
 
 ## Phase 4 — Refactors (no behaviour change)
 
