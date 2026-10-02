@@ -11,11 +11,12 @@ those packages to be installed.
 from starship_notam.scrapers.faa_fetcher import fetch_faa_advisory
 from starship_notam.scrapers.faa_license_fetcher import fetch_faa_license
 from starship_notam.scrapers.fcc_els_fetcher import fetch_fcc_els_applications
-from starship_notam.scrapers.notam_scraper import search_notams
+from starship_notam.scrapers.notam_scraper import search_notams, search_notams_many
 from starship_notam.scrapers.starbase_fetcher import fetch_starbase_status
 
 __all__ = [
     "search_notams",
+    "search_notams_many",
     "fetch_faa_advisory",
     "fetch_faa_license",
     "fetch_starbase_status",
