@@ -30,8 +30,11 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from hypothesis import HealthCheck, given, settings, strategies as st
 
+from starship_notam.data.connection import init_db
 from starship_notam.bot.formatting import format_fcc_els_application
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,
@@ -39,8 +42,8 @@ from starship_notam.data.fcc_els_repo import (
     save_fcc_els_application,
 )
 
-# These property examples exercise real SQLite file I/O (init_db rebuilds the
-# full schema on every save), so individual examples exceed Hypothesis's default
+# These property examples exercise real SQLite file I/O, so individual
+# examples can exceed Hypothesis's default
 # 200ms deadline and generation can trip the too_slow health check. The work is
 # I/O-bound, not compute-bound, so disable the deadline / timing checks rather
 # than shrink coverage. Mirrors the existing repo test settings.
@@ -49,6 +52,10 @@ _DB_SETTINGS = settings(
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
+
+# The schema is created once at startup in production (ensure_setup), not by
+# the repository functions, so every test here starts from an initialized DB.
+pytestmark = pytest.mark.usefixtures("initialized_db")
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +161,7 @@ def test_empty_detail_deferred_then_single_post_when_populated(
         violated).
     """
     db = str(tmp_path_factory.mktemp("empty_defer") / "notams.db")
+    init_db(db)
 
     # 1) Save the application while its detail is empty, then force the concrete
     #    empty representation under test (NULL / '' / whitespace / '{}').
@@ -216,6 +224,7 @@ def test_empty_detail_message_omits_purpose_and_explanation(
     sent; the assertion below documents its incompleteness.
     """
     db = str(tmp_path_factory.mktemp("empty_msg") / "notams.db")
+    init_db(db)
 
     save_fcc_els_application(_empty_app(file_number), db)
     _force_detail_json(db, file_number, empty_json)

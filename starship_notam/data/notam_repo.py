@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from starship_notam.core.config import DB_PATH
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db, utc_now_iso
+from starship_notam.data.connection import get_connection, utc_now_iso
 
 
 def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
@@ -26,7 +26,6 @@ def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
     JSON-serialised payload to detect changes; resets ``image_generated`` when
     the content has changed.
     """
-    init_db(db_path)
     now = utc_now_iso()
 
     def _safe_get(k: str):
@@ -179,7 +178,6 @@ def get_notams_needing_images(
     db_path: Optional[str] = None,
 ) -> List[Tuple[str, Dict]]:
     """Return list of ``(name, parsed_dict)`` where ``image_generated == 0``."""
-    init_db(db_path)
     resolved_path = db_path or os.environ.get("NOTAM_DB_PATH") or DB_PATH
     if not Path(resolved_path).exists():
         return []
@@ -224,7 +222,6 @@ def get_notams_needing_images(
 
 def mark_image_generated(name: str, db_path: Optional[str] = None) -> None:
     """Mark a NOTAM as having had its image generated."""
-    init_db(db_path)
     now = utc_now_iso()
     conn = get_connection(db_path)
     try:

@@ -19,7 +19,7 @@ import json
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db, utc_now_iso
+from starship_notam.data.connection import get_connection, utc_now_iso
 
 
 def save_faa_license(record: Dict, db_path: Optional[str] = None) -> None:
@@ -48,7 +48,6 @@ def save_faa_license(record: Dict, db_path: Optional[str] = None) -> None:
         )
         return
 
-    init_db(db_path)
 
     details_json = json.dumps(
         record.get("details") or {}, sort_keys=True, ensure_ascii=False

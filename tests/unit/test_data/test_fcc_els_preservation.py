@@ -26,8 +26,11 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from hypothesis import HealthCheck, given, settings, strategies as st
 
+from starship_notam.data.connection import init_db
 from starship_notam.bot import formatting
 from starship_notam.bot.formatting import format_fcc_els_application
 from starship_notam.data.fcc_els_repo import (
@@ -36,8 +39,8 @@ from starship_notam.data.fcc_els_repo import (
     save_fcc_els_application,
 )
 
-# These property examples exercise real SQLite file I/O (init_db rebuilds the
-# full schema on every save), so individual examples exceed Hypothesis's default
+# These property examples exercise real SQLite file I/O, so individual
+# examples can exceed Hypothesis's default
 # 200ms deadline and generation can trip the too_slow health check. The work is
 # I/O-bound, not compute-bound, so disable the deadline / timing checks rather
 # than shrink coverage. Mirrors the existing repo test settings.
@@ -46,6 +49,10 @@ _DB_SETTINGS = settings(
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
+
+# The schema is created once at startup in production (ensure_setup), not by
+# the repository functions, so every test here starts from an initialized DB.
+pytestmark = pytest.mark.usefixtures("initialized_db")
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +141,7 @@ def test_populated_first_appearance_is_post_eligible_and_complete(
     post-eligible, and the single eligible row renders a complete message
     (purpose + explanation present). Baseline behavior — Requirement 3.1."""
     db = str(tmp_path_factory.mktemp("populated_first") / "notams.db")
+    init_db(db)
 
     save_fcc_els_application(app, db)
 
@@ -161,6 +169,7 @@ def test_no_change_rescrape_is_not_reposted(tmp_path_factory, app):
     payload again leaves telegram_posted = 1, changes no stored field, and does
     not make the app post-eligible again. Baseline behavior — Requirement 3.2."""
     db = str(tmp_path_factory.mktemp("no_change") / "notams.db")
+    init_db(db)
 
     save_fcc_els_application(app, db)
     mark_fcc_els_application_posted(app["file_number"], "msg-1", db)
@@ -195,6 +204,7 @@ def test_new_populated_file_numbers_are_all_post_eligible(
     makes every one of them post-eligible. Baseline behavior — Requirement
     3.3."""
     db = str(tmp_path_factory.mktemp("new_populated") / "notams.db")
+    init_db(db)
 
     # Build a set of distinct file_numbers so each save is a genuinely new app.
     count = data.draw(st.integers(min_value=1, max_value=5))
