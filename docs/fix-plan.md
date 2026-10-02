@@ -105,7 +105,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 
 ## Phase 2 — Posting reliability
 
-### 5. `send_message` retries forever on timeout `[ ]`
+### 5. `send_message` retries forever on timeout `[x]`
 
 - **Where:** `bot/transport.py:85`
 - **Fix:** cap at 3 attempts with backoff (e.g. 2s, 5s, 10s); honour
@@ -114,7 +114,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 - **Test:** mock bot raising `TimedOut` repeatedly; assert it returns `None`
   after the cap and sleeps between attempts.
 
-### 6. One posting loop, consistent "mark as posted" `[ ]`
+### 6. One posting loop, consistent "mark as posted" `[x]`
 
 - **Where:** `bot/orchestrator.py` (5 copies of the send/collect/mark loop)
 - **Problem:** FAA activities, beach and road alerts are marked posted even
@@ -125,7 +125,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 - **Test:** for each item type, a failed send leaves the item unposted; a
   successful send marks it with the joined message ids.
 
-### 7. Caption trimming can break HTML `[ ]`
+### 7. Caption trimming can break HTML `[x]`
 
 - **Where:** `bot/formatting.py:404` (`build_notam_caption`)
 - **Problem:** slicing at a fixed length can cut through `&amp;` or a tag, and
@@ -135,7 +135,7 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 - **Test:** a very long E-field full of `&` and `<` produces a caption of at
   most 1024 chars with no partial entity and a closed blockquote.
 
-### 8. One bad Starbase date breaks the whole page parse `[ ]`
+### 8. One bad Starbase date breaks the whole page parse `[x]`
 
 - **Where:** `parsers/starbase_parser.py` (`parse_rich_notification`)
 - **Fix:** catch `ValueError` around `parse_datetime_range`, same as
