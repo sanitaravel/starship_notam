@@ -257,9 +257,14 @@ def parse_rich_notification(notification: Any) -> list[dict]:
 
         start_utc = end_utc = None
         if date_raw:
-            start_dt, end_dt = parse_datetime_range(date_raw)
-            start_utc = start_dt.isoformat()
-            end_utc = end_dt.isoformat()
+            try:
+                start_dt, end_dt = parse_datetime_range(date_raw)
+                start_utc = start_dt.isoformat()
+                end_utc = end_dt.isoformat()
+            except ValueError:
+                # Keep the event with only its raw date, same as
+                # parse_notice_container, instead of failing the whole page.
+                pass
 
         parsed_events.append({
             "description": description,
