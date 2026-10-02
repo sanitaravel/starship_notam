@@ -39,7 +39,7 @@ import logging
 import math
 
 import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import example, given, settings, HealthCheck
 from hypothesis import strategies as st
 
 from starship_notam.visualization.map_renderer import MAP_H, MAP_W
@@ -77,7 +77,12 @@ def _capture_extent(coords, radius_nm=None):
     sentinel = RuntimeError("STOP_AFTER_EXTENT")
 
     def spy(self, extents, crs=None):  # noqa: ANN001 - mirrors cartopy signature
-        captured["extent"] = list(extents)
+        # Near the 180° meridian render_map centres the projection on the area
+        # and passes the extent in that projection's coordinates; convert it
+        # back to geographic longitude so assertions stay in degrees.
+        lon_0 = float(getattr(crs, "proj4_params", {}).get("lon_0", 0.0)) if crs else 0.0
+        x0, x1, y0, y1 = list(extents)
+        captured["extent"] = [x0 + lon_0, x1 + lon_0, y0, y1]
         raise sentinel
 
     original = ga.GeoAxes.set_extent
@@ -359,6 +364,8 @@ def test_land_adjacent_polygon_stays_centered_and_fitted(coords):
 
 @settings(max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(data=radius_points())
+# A circle crossing the 180° meridian (the map is centred on it).
+@example(data=((53.0, 178.0), 22.0))
 def test_point_with_radius_fits_the_circle(data):
     """3.2: a point-with-radius renders centered on the point with the radius
     circle fully inside the extent (aspect-corrected), as it does today."""
