@@ -66,6 +66,9 @@ def save_beach_alert(alert: Dict, db_path: Optional[str] = None) -> None:
 
         if existing:
             logger.info("Changes detected for beach alert; updating record")
+            # Intentionally leaves ``processed`` untouched: an updated closure
+            # is not re-posted (unlike the other tables, which reset their
+            # posted flag on change).
             cur.execute(
                 """
                 UPDATE starbase_beach
@@ -170,6 +173,9 @@ def save_road_alert(alert: Dict, db_path: Optional[str] = None) -> None:
 
         if existing:
             logger.info("Changes detected for road alert; updating record")
+            # Intentionally leaves ``processed`` untouched: an updated closure
+            # is not re-posted (unlike the other tables, which reset their
+            # posted flag on change).
             cur.execute(
                 """
                 UPDATE starbase_road
