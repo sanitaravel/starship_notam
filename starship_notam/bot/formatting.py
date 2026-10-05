@@ -13,6 +13,7 @@ Public functions:
     format_beach_alert(alert) -> str
     format_fcc_els_application(app) -> str
     format_faa_license(item) -> str
+    format_compass_file(item) -> str
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from __future__ import annotations
 import html
 import json
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 from starship_notam.parsers.notam_time import parse_notam_time
 from starship_notam.parsers.schedule import (
@@ -39,6 +40,7 @@ _TAGS_ROAD = (_TAG_COMMON, "#Дорога", "#Перекрытие")
 _TAGS_BEACH = (_TAG_COMMON, "#Пляж", "#Перекрытие")
 _TAGS_FCC = (_TAG_COMMON, "#FCC", "#Заявка")
 _TAGS_FAA_LICENSE = (_TAG_COMMON, "#FAA", "#Лицензия")
+_TAGS_COMPASS = (_TAG_COMMON, "#COMPASS")
 
 
 # Telegram's maximum photo caption length.
@@ -95,6 +97,12 @@ _FCC_ELS_BASE_URL = "https://apps.fcc.gov/oetcf/els/reports/"
 # license record's ``doc_unique_id``. Kept local so this module stays
 # stdlib-only and free of the config/network layer.
 _FAA_DRS_VIEWER_BASE_URL = "https://drs.faa.gov/browse/excelExternalWindow/"
+
+
+# Links for COMPASS "Master Slide Deck" posts: the file itself (by fileuuid)
+# and the list page. Kept local so this module stays stdlib-only.
+_COMPASS_FILE_URL = "https://compass.atfm.aero/public_svcdynamic/getfile?download=false&fileuuid="
+_COMPASS_PAGE_URL = "https://compass.atfm.aero/vpublic_anspdetail.jsp?view=3"
 
 
 # Ordered "Document Details" labels (left column) mapped to their Russian
@@ -462,5 +470,34 @@ def format_faa_license(item: dict) -> str:
         )
 
     parts.append(_hashtag_line(*_TAGS_FAA_LICENSE))
+
+    return "\n\n".join(parts)
+
+
+def format_compass_file(item: dict) -> str:
+    """Format a new COMPASS "Master Slide Deck" file into a Russian HTML string.
+
+    Shows the file name and upload time (as the site prints it), a direct
+    link to the file and a link to the list page. All site-supplied text is
+    passed through ``html.escape``.
+    """
+    parts = ["<b>📊 Новый файл в COMPASS (Master Slide Deck)</b>"]
+
+    filename = str(item.get("filename") or "").strip()
+    if filename:
+        parts.append(f"<b>Файл:</b> {html.escape(filename)}")
+    uploaded_at = str(item.get("uploaded_at") or "").strip()
+    if uploaded_at:
+        parts.append(f"<b>Загружен:</b> {html.escape(uploaded_at)}")
+
+    links = []
+    file_uuid = str(item.get("file_uuid") or "").strip()
+    if file_uuid:
+        file_url = _COMPASS_FILE_URL + quote(file_uuid)
+        links.append(f'<a href="{html.escape(file_url, quote=True)}">Скачать файл</a>')
+    links.append(f'<a href="{html.escape(_COMPASS_PAGE_URL, quote=True)}">Все файлы</a>')
+    parts.append(" | ".join(links))
+
+    parts.append(_hashtag_line(*_TAGS_COMPASS))
 
     return "\n\n".join(parts)

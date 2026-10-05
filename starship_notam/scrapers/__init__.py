@@ -8,6 +8,7 @@ individual scraper functions so that importing this package does not require
 those packages to be installed.
 """
 
+from starship_notam.scrapers.compass_fetcher import fetch_compass_files
 from starship_notam.scrapers.faa_fetcher import fetch_faa_advisory
 from starship_notam.scrapers.faa_license_fetcher import fetch_faa_license
 from starship_notam.scrapers.fcc_els_fetcher import fetch_fcc_els_applications
@@ -21,4 +22,5 @@ __all__ = [
     "fetch_faa_license",
     "fetch_starbase_status",
     "fetch_fcc_els_applications",
+    "fetch_compass_files",
 ]

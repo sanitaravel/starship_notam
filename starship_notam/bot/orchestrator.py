@@ -37,6 +37,7 @@ from starship_notam.core.logging import logger
 from starship_notam.bot.formatting import (
     build_notam_caption,
     format_beach_alert,
+    format_compass_file,
     format_faa_activity,
     format_faa_license,
     format_fcc_els_application,
@@ -55,6 +56,7 @@ from starship_notam.bot.reloader import (
 
 from starship_notam.data import (
     get_beach_alerts_needing_post,
+    get_compass_files_needing_post,
     get_faa_activities_needing_post,
     get_faa_licenses_needing_post,
     get_fcc_els_applications_needing_post,
@@ -62,12 +64,15 @@ from starship_notam.data import (
     get_road_alerts_needing_post,
     init_db,
     mark_beach_posted,
+    mark_compass_file_posted,
+    mark_compass_files_posted,
     mark_faa_activity_posted,
     mark_faa_license_posted,
     mark_fcc_els_application_posted,
     mark_image_generated,
     mark_road_posted,
     save_beach_alert,
+    save_compass_file,
     save_faa_activity,
     save_faa_license,
     save_fcc_els_application,
@@ -79,6 +84,7 @@ from starship_notam.parsers.coord_parser import parse_coords_from_text
 from starship_notam.parsers.notam_parser import parse_notam
 
 from starship_notam.scrapers import (
+    fetch_compass_files,
     fetch_faa_advisory,
     fetch_faa_license,
     fetch_fcc_els_applications,
@@ -377,6 +383,56 @@ async def _process_faa_licenses(chat_list: list[str]) -> None:
     )
 
 
+def _save_compass_files(files: list[dict]) -> None:
+    """Persist fetched COMPASS files, oldest first.
+
+    The site lists files newest first; saving in reverse gives new rows
+    ascending ids, so several files found in one cycle are posted in upload
+    order.
+    """
+    for record in reversed(files):
+        try:
+            save_compass_file(record, config.DB_PATH)
+        except Exception:
+            logger.exception(f"Failed to save COMPASS file {record}")
+
+
+async def _process_compass_files(chat_list: list[str]) -> None:
+    """Fetch the COMPASS Master Slide Deck list and post any new files."""
+    logger.info("Refreshing COMPASS files needing Telegram post")
+    try:
+        files = await asyncio.to_thread(fetch_compass_files)
+        _save_compass_files(files or [])
+    except Exception:
+        logger.exception("Failed to fetch and parse COMPASS file list")
+
+    await _post_pending(
+        get_compass_files_needing_post(config.DB_PATH),
+        chat_list,
+        label="COMPASS file",
+        format_fn=format_compass_file,
+        key_fn=lambda f: f["file_uuid"],
+        mark_fn=lambda key, ids: mark_compass_file_posted(key, ids, config.DB_PATH),
+    )
+
+
+def prefill_compass_files() -> int:
+    """Record every file currently on the COMPASS list as already posted.
+
+    Run once before starting the bot so it announces only files uploaded
+    afterwards. Returns the number of files marked; raises ``RuntimeError``
+    when the list could not be fetched.
+    """
+    init_db(config.DB_PATH)
+    files = fetch_compass_files()
+    if files is None:
+        raise RuntimeError("Could not fetch the COMPASS file list")
+    _save_compass_files(files)
+    return mark_compass_files_posted(
+        [f["file_uuid"] for f in files], None, config.DB_PATH
+    )
+
+
 async def _ingest_starbase_alerts() -> None:
     """Fetch Starbase status and persist beach/road alerts."""
     logger.info("Refreshing Starbase alerts needing Telegram post")
@@ -433,6 +489,7 @@ async def generate_and_send() -> None:
     await _process_faa_activities(chat_list)
     await _process_fcc_els_applications(chat_list)
     await _process_faa_licenses(chat_list)
+    await _process_compass_files(chat_list)
     await _ingest_starbase_alerts()
     await _process_beach_alerts(chat_list)
     await _process_road_alerts(chat_list)

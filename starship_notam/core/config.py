@@ -77,3 +77,14 @@ FAA_LICENSE_SUMMARY_URL: str = (
     f"{FAA_LICENSE_BASE_URL}"
     f"/api/browse/documents/summaryguiddocview/{FAA_LICENSE_DOC_ID}"
 )
+
+# --- COMPASS (CADENA ATFM) Master Slide Deck tracker configuration ---
+
+# Base host of the COMPASS public portal.
+COMPASS_BASE_URL: str = "https://compass.atfm.aero"
+
+# The JSON endpoint that fills the "Master Slide Deck" grid on
+# vpublic_anspdetail.jsp?view=3 (one row per uploaded file).
+COMPASS_SLIDE_LIST_URL: str = (
+    f"{COMPASS_BASE_URL}/public_svcdynamic/?key=public_getpublicslidelist"
+)

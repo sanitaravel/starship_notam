@@ -3,6 +3,12 @@
 Re-exports public functions from submodules for convenient access.
 """
 
+from starship_notam.data.compass_repo import (
+    get_compass_files_needing_post,
+    mark_compass_file_posted,
+    mark_compass_files_posted,
+    save_compass_file,
+)
 from starship_notam.data.connection import get_connection, init_db
 from starship_notam.data.faa_repo import (
     get_faa_activities_needing_post,
@@ -50,6 +56,10 @@ __all__ = [
     "save_faa_license",
     "get_faa_licenses_needing_post",
     "mark_faa_license_posted",
+    "save_compass_file",
+    "get_compass_files_needing_post",
+    "mark_compass_file_posted",
+    "mark_compass_files_posted",
     "save_beach_alert",
     "save_road_alert",
     "get_beach_alerts_needing_post",
