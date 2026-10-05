@@ -115,12 +115,11 @@ def test_build_notam_caption_full(sample_parsed_notam):
     assert caption.rstrip().endswith("#Starship #NOTAM #06123")
 
 
-def test_build_notam_caption_strips_json_suffix_and_underscores():
-    """A ``.json`` suffix is stripped and underscores become slashes."""
-    caption = formatting.build_notam_caption("A1234_25.json", {})
+def test_build_notam_caption_replaces_underscores():
+    """Stored-name underscores become slashes in the displayed NOTAM code."""
+    caption = formatting.build_notam_caption("A1234_25", {})
 
     assert "<b>Код NOTAM:</b> A1234/25" in caption
-    assert ".json" not in caption
 
 
 def test_build_notam_caption_escapes_html_in_details():

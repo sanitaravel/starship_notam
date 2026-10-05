@@ -5,10 +5,14 @@ text, CARF/TFR-style messages, and Q-line qualifiers into structured dicts.
 """
 
 import re
-from datetime import datetime
 from typing import Dict, Optional, List, Any
 
 from starship_notam.core.logging import logger
+from starship_notam.parsers.coord_parser import _dms_token_to_decimal
+from starship_notam.parsers.notam_time import parse_notam_time
+
+# Compact coordinate token, e.g. 1700N07140W or 260000N0955500W.
+_COORD_RE = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
 
 
 def _find_fields(text: str) -> Dict[str, str]:
@@ -50,52 +54,15 @@ def _find_fields(text: str) -> Dict[str, str]:
     return fields
 
 
-def _try_parse_dt(s: str) -> Optional[str]:
+def _try_parse_dt(s) -> Optional[str]:
+    """Return a NOTAM time as ``YYYY-MM-DDTHH:MM:SSZ``, or the raw text if unparseable."""
     if s is None:
         return None
-    # Coerce non-string inputs (e.g., numeric JSON values) to string
-    if not isinstance(s, str):
-        s = str(s)
-    s = s.strip()
-    # common NOTAM formats: YYYYMMDDhhmm, YYMMDDhhmm, YYYYMMDDThhmm, YYYY-MM-DDTHH:MMZ
-    fmt_candidates = [
-        '%Y%m%d%H%M', '%y%m%d%H%M', '%Y%m%dT%H%M', '%y%m%dT%H%M', '%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M'
-    ]
-    # remove obvious noise but keep digits, T, Z, colon, dash and space
-    cleaned = re.sub(r'(?i)[^0-9TZt:\-:\s]', '', s)
-
-    # Extract all compact numeric tokens (12-digit YYYYMMDDHHMM or 10-digit YYMMDDHHMM)
-    tokens = re.findall(r'\d{12}|\d{10}', cleaned)
-
-    # Try parsing each token in a sensible order
-    for token in tokens:
-        try:
-            if len(token) == 12:
-                dt = datetime.strptime(token, '%Y%m%d%H%M')
-                parsed = dt.isoformat() + 'Z'
-                logger.debug(f"Parsed datetime token '{token}' from '{s}' as {parsed} using %Y format")
-                return parsed
-            elif len(token) == 10:
-                # Interpret 10-digit token as YYMMDDHHMM (e.g., 2106231700 -> 2021-06-23T17:00Z)
-                dt = datetime.strptime(token, '%y%m%d%H%M')
-                parsed = dt.isoformat() + 'Z'
-                logger.debug(f"Parsed datetime token '{token}' from '{s}' as {parsed} using %y format")
-                return parsed
-        except Exception:
-            continue
-
-    # Fallback: try candidate formats against the cleaned string
-    for fmt in fmt_candidates:
-        try:
-            dt = datetime.strptime(cleaned, fmt)
-            parsed = dt.isoformat() + 'Z'
-            logger.debug(f"Parsed datetime '{s}' as {parsed} using fmt {fmt}")
-            return parsed
-        except Exception:
-            continue
-
-    logger.info(f"Could not parse datetime string: {s}; returning raw")
-    return s
+    dt = parse_notam_time(s)
+    if dt is None:
+        logger.info(f"Could not parse datetime string: {s}; returning raw")
+        return str(s).strip()
+    return dt.isoformat() + 'Z'
 
 
 def _parse_q_line(q: str) -> Dict[str, Optional[str]]:
@@ -196,40 +163,20 @@ def parse_notam(text: str) -> Dict[str, str]:
     return parsed
 
 
-def _dms_to_decimal(dms: str) -> Optional[float]:
-    """Convert a compact DMS string (e.g. 260000 -> 26°00'00") to decimal degrees."""
-    if not dms or not dms.isdigit():
-        return None
-    # handle variable-length degree portions (lat may be 4-6 digits, lon 5-7)
-    L = len(dms)
-    if L < 4:
-        return None
-    # degrees are the leading digits before the last 4 (mmss)
-    deg_part = dms[:-4]
-    min_part = dms[-4:-2]
-    sec_part = dms[-2:]
-    try:
-        deg = int(deg_part) if deg_part else 0
-        minu = int(min_part)
-        sec = int(sec_part)
-    except Exception:
-        return None
-    return deg + minu / 60.0 + sec / 3600.0
-
-
 def _parse_coord_pair(token: str) -> Optional[Dict[str, float]]:
-    """Parse a single compact coordinate token like 260000N0955500W into decimal lat/lon."""
-    m = re.match(r'(?P<lat>\d{4,6})(?P<latdir>[NS])(?P<lon>\d{5,7})(?P<londir>[EW])', token)
+    """Parse a compact coordinate token into decimal lat/lon.
+
+    Accepts every NOTAM precision: ``DDMMN``/``DDDMMW`` (e.g. 1700N07140W) and
+    ``DDMMSSN``/``DDDMMSSW`` (e.g. 260000N0955500W). Conversion is delegated to
+    :func:`coord_parser._dms_token_to_decimal`, which also applies the sign.
+    """
+    m = re.match(r'(?P<lat>\d{4,6}[NS])(?P<lon>\d{5,7}[EW])', token)
     if not m:
         return None
-    lat = _dms_to_decimal(m.group('lat'))
-    lon = _dms_to_decimal(m.group('lon'))
+    lat = _dms_token_to_decimal(m.group('lat'))
+    lon = _dms_token_to_decimal(m.group('lon'))
     if lat is None or lon is None:
         return None
-    if m.group('latdir') == 'S':
-        lat = -lat
-    if m.group('londir') == 'W':
-        lon = -lon
     return {'raw': token, 'lat': lat, 'lon': lon}
 
 
@@ -237,8 +184,7 @@ def _parse_polygon_from_chain(chain: str) -> List[Dict[str, float]]:
     """Given a coordinate chain like '260000N0955500W TO 255900N0954800W',
     return a list of parsed point dicts.
     """
-    coord_re = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
-    matches = coord_re.findall(chain)
+    matches = _COORD_RE.findall(chain)
     out = []
     for t in matches:
         p = _parse_coord_pair(t)
@@ -253,10 +199,9 @@ def _extract_coord_chain(text: str) -> Optional[str]:
     The chain may contain annotations in parentheses after each coordinate and
     may end before a validity window like ``2607081350-2607160500``.
     """
-    coord_re = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
     window_re = re.compile(r'\d{10,12}-\d{10,12}')
 
-    first = coord_re.search(text)
+    first = _COORD_RE.search(text)
     if not first:
         return None
 
@@ -265,22 +210,11 @@ def _extract_coord_chain(text: str) -> Optional[str]:
     if window:
         tail = tail[:window.start()]
 
-    coords = coord_re.findall(tail)
+    coords = _COORD_RE.findall(tail)
     if not coords:
         return None
 
     return ' TO '.join(coords)
-
-
-def _extract_altitude(text: str) -> Optional[str]:
-    """Best-effort extraction of a TFR altitude block.
-
-    Supports common forms like ``SFC-5000FT AGL ONLY`` or ``FL180-FL240``.
-    """
-    altitude_info = _parse_tfr_altitude(text)
-    if altitude_info:
-        return altitude_info['raw']
-    return None
 
 
 def _normalize_altitude_token(token: str) -> Dict[str, Optional[str]]:
@@ -428,14 +362,6 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
     out['notam_id'] = notam_id
     out['artcc'] = artcc
 
-    # find first coordinate token to delimit the operation string
-    coord_re = re.compile(r'^\d{4,6}[NS]\d{5,7}[EW]$')
-    coord_index = None
-    for i in range(op_start_idx, len(toks)):
-        if coord_re.match(toks[i].strip(',.')):
-            coord_index = i
-            break
-
     remainder = ' '.join(toks[op_start_idx:]).strip()
     circle_def = _extract_circle_definition(remainder)
     chain_str = _extract_coord_chain(remainder)
@@ -465,7 +391,7 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
         out['polygon'] = []
         out['Q'] = {}
     else:
-        first_coord = re.search(r'\d{4,6}[NS]\d{5,7}[EW]', remainder)
+        first_coord = _COORD_RE.search(remainder)
         op_text = remainder[:first_coord.start()] if first_coord else remainder
         out['operation'] = ' '.join(op_text.split()).strip(' ,.;')
 
@@ -480,16 +406,6 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
             out['radius_nm'] = circle_def['radius_nm']
             out['center'] = circle_def.get('center')
         out['Q'] = q
-
-        alt_token = _extract_altitude(remainder)
-        if alt_token:
-            out['altitude'] = alt_token
-            try:
-                lower, upper = alt_token.split('-', 1)
-                out['Q']['lower'] = lower.strip()
-                out['Q']['upper'] = upper.strip()
-            except Exception:
-                pass
 
         if altitude_info:
             out['Q']['lower'] = altitude_info['min']

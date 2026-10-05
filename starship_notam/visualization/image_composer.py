@@ -15,13 +15,13 @@ and keeps the visualization layer independently importable.
 
 Public entry points:
     render_notam_image(notam_dict, output_path) -> str
-    plot_single_notam(name, parsed, coords, out_path, _unused=None) -> str
+    plot_single_notam(name, parsed, out_path) -> str
 """
 
 from __future__ import annotations
 
+import functools
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 from starship_notam.core.logging import logger
@@ -29,11 +29,17 @@ from starship_notam.parsers.coord_parser import (
     parse_coord_groups_from_text,
     parse_coords_from_text,
 )
+from starship_notam.parsers.notam_time import parse_notam_time
 from starship_notam.parsers.schedule import (
     parse_notam_windows,  # noqa: F401  (re-exported for tests / callers)
     parse_notam_windows_with_dates,
 )
-from starship_notam.visualization.map_renderer import MAP_H, MAP_W, render_map
+from starship_notam.visualization.map_renderer import (
+    MAP_H,
+    MAP_W,
+    _unwrap_groups,
+    render_map,
+)
 
 # Canvas and layout constants
 CANVAS_W = 1316
@@ -55,11 +61,13 @@ RED_CF = (207, 0, 0)
 _FONTS_DIR = Path(__file__).resolve().parents[2] / "fonts"
 
 
+@functools.lru_cache(maxsize=None)
 def load_font(name: str, size: int, weight: str | None = None):
     """Load a TrueType font, preferring the project's ``fonts/`` directory.
 
     Falls back to common system font locations and finally to PIL's default
-    font if nothing suitable can be loaded.
+    font if nothing suitable can be loaded. Cached: each image needs seven
+    fonts, and the lookup searches the fonts folder every time.
     """
     from PIL import ImageFont
 
@@ -99,67 +107,6 @@ def load_font(name: str, size: int, weight: str | None = None):
 
     logger.warning("Falling back to default PIL font for size %s", size)
     return ImageFont.load_default()
-
-
-def _parse_notam_time(raw):
-    """Parse various NOTAM time formats into a datetime (UTC) or None."""
-    if not raw:
-        return None
-    if isinstance(raw, datetime):
-        return raw
-    s = str(raw).strip()
-
-    # ISO with trailing Z
-    try:
-        if s.endswith('Z') and 'T' in s:
-            s2 = s[:-1] + '+00:00'
-            dt = datetime.fromisoformat(s2)
-            return dt
-    except Exception:
-        pass
-
-    # Look for compact numeric tokens like YYYYMMDDHHMM, YYMMDDHHMM or YYYYMMDD
-    m = re.search(r'(\d{12}|\d{10}|\d{8})', s)
-    if m:
-        tok = m.group(1)
-        try:
-            if len(tok) == 12:
-                return datetime.strptime(tok, '%Y%m%d%H%M').replace(tzinfo=timezone.utc)
-            if len(tok) == 10:
-                dt = datetime.strptime(tok, '%y%m%d%H%M')
-                if dt.year < 100:
-                    dt = dt.replace(year=dt.year + 2000)
-                return dt.replace(tzinfo=timezone.utc)
-            if len(tok) == 8:
-                if tok.startswith('20') or tok.startswith('19'):
-                    return datetime.strptime(tok, '%Y%m%d').replace(tzinfo=timezone.utc)
-                dt = datetime.strptime(tok, '%y%m%d')
-                if dt.year < 100:
-                    dt = dt.replace(year=dt.year + 2000)
-                return dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
-
-    # Try common ISO / human formats
-    try:
-        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
-        return dt
-    except Exception:
-        pass
-
-    patterns = [
-        '%d.%m.%Y %H:%M', '%d.%m.%Y %H:%M:%S', '%d.%m.%Y',
-        '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M',
-        '%d %b %Y %H:%M', '%d %b %Y', '%d %B %Y %H:%M', '%d %B %Y'
-    ]
-    for fmt in patterns:
-        try:
-            dt = datetime.strptime(s, fmt)
-            return dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
-
-    return None
 
 
 def extract_starship_template(notam: str) -> str | None:
@@ -365,22 +312,8 @@ def _notam_from_db_row(name: str, parsed: dict) -> dict:
         coords = None
         radius_nm = None
 
-    # Normalize number: strip trailing .json (if present), then replace
-    # underscore with slash (A0669_26 -> A0669/26). This guards against
-    # legacy or malformed names like 'E1777_26.json' that would otherwise
-    # become 'E1777/26.json' when only replacing underscores.
-    number = name
-    try:
-        if isinstance(name, str):
-            raw_name = name.strip()
-            if raw_name.lower().endswith('.json'):
-                raw_name = raw_name[:-5]
-            number = raw_name.replace('_', '/')
-    except Exception:
-        number = name
-
-    if number != name:
-        logger.info("Normalized NOTAM name '%s' -> '%s'", name, number)
+    # Stored names use '_' in place of '/' (A0669_26 -> A0669/26).
+    number = str(name).strip().replace('_', '/')
 
     # Strip trailing punctuation from details
     if details:
@@ -399,8 +332,8 @@ def _notam_from_db_row(name: str, parsed: dict) -> dict:
     if not end_raw:
         end_raw = parsed.get('end') if isinstance(parsed, dict) else None
 
-    start_dt = _parse_notam_time(start_raw)
-    end_dt = _parse_notam_time(end_raw)
+    start_dt = parse_notam_time(start_raw)
+    end_dt = parse_notam_time(end_raw)
     start_str = start_dt.strftime('%d.%m.%Y, %H:%M UTC') if start_dt else None
     end_str = end_dt.strftime('%d.%m.%Y, %H:%M UTC') if end_dt else None
 
@@ -615,10 +548,12 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
                 # Normalize to a list of polygon groups so a multi-area NOTAM
                 # (list-of-lists) and a single polygon (flat list of points)
                 # share one drawing path. Each group is drawn separately.
+                # Unwrap longitudes so an area crossing the 180° meridian is
+                # drawn in one piece rather than stretched across the map.
                 if isinstance(coords[0], list):
-                    groups = [g for g in coords if g]
+                    groups = _unwrap_groups(coords)
                 else:
-                    groups = [coords]
+                    groups = _unwrap_groups([coords])
                 all_pts = [pt for g in groups for pt in g]
                 lats = [p[0] for p in all_pts]
                 lons = [p[1] for p in all_pts]
@@ -691,33 +626,19 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
     return output_path
 
 
-def plot_single_notam(name: str, parsed: dict, coords, out_path: str, _unused=None) -> str:
+def plot_single_notam(name: str, parsed: dict, out_path: str) -> str:
     """Blocking helper used by external callers to generate a NOTAM image.
 
     This function is suitable for running in a thread (e.g. via
     ``asyncio.to_thread``) and simply wraps existing helpers to produce
     the file at ``out_path`` and return that path.
+
+    Coordinates are always derived from ``parsed`` by
+    :func:`_notam_from_db_row`, which keeps AND-separated areas as separate
+    polygon groups.
     """
     try:
-        # Prefer converting the DB row into the renderer's expected dict.
-        try:
-            notam = _notam_from_db_row(name, parsed) if isinstance(parsed, dict) else {
-                'number': name,
-                'details': str(parsed or ''),
-                'coords': coords,
-            }
-        except Exception:
-            notam = {
-                'number': name,
-                'details': str(parsed or ''),
-                'coords': coords,
-            }
-
-        # If coords were passed explicitly, prefer those.
-        if coords:
-            notam['coords'] = coords
-
-        return render_notam_image(notam, output_path=out_path)
+        return render_notam_image(_notam_from_db_row(name, parsed), output_path=out_path)
     except Exception:
         logger.exception("plot_single_notam failed for %s", name)
         raise

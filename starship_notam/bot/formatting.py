@@ -19,9 +19,10 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from urllib.parse import urljoin
 
+from starship_notam.parsers.notam_time import parse_notam_time
 from starship_notam.parsers.schedule import (
     parse_notam_windows,
     parse_notam_windows_with_dates,
@@ -40,9 +41,34 @@ _TAGS_FCC = (_TAG_COMMON, "#FCC", "#Заявка")
 _TAGS_FAA_LICENSE = (_TAG_COMMON, "#FAA", "#Лицензия")
 
 
+# Telegram's maximum photo caption length.
+_CAPTION_LIMIT = 1024
+
+
 def _hashtag_line(*tags: str) -> str:
     """Join hashtags into a single space-separated line, dropping blanks."""
     return " ".join(t for t in tags if t)
+
+
+def _coerce_json(value, default):
+    """Return ``value`` decoded from JSON if it is a string.
+
+    Sub-payloads arrive either already decoded or as the JSON text stored in
+    the database. Returns ``default`` when decoding fails or the result is not
+    of the same type as ``default`` (e.g. ``[]`` for a list, ``{}`` for a dict).
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return default
+    return value if isinstance(value, type(default)) else default
+
+
+def _fmt_utc(iso_str: str) -> str:
+    """Format an ISO UTC timestamp (``Z`` or ``+00:00``) as ``dd.mm.yyyy HH:MM UTC``."""
+    dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    return dt.strftime("%d.%m.%Y %H:%M UTC")
 
 
 def _sanitize_tag(value: str) -> str:
@@ -148,11 +174,6 @@ def format_faa_activity(activity: dict) -> str:
 def format_road_alert(alert: dict) -> str:
     """Format a road-delay alert dict into an HTML message string."""
 
-    def fmt_time(iso_str: str):
-        # expects ISO UTC like "2026-06-25T04:59:00+00:00"
-        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return dt.strftime("%d.%m.%Y %H:%M UTC")
-
     origin = translate_place(alert.get("origin"))
     destination = translate_place(alert.get("destination"))
 
@@ -162,7 +183,7 @@ def format_road_alert(alert: dict) -> str:
 
     if alert.get("start_utc") and alert.get("end_utc"):
         parts.append(
-            f"<b>Время:</b> {html.escape(fmt_time(alert['start_utc']))} – {html.escape(fmt_time(alert['end_utc']))}"
+            f"<b>Время:</b> {html.escape(_fmt_utc(alert['start_utc']))} – {html.escape(_fmt_utc(alert['end_utc']))}"
         )
 
     parts.append(_hashtag_line(*_TAGS_ROAD))
@@ -173,28 +194,16 @@ def format_road_alert(alert: dict) -> str:
 def format_beach_alert(alert: dict) -> str:
     """Format a beach-closure alert dict into an HTML message string."""
 
-    def fmt_time(iso_str: str):
-        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return dt.strftime("%d.%m.%Y %H:%M UTC")
-
     def period_text(period: dict) -> str:
         start_utc = period.get("start_utc")
         end_utc = period.get("end_utc")
         if start_utc and end_utc:
-            return f"{fmt_time(start_utc)} – {fmt_time(end_utc)}"
+            return f"{_fmt_utc(start_utc)} – {_fmt_utc(end_utc)}"
 
         raw_date = period.get("raw_date")
         return html.escape(str(raw_date)) if raw_date else ""
 
-    periods = alert.get("periods_json")
-
-    if isinstance(periods, str):
-        try:
-            periods = json.loads(periods)
-        except Exception:
-            periods = []
-    if not isinstance(periods, list):
-        periods = []
+    periods = _coerce_json(alert.get("periods_json"), [])
 
     primary_period = periods[0] if periods else {
         "start_utc": alert.get("start_utc"),
@@ -267,16 +276,7 @@ def format_fcc_els_application(app: dict) -> str:
     parts.append(f"<b>Дата получения:</b> {html.escape(receipt_date)}")
     parts.append(f"<b>Дата статуса:</b> {html.escape(status_date)}")
 
-    # Detail fields: accept either a dict or a JSON string (mirrors how
-    # format_beach_alert handles periods_json).
-    detail = app.get("detail_json")
-    if isinstance(detail, str):
-        try:
-            detail = json.loads(detail)
-        except Exception:
-            detail = {}
-    if not isinstance(detail, dict):
-        detail = {}
+    detail = _coerce_json(app.get("detail_json"), {})
 
     # Build the expandable blockquote from the purpose-of-operation and the STA
     # explanation, each under its own bold label. Include only the fields that
@@ -322,46 +322,22 @@ def build_notam_caption(name: str, parsed: dict) -> str:
     """Build an HTML caption for a NOTAM image from a parsed NOTAM dict."""
     parts = []
     parts.append('<b>Новый NOTAM</b>')
-    # display name/title: strip any trailing .json then replace underscores
-    raw_name = str(name or '')
-    if raw_name.lower().endswith('.json'):
-        raw_name = raw_name[:-5]
-    display_name = raw_name.replace('_', '/')
+    # Stored names use '_' in place of '/' (A0669_26 -> A0669/26).
+    display_name = str(name or '').replace('_', '/')
     parts.append(f"<b>Код NOTAM:</b> {html.escape(display_name)}")
 
-    def _parse_dt(s):
-        """Parse a NOTAM B/C timestamp into a UTC-naive-ish datetime or None."""
-        if not s:
-            return None
-        try:
-            s_str = str(s).strip()
-            if s_str.endswith('Z'):
-                s_str = s_str[:-1]
-            s_iso = s_str.replace('T', ' ')
-            dt = datetime.fromisoformat(s_iso)
-            if dt.tzinfo is not None:
-                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-            return dt
-        except Exception:
-            return None
-
     def _fmt_dt(s):
-        dt = _parse_dt(s)
+        dt = parse_notam_time(s)
         if dt is not None:
             return dt.strftime('%d.%m.%Y %H:%M UTC')
-        if not s:
-            return ''
-        s_str = str(s).strip()
-        if s_str.endswith('Z'):
-            s_str = s_str[:-1]
-        return s_str.replace('T', ' ')
+        return str(s or '').strip().removesuffix('Z').replace('T', ' ')
 
     # Dates. Prefer the same per-day schedule breakdown used on the image
     # (parsed from field D), so daily/multi-day NOTAMs list each active date
     # with its window instead of a single "B → C" span. Fall back to the
     # B → C line when D is empty or unparseable.
-    start_dt = _parse_dt(parsed.get('B'))
-    end_dt = _parse_dt(parsed.get('C'))
+    start_dt = parse_notam_time(parsed.get('B'))
+    end_dt = parse_notam_time(parsed.get('C'))
     windows = parse_notam_windows_with_dates(
         parsed.get('D'), parsed.get('E'), start_dt, end_dt
     )
@@ -376,36 +352,59 @@ def build_notam_caption(name: str, parsed: dict) -> str:
                 f"<b>Даты:</b> {html.escape(b_fmt)} → {html.escape(c_fmt)}"
             )
 
-    # Details (E) as blockquote
-    if parsed.get('E'):
-        details_raw = parsed.get('E')
-        details_clean = str(details_raw).replace('%0', ' ')
-        details_escaped = html.escape(details_clean)
-        parts.append('Подробности:')
-        expandable_bq = f"<blockquote expandable>{details_escaped}</blockquote>"
-        parts.append(expandable_bq)
-
     # Hashtags for channel search: the common + NOTAM tags plus a tag derived
     # from the NOTAM code (e.g. "B1882/26" -> "#B188226") so a specific NOTAM
-    # is searchable. Kept out of the truncation body below so it always
-    # survives (Telegram caption hard limit is 1024 characters).
+    # is searchable. Always kept, even when the details are trimmed.
     tag_line = _hashtag_line(*_TAGS_NOTAM, _sanitize_tag(display_name))
+    head = '\n\n'.join(parts)
 
-    body = '\n\n'.join(parts)
-    caption = f"{body}\n\n{tag_line}"
-    if len(caption) <= 1024:
+    details = str(parsed.get('E') or '').replace('%0', ' ')
+    if not details:
+        return _fit_caption(f"{head}\n\n{tag_line}")
+
+    def with_details(text: str) -> str:
+        return (
+            f"{head}\n\nПодробности:\n\n"
+            f"<blockquote expandable>{html.escape(text)}</blockquote>"
+            f"\n\n{tag_line}"
+        )
+
+    caption = with_details(details)
+    if len(caption) <= _CAPTION_LIMIT:
         return caption
 
-    # Too long: trim the body so the caption plus the hashtag line fits, then
-    # re-append the tags. Close any open blockquote left dangling by the cut.
-    tag_suffix = f"\n\n{tag_line}"
-    budget = 1024 - len(tag_suffix)
-    closing = '</blockquote>'
-    if '<blockquote' in body:
-        trimmed = body[:budget - len(closing)] + closing
-    else:
-        trimmed = body[:budget]
-    return f"{trimmed}{tag_suffix}"
+    # Too long (Telegram caption limit): trim the *unescaped* details so the
+    # cut never lands inside an HTML entity like "&amp;" or a tag, then escape
+    # and wrap them again. Binary search for the longest prefix that fits.
+    lo, hi = 0, len(details)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if len(with_details(details[:mid].rstrip() + '…')) <= _CAPTION_LIMIT:
+            lo = mid
+        else:
+            hi = mid - 1
+    if lo == 0:
+        return _fit_caption(f"{head}\n\n{tag_line}")
+    return with_details(details[:lo].rstrip() + '…')
+
+
+def _fit_caption(caption: str) -> str:
+    """Hard-trim a caption that has no blockquote to the Telegram limit.
+
+    Only reached when the header alone is too long, which needs a name or
+    schedule of hundreds of characters; the cut happens on a line boundary so
+    no tag or entity is split.
+    """
+    if len(caption) <= _CAPTION_LIMIT:
+        return caption
+    lines = caption.split('\n')
+    tag_line = lines[-1]
+    kept: list[str] = []
+    for line in lines[:-1]:
+        if len('\n'.join(kept + [line])) + len('\n\n') + len(tag_line) > _CAPTION_LIMIT:
+            break
+        kept.append(line)
+    return '\n'.join(kept).rstrip() + '\n\n' + tag_line
 
 
 def format_faa_license(item: dict) -> str:
@@ -422,14 +421,7 @@ def format_faa_license(item: dict) -> str:
     and ``format_fcc_els_application`` tolerate serialized sub-payloads).
     Performs no network I/O; uses the standard library only.
     """
-    details = item.get("details")
-    if isinstance(details, str):
-        try:
-            details = json.loads(details)
-        except Exception:
-            details = {}
-    if not isinstance(details, dict):
-        details = {}
+    details = _coerce_json(item.get("details"), {})
 
     # Fall back to the flat columns for the headline fields when ``details`` is
     # missing an entry (both are populated by the parser, but stay defensive).

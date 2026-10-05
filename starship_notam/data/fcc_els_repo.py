@@ -12,7 +12,12 @@ import json
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, init_db, utc_now_iso
+from starship_notam.data.connection import (
+    get_connection,
+    transaction,
+    upsert,
+    utc_now_iso,
+)
 
 
 def _is_empty_detail_json(value: Optional[str]) -> bool:
@@ -40,7 +45,6 @@ def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> None:
     have all fields refreshed, ``updated_at`` bumped, and ``telegram_posted``
     reset to 0 so they are re-posted.
     """
-    init_db(db_path)
 
     detail_json = json.dumps(
         app.get("detail") or {}, sort_keys=True, ensure_ascii=False
@@ -63,106 +67,18 @@ def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> None:
         json.dumps(payload, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
-
-        cur.execute(
-            "SELECT payload_hash FROM fcc_els_applications WHERE file_number = ?",
-            (file_number,),
+    fields = {k: v for k, v in payload.items() if k != "file_number"}
+    with transaction(get_connection(db_path)) as cur:
+        result = upsert(
+            cur,
+            "fcc_els_applications",
+            "file_number",
+            file_number,
+            fields,
+            payload_hash,
+            reset={"telegram_posted": 0},
         )
-        existing = cur.fetchone()
-
-        if existing and existing["payload_hash"] == payload_hash:
-            logger.info(
-                "No changes detected for FCC ELS application '%s'; skipping DB update",
-                file_number,
-            )
-            return
-
-        now = utc_now_iso()
-
-        if existing:
-            logger.info(
-                "Changes detected for FCC ELS application '%s'; updating record",
-                file_number,
-            )
-            cur.execute(
-                """
-                UPDATE fcc_els_applications
-                SET application_seq = ?,
-                    applicant_name = ?,
-                    call_sign = ?,
-                    receipt_date = ?,
-                    status = ?,
-                    status_date = ?,
-                    current_detail_url = ?,
-                    detail_json = ?,
-                    updated_at = ?,
-                    payload_hash = ?,
-                    telegram_posted = 0
-                WHERE file_number = ?
-                """,
-                (
-                    payload["application_seq"],
-                    payload["applicant_name"],
-                    payload["call_sign"],
-                    payload["receipt_date"],
-                    payload["status"],
-                    payload["status_date"],
-                    payload["current_detail_url"],
-                    detail_json,
-                    now,
-                    payload_hash,
-                    file_number,
-                ),
-            )
-        else:
-            logger.info(
-                "Inserting new FCC ELS application '%s'", file_number
-            )
-            cur.execute(
-                """
-                INSERT INTO fcc_els_applications (
-                    file_number,
-                    application_seq,
-                    applicant_name,
-                    call_sign,
-                    receipt_date,
-                    status,
-                    status_date,
-                    current_detail_url,
-                    detail_json,
-                    created_at,
-                    updated_at,
-                    payload_hash,
-                    telegram_posted
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """,
-                (
-                    file_number,
-                    payload["application_seq"],
-                    payload["applicant_name"],
-                    payload["call_sign"],
-                    payload["receipt_date"],
-                    payload["status"],
-                    payload["status_date"],
-                    payload["current_detail_url"],
-                    detail_json,
-                    now,
-                    now,
-                    payload_hash,
-                ),
-            )
-
-        conn.commit()
-    except Exception as e:
-        logger.exception(f"Failed to save FCC ELS application to DB: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    logger.info("FCC ELS application '%s': %s", file_number, result)
 
 
 def get_fcc_els_applications_needing_post(
@@ -170,9 +86,7 @@ def get_fcc_els_applications_needing_post(
 ) -> List[Dict]:
     """Return FCC ELS applications that have not yet been posted to Telegram."""
     logger.info("Fetching FCC ELS applications needing Telegram posting")
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
+    with transaction(get_connection(db_path)) as cur:
         cur.execute(
             """
             SELECT id,
@@ -197,20 +111,18 @@ def get_fcc_els_applications_needing_post(
             """
         )
         rows = cur.fetchall()
-        # Exclude empty-detail rows in Python using ``_is_empty_detail_json`` as
-        # the single source of truth. SQLite's ``TRIM`` only strips ASCII spaces
-        # (not tabs/newlines), so gating in SQL would diverge from the Python
-        # helper on whitespace-only ``detail_json``; filtering here keeps the
-        # "empty detail" definition in exactly one place (Requirement 2.1).
-        result = [
-            dict(r) for r in rows if not _is_empty_detail_json(r["detail_json"])
-        ]
-        logger.debug(
-            "Found %d FCC ELS applications needing Telegram posting", len(result)
-        )
-        return result
-    finally:
-        conn.close()
+    # Exclude empty-detail rows in Python using ``_is_empty_detail_json`` as
+    # the single source of truth. SQLite's ``TRIM`` only strips ASCII spaces
+    # (not tabs/newlines), so gating in SQL would diverge from the Python
+    # helper on whitespace-only ``detail_json``; filtering here keeps the
+    # "empty detail" definition in exactly one place (Requirement 2.1).
+    result = [
+        dict(r) for r in rows if not _is_empty_detail_json(r["detail_json"])
+    ]
+    logger.debug(
+        "Found %d FCC ELS applications needing Telegram posting", len(result)
+    )
+    return result
 
 
 def mark_fcc_els_application_posted(
@@ -222,9 +134,7 @@ def mark_fcc_els_application_posted(
         file_number,
         telegram_message_id,
     )
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
+    with transaction(get_connection(db_path)) as cur:
         cur.execute(
             """
             UPDATE fcc_els_applications
@@ -235,12 +145,3 @@ def mark_fcc_els_application_posted(
             """,
             (utc_now_iso(), telegram_message_id, file_number),
         )
-        conn.commit()
-    except Exception as e:
-        logger.exception(
-            f"Failed to mark FCC ELS application as posted: {e}"
-        )
-        conn.rollback()
-        raise
-    finally:
-        conn.close()

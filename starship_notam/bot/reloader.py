@@ -122,9 +122,7 @@ def _restart_argv() -> list[str]:
     # ``__main__.__package__`` is set to the package name when launched with
     # ``python -m <package>``.
     main_module = sys.modules.get("__main__")
-    launched_as_module = bool(getattr(main_module, "__package__", "") )
-
-    if launched_as_module and getattr(main_module, "__package__", ""):
+    if getattr(main_module, "__package__", ""):
         return [sys.executable, "-m", "starship_notam", *sys.argv[1:]]
 
     return [sys.executable, *sys.argv]

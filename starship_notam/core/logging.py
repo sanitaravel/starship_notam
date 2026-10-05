@@ -6,6 +6,7 @@ shared `rich.console.Console` instance.
 """
 
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -15,8 +16,12 @@ from rich.logging import RichHandler
 # Shared Rich console instance
 console = Console()
 
-# Ensure a logs directory exists relative to the project root
-LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+# Ensure a logs directory exists: ``NOTAM_LOG_DIR`` if set (the test suite
+# points it at a temporary folder), otherwise ``logs/`` in the project root.
+LOG_DIR = Path(
+    os.environ.get("NOTAM_LOG_DIR")
+    or Path(__file__).resolve().parent.parent.parent / "logs"
+)
 try:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 except Exception:

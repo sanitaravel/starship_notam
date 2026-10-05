@@ -22,7 +22,15 @@ and schema-creation logic.
 
 from __future__ import annotations
 
+import os
+import tempfile
+
 import pytest
+
+# Keep test runs out of the bot's real ``logs/notam.log``. The logger is set up
+# when ``starship_notam.core.logging`` is first imported, so this must run
+# before any test module imports the package.
+os.environ["NOTAM_LOG_DIR"] = tempfile.mkdtemp(prefix="notam-test-logs-")
 
 
 # ---------------------------------------------------------------------------
