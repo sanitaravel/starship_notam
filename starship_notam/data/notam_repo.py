@@ -15,7 +15,40 @@ from typing import Dict, List, Optional, Tuple
 
 from starship_notam.core.config import DB_PATH
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, utc_now_iso
+from starship_notam.data.connection import (
+    get_connection,
+    transaction,
+    upsert,
+    utc_now_iso,
+)
+
+# Top-level NOTAM fields, stored in columns of the same name.
+FIELD_COLS = ("A", "B", "C", "D", "E", "F", "G")
+
+# Keys of the parsed "Q" dict -> the column each one is stored in.
+Q_COLS = {
+    "location": "Q_location",
+    "q_code": "Q_q_code",
+    "traffic": "Q_traffic",
+    "traffic_rule": "Q_traffic_rule",
+    "lower": "Q_lower",
+    "upper": "Q_upper",
+    "coordinates": "Q_coordinates",
+    "radius_nm": "Q_radius_nm",
+}
+
+_SELECT_PARSED = (
+    f"SELECT name, {', '.join(FIELD_COLS)}, {', '.join(Q_COLS.values())} FROM notams"
+)
+
+
+def _row_to_parsed(row) -> Dict:
+    """Rebuild a parsed NOTAM dict from a ``notams`` row, omitting NULLs."""
+    parsed: Dict = {k: row[k] for k in FIELD_COLS if row[k] is not None}
+    q = {key: row[col] for key, col in Q_COLS.items() if row[col] is not None}
+    if q:
+        parsed["Q"] = q
+    return parsed
 
 
 def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
@@ -26,48 +59,13 @@ def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
     JSON-serialised payload to detect changes; resets ``image_generated`` when
     the content has changed.
     """
-    now = utc_now_iso()
+    parsed_dict = parsed if isinstance(parsed, dict) else {}
+    q = parsed_dict.get("Q")
+    if not isinstance(q, dict):
+        q = {}
 
-    def _safe_get(k: str):
-        return parsed.get(k) if isinstance(parsed, dict) else None
-
-    col_values: Dict[str, Optional[str]] = {
-        "A": _safe_get("A"),
-        "B": _safe_get("B"),
-        "C": _safe_get("C"),
-        "D": _safe_get("D"),
-        "E": _safe_get("E"),
-        "F": _safe_get("F"),
-        "G": _safe_get("G"),
-    }
-
-    q = parsed.get("Q") if isinstance(parsed, dict) else None
-    if isinstance(q, dict):
-        col_values.update(
-            {
-                "Q_location": q.get("location"),
-                "Q_q_code": q.get("q_code"),
-                "Q_traffic": q.get("traffic"),
-                "Q_traffic_rule": q.get("traffic_rule"),
-                "Q_lower": q.get("lower"),
-                "Q_upper": q.get("upper"),
-                "Q_coordinates": q.get("coordinates"),
-                "Q_radius_nm": q.get("radius_nm"),
-            }
-        )
-    else:
-        col_values.update(
-            {
-                "Q_location": None,
-                "Q_q_code": None,
-                "Q_traffic": None,
-                "Q_traffic_rule": None,
-                "Q_lower": None,
-                "Q_upper": None,
-                "Q_coordinates": None,
-                "Q_radius_nm": None,
-            }
-        )
+    fields: Dict[str, Optional[str]] = {k: parsed_dict.get(k) for k in FIELD_COLS}
+    fields.update({col: q.get(key) for key, col in Q_COLS.items()})
 
     # Compute a stable hash of the parsed payload to detect changes
     try:
@@ -76,204 +74,51 @@ def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
     except Exception:
         parsed_hash = None
 
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
-
-        cur.execute(
-            "SELECT parsed_hash, A, B, C, D, E, F, G, "
-            "Q_location, Q_q_code, Q_traffic, Q_traffic_rule, "
-            "Q_lower, Q_upper, Q_coordinates, Q_radius_nm "
-            "FROM notams WHERE name = ?",
-            (name,),
+    with transaction(get_connection(db_path)) as cur:
+        result = upsert(
+            cur,
+            "notams",
+            "name",
+            name,
+            fields,
+            parsed_hash,
+            reset={"image_generated": 0, "image_generated_at": None},
+            hash_col="parsed_hash",
         )
-        existing = cur.fetchone()
+    logger.info("NOTAM %s: %s", name, result)
 
-        if existing:
-            logger.info(f"Existing NOTAM found for {name}, checking for changes")
-            existing_hash = existing["parsed_hash"]
 
-            if (
-                existing_hash is not None
-                and parsed_hash is not None
-                and existing_hash == parsed_hash
-            ):
-                logger.info(
-                    f"No changes detected for {name} based on parsed_hash; skipping DB update"
-                )
-            else:
-                logger.info(f"Changes detected for {name}; updating all fields")
-                changed = False
-                for k in list(col_values.keys()):
-                    try:
-                        existing_val = existing[k]
-                    except Exception:
-                        existing_val = None
-                    new_val = col_values.get(k)
-                    if (existing_val or "").strip() != (new_val or "").strip():
-                        changed = True
-                        break
+def _load_parsed(where: str, db_path: Optional[str]) -> List[Tuple[str, Dict]]:
+    """Return ``(name, parsed_dict)`` for rows matching *where*, ordered by name.
 
-                if changed or existing_hash != parsed_hash:
-                    logger.info(
-                        f"Effective changes detected for {name}; "
-                        "updating structured fields and resetting image_generated"
-                    )
-                    update_cols = (
-                        ["updated_at"]
-                        + list(col_values.keys())
-                        + ["parsed_hash", "image_generated", "image_generated_at"]
-                    )
-                    update_set = ", ".join(f"{c} = ?" for c in update_cols)
-                    update_params = (
-                        [now]
-                        + [col_values[k] for k in col_values.keys()]
-                        + [parsed_hash, 0, None, name]
-                    )
-                    cur.execute(
-                        f"UPDATE notams SET {update_set} WHERE name = ?",
-                        update_params,
-                    )
-                else:
-                    logger.info(
-                        f"No effective changes detected for {name}; "
-                        "refreshing updated_at and structured fields"
-                    )
-                    update_cols = ["updated_at"] + list(col_values.keys())
-                    update_set = ", ".join(f"{c} = ?" for c in update_cols)
-                    update_params = (
-                        [now] + [col_values[k] for k in col_values.keys()] + [name]
-                    )
-                    cur.execute(
-                        f"UPDATE notams SET {update_set} WHERE name = ?",
-                        update_params,
-                    )
-        else:
-            logger.info(f"No existing NOTAM found for {name}; inserting new record")
-            insert_cols = (
-                ["name", "created_at", "updated_at"]
-                + list(col_values.keys())
-                + ["parsed_hash", "image_generated"]
-            )
-            placeholders = ",".join("?" for _ in insert_cols)
-            insert_params = (
-                [name, now, now]
-                + [col_values[k] for k in col_values.keys()]
-                + [parsed_hash, 0]
-            )
-            cur.execute(
-                f"INSERT INTO notams ({','.join(insert_cols)}) VALUES ({placeholders})",
-                insert_params,
-            )
-
-        conn.commit()
-    except Exception as e:
-        logger.exception(f"Failed to save NOTAM to DB: {e}")
-        raise
-    finally:
-        conn.close()
+    Returns an empty list when the database file does not exist, rather than
+    creating it.
+    """
+    resolved_path = db_path or os.environ.get("NOTAM_DB_PATH") or DB_PATH
+    if not Path(resolved_path).exists():
+        return []
+    with transaction(get_connection(db_path)) as cur:
+        cur.execute(f"{_SELECT_PARSED} {where} ORDER BY name")
+        rows = cur.fetchall()
+    return [(r["name"], _row_to_parsed(r)) for r in rows]
 
 
 def get_notams_needing_images(
     db_path: Optional[str] = None,
 ) -> List[Tuple[str, Dict]]:
     """Return list of ``(name, parsed_dict)`` where ``image_generated == 0``."""
-    resolved_path = db_path or os.environ.get("NOTAM_DB_PATH") or DB_PATH
-    if not Path(resolved_path).exists():
-        return []
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT name, A, B, C, D, E, F, G, "
-            "Q_location, Q_q_code, Q_traffic, Q_traffic_rule, "
-            "Q_lower, Q_upper, Q_coordinates, Q_radius_nm "
-            "FROM notams WHERE image_generated = 0 ORDER BY name"
-        )
-        rows = cur.fetchall()
-        out: List[Tuple[str, Dict]] = []
-        for r in rows:
-            parsed: Dict = {}
-            for k in ("A", "B", "C", "D", "E", "F", "G"):
-                v = r[k]
-                if v is not None:
-                    parsed[k] = v
-            q: Dict = {}
-            q_map = {
-                "location": r["Q_location"],
-                "q_code": r["Q_q_code"],
-                "traffic": r["Q_traffic"],
-                "traffic_rule": r["Q_traffic_rule"],
-                "lower": r["Q_lower"],
-                "upper": r["Q_upper"],
-                "coordinates": r["Q_coordinates"],
-                "radius_nm": r["Q_radius_nm"],
-            }
-            for kk, vv in q_map.items():
-                if vv is not None:
-                    q[kk] = vv
-            if q:
-                parsed["Q"] = q
-            out.append((r["name"], parsed))
-        return out
-    finally:
-        conn.close()
+    return _load_parsed("WHERE image_generated = 0", db_path)
 
 
 def mark_image_generated(name: str, db_path: Optional[str] = None) -> None:
     """Mark a NOTAM as having had its image generated."""
-    now = utc_now_iso()
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
+    with transaction(get_connection(db_path)) as cur:
         cur.execute(
             "UPDATE notams SET image_generated = 1, image_generated_at = ? WHERE name = ?",
-            (now, name),
+            (utc_now_iso(), name),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def load_all_notams(db_path: Optional[str] = None) -> List[Tuple[str, Dict]]:
     """Return list of ``(name, parsed_dict)`` for all NOTAMs ordered by name."""
-    resolved_path = db_path or os.environ.get("NOTAM_DB_PATH") or DB_PATH
-    if not Path(resolved_path).exists():
-        return []
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT name, A, B, C, D, E, F, G, "
-            "Q_location, Q_q_code, Q_traffic, Q_traffic_rule, "
-            "Q_lower, Q_upper, Q_coordinates, Q_radius_nm "
-            "FROM notams ORDER BY name"
-        )
-        rows = cur.fetchall()
-        out: List[Tuple[str, Dict]] = []
-        for r in rows:
-            parsed: Dict = {}
-            for k in ("A", "B", "C", "D", "E", "F", "G"):
-                v = r[k]
-                if v is not None:
-                    parsed[k] = v
-            q: Dict = {}
-            q_map = {
-                "location": r["Q_location"],
-                "q_code": r["Q_q_code"],
-                "traffic": r["Q_traffic"],
-                "traffic_rule": r["Q_traffic_rule"],
-                "lower": r["Q_lower"],
-                "upper": r["Q_upper"],
-                "coordinates": r["Q_coordinates"],
-                "radius_nm": r["Q_radius_nm"],
-            }
-            for kk, vv in q_map.items():
-                if vv is not None:
-                    q[kk] = vv
-            if q:
-                parsed["Q"] = q
-            out.append((r["name"], parsed))
-        return out
-    finally:
-        conn.close()
+    return _load_parsed("", db_path)
