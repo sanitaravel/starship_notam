@@ -9,8 +9,9 @@ This module does NOT import from Telegram, parsing, or visualization modules.
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Generator, Optional
 
 from starship_notam.core.config import DB_PATH
 from starship_notam.core.logging import logger
@@ -43,6 +44,73 @@ def get_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Generator[sqlite3.Cursor, None, None]:
+    """Yield a cursor on *conn*; commit on success, roll back on error, always close.
+
+    Takes an already-open connection (rather than opening one) so each
+    repository keeps using its own ``get_connection`` reference.
+    """
+    try:
+        yield conn.cursor()
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def upsert(
+    cur: sqlite3.Cursor,
+    table: str,
+    key_col: str,
+    key,
+    fields: Dict[str, Any],
+    payload_hash: Optional[str],
+    reset: Optional[Dict[str, Any]] = None,
+    hash_col: str = "payload_hash",
+) -> str:
+    """Insert or update the row of *table* whose *key_col* equals *key*.
+
+    An existing row with the same stored hash is left untouched. Otherwise
+    *fields*, ``updated_at`` and the hash are written, plus the *reset*
+    columns (e.g. ``{"telegram_posted": 0}``) so the changed row is
+    processed again. New rows also get ``created_at`` and the *reset* values.
+
+    Returns ``"unchanged"``, ``"updated"`` or ``"inserted"``.
+    """
+    cur.execute(f"SELECT {hash_col} FROM {table} WHERE {key_col} = ?", (key,))
+    existing = cur.fetchone()
+    if existing and payload_hash is not None and existing[hash_col] == payload_hash:
+        return "unchanged"
+
+    now = utc_now_iso()
+    if existing:
+        cols = {**fields, "updated_at": now, hash_col: payload_hash, **(reset or {})}
+        set_clause = ", ".join(f"{c} = ?" for c in cols)
+        cur.execute(
+            f"UPDATE {table} SET {set_clause} WHERE {key_col} = ?",
+            [*cols.values(), key],
+        )
+        return "updated"
+
+    cols = {
+        key_col: key,
+        **fields,
+        "created_at": now,
+        "updated_at": now,
+        hash_col: payload_hash,
+        **(reset or {}),
+    }
+    placeholders = ", ".join("?" for _ in cols)
+    cur.execute(
+        f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})",
+        list(cols.values()),
+    )
+    return "inserted"
 
 
 def init_db(db_path: Optional[str] = None) -> None:

@@ -19,7 +19,12 @@ import json
 from typing import Dict, List, Optional
 
 from starship_notam.core.logging import logger
-from starship_notam.data.connection import get_connection, utc_now_iso
+from starship_notam.data.connection import (
+    get_connection,
+    transaction,
+    upsert,
+    utc_now_iso,
+)
 
 
 def save_faa_license(record: Dict, db_path: Optional[str] = None) -> None:
@@ -48,7 +53,6 @@ def save_faa_license(record: Dict, db_path: Optional[str] = None) -> None:
         )
         return
 
-
     details_json = json.dumps(
         record.get("details") or {}, sort_keys=True, ensure_ascii=False
     )
@@ -69,108 +73,18 @@ def save_faa_license(record: Dict, db_path: Optional[str] = None) -> None:
         json.dumps(payload, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
-
-        cur.execute(
-            "SELECT payload_hash FROM faa_licenses WHERE doc_unique_id = ?",
-            (doc_unique_id,),
+    fields = {k: v for k, v in payload.items() if k != "doc_unique_id"}
+    with transaction(get_connection(db_path)) as cur:
+        result = upsert(
+            cur,
+            "faa_licenses",
+            "doc_unique_id",
+            doc_unique_id,
+            fields,
+            payload_hash,
+            reset={"telegram_posted": 0},
         )
-        existing = cur.fetchone()
-
-        if existing and existing["payload_hash"] == payload_hash:
-            logger.info(
-                "No changes detected for FAA DRS license '%s'; skipping DB update",
-                doc_unique_id,
-            )
-            return
-
-        now = utc_now_iso()
-
-        if existing:
-            logger.info(
-                "Changes detected for FAA DRS license '%s'; updating record",
-                doc_unique_id,
-            )
-            cur.execute(
-                """
-                UPDATE faa_licenses
-                SET content_guid = ?,
-                    doc_number = ?,
-                    doc_name = ?,
-                    doc_type_label = ?,
-                    status = ?,
-                    revision_number = ?,
-                    issue_date = ?,
-                    expiration_date = ?,
-                    details_json = ?,
-                    updated_at = ?,
-                    payload_hash = ?,
-                    telegram_posted = 0
-                WHERE doc_unique_id = ?
-                """,
-                (
-                    payload["content_guid"],
-                    payload["doc_number"],
-                    payload["doc_name"],
-                    payload["doc_type_label"],
-                    payload["status"],
-                    payload["revision_number"],
-                    payload["issue_date"],
-                    payload["expiration_date"],
-                    details_json,
-                    now,
-                    payload_hash,
-                    doc_unique_id,
-                ),
-            )
-        else:
-            logger.info("Inserting new FAA DRS license '%s'", doc_unique_id)
-            cur.execute(
-                """
-                INSERT INTO faa_licenses (
-                    doc_unique_id,
-                    content_guid,
-                    doc_number,
-                    doc_name,
-                    doc_type_label,
-                    status,
-                    revision_number,
-                    issue_date,
-                    expiration_date,
-                    details_json,
-                    created_at,
-                    updated_at,
-                    payload_hash,
-                    telegram_posted
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """,
-                (
-                    doc_unique_id,
-                    payload["content_guid"],
-                    payload["doc_number"],
-                    payload["doc_name"],
-                    payload["doc_type_label"],
-                    payload["status"],
-                    payload["revision_number"],
-                    payload["issue_date"],
-                    payload["expiration_date"],
-                    details_json,
-                    now,
-                    now,
-                    payload_hash,
-                ),
-            )
-
-        conn.commit()
-    except Exception as e:
-        logger.exception(f"Failed to save FAA DRS license to DB: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    logger.info("FAA DRS license '%s': %s", doc_unique_id, result)
 
 
 def get_faa_licenses_needing_post(
@@ -184,9 +98,7 @@ def get_faa_licenses_needing_post(
     back into an ordered dict) alongside the raw columns.
     """
     logger.info("Fetching FAA DRS licenses needing Telegram posting")
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
+    with transaction(get_connection(db_path)) as cur:
         cur.execute(
             """
             SELECT id,
@@ -212,24 +124,22 @@ def get_faa_licenses_needing_post(
             """
         )
         rows = cur.fetchall()
-        result = []
-        for r in rows:
-            item = dict(r)
-            try:
-                item["details"] = json.loads(item.get("details_json") or "{}")
-            except Exception:
-                item["details"] = {}
-            # A first-time insert has created_at == updated_at; anything else is
-            # a change to an already-tracked license. Callers can use this to
-            # word the notification ("new" vs "updated").
-            item["is_new"] = item.get("created_at") == item.get("updated_at")
-            result.append(item)
-        logger.debug(
-            "Found %d FAA DRS licenses needing Telegram posting", len(result)
-        )
-        return result
-    finally:
-        conn.close()
+    result = []
+    for r in rows:
+        item = dict(r)
+        try:
+            item["details"] = json.loads(item.get("details_json") or "{}")
+        except Exception:
+            item["details"] = {}
+        # A first-time insert has created_at == updated_at; anything else is
+        # a change to an already-tracked license. Callers can use this to
+        # word the notification ("new" vs "updated").
+        item["is_new"] = item.get("created_at") == item.get("updated_at")
+        result.append(item)
+    logger.debug(
+        "Found %d FAA DRS licenses needing Telegram posting", len(result)
+    )
+    return result
 
 
 def mark_faa_license_posted(
@@ -241,9 +151,7 @@ def mark_faa_license_posted(
         doc_unique_id,
         telegram_message_id,
     )
-    conn = get_connection(db_path)
-    try:
-        cur = conn.cursor()
+    with transaction(get_connection(db_path)) as cur:
         cur.execute(
             """
             UPDATE faa_licenses
@@ -254,10 +162,3 @@ def mark_faa_license_posted(
             """,
             (utc_now_iso(), telegram_message_id, doc_unique_id),
         )
-        conn.commit()
-    except Exception as e:
-        logger.exception(f"Failed to mark FAA DRS license as posted: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
