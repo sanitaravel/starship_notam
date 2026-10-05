@@ -211,17 +211,39 @@ Steps 1 and 2 touch the same map code path, so do them in order. Steps 3 and
 Do these after phases 1–3 so the bug fixes stay small and easy to review.
 Existing tests must pass unchanged.
 
-| # | Area | Change |
-| --- | --- | --- |
-| 14 | `data/*_repo.py` | One `_upsert(table, key_col, fields, reset_col)` helper and a commit/rollback/close context manager (~300 lines) |
-| 15 | `data/connection.py` | `_ensure_columns(cur, table, spec)`; single `executescript`; drop the legacy `parsed_json` migration once confirmed no old DBs remain (~150 lines) |
-| 16 | `data/notam_repo.py` | One `_row_to_parsed()` and one `Q_COLS` mapping; remove the unreachable "no effective changes" branch in `save_notam` (~80 lines) |
-| 17 | `visualization/map_renderer.py` | Split `render_map` into `_fit_extent`, `_add_base_layers`, `_draw_graticule`, `_label_layer`, `_draw_geometry`; treat a single polygon as a list of one (~250 lines) |
-| 18 | `scrapers/notam_scraper.py` | `_click_first(driver, xpaths, timeout)` helper; one ICAO XPath constant (~120 lines) |
-| 19 | `scrapers/fcc_els_fetcher.py` | `_fill(field, value)` helper; `calendar.monthrange`; drop unused `import time` (~40 lines) |
-| 20 | `bot/formatting.py` | `_coerce_json(value, default)` and `_fmt_utc(iso)` helpers (~40 lines) |
-| 21 | parsers / visualization / bot | One shared NOTAM time parser replacing the 4 existing ones (~60 lines) |
-| 22 | various | Delete dead code: unused `coord_index` and overwritten `alt_token` branch in `parse_carf_message`, step 3 of `_parse_coords`, `MAP_EXTENT_SCALE` try/except, duplicated growth step in `_expand_extent_until_land`, double check in `_restart_argv` (~80 lines) |
+| # | Area | Change | Status |
+| --- | --- | --- | --- |
+| 14 | `data/*_repo.py` | One `_upsert(table, key_col, fields, reset_col)` helper and a commit/rollback/close context manager (~300 lines) | `[x]` |
+| 15 | `data/connection.py` | `_ensure_columns(cur, table, spec)`; single `executescript`; drop the legacy `parsed_json` migration once confirmed no old DBs remain (~150 lines) | `[x]` |
+| 16 | `data/notam_repo.py` | One `_row_to_parsed()` and one `Q_COLS` mapping; remove the unreachable "no effective changes" branch in `save_notam` (~80 lines) | `[x]` |
+| 17 | `visualization/map_renderer.py` | Split `render_map` into `_fit_extent`, `_add_base_layers`, `_draw_graticule`, `_label_layer`, `_draw_geometry`; treat a single polygon as a list of one (~250 lines) | `[x]` |
+| 18 | `scrapers/notam_scraper.py` | `_click_first(driver, xpaths, timeout)` helper; one ICAO XPath constant (~120 lines) | `[x]` |
+| 19 | `scrapers/fcc_els_fetcher.py` | `_fill(field, value)` helper; `calendar.monthrange`; drop unused `import time` (~40 lines) | `[x]` |
+| 20 | `bot/formatting.py` | `_coerce_json(value, default)` and `_fmt_utc(iso)` helpers (~40 lines) | `[x]` |
+| 21 | parsers / visualization / bot | One shared NOTAM time parser replacing the 4 existing ones (~60 lines) | `[x]` |
+| 22 | various | Delete dead code: unused `coord_index` and overwritten `alt_token` branch in `parse_carf_message`, step 3 of `_parse_coords`, `MAP_EXTENT_SCALE` try/except, duplicated growth step in `_expand_extent_until_land`, double check in `_restart_argv` (~80 lines) | `[x]` |
+
+Notes on how these were done:
+
+- **14:** the helpers are `upsert()` and `transaction()` in `data/connection.py`.
+  `upsert` takes a `reset` dict instead of one `reset_col`, because NOTAMs
+  reset two columns. `transaction()` wraps a connection the repo opened
+  itself, so tests that patch a repo's `get_connection` still work. Repos no
+  longer log save errors themselves; the orchestrator already does.
+- **15:** `parsed_json` migration dropped after checking that neither
+  `notams.db` nor `notams copy.db` has the column (2026-10-05).
+- **17:** checked pixel-identical against the old `render_map` on 12 inputs
+  plus one that triggers the land zoom-out. The map-renderer parts of 22 were
+  done here.
+- **18:** already done by step 11; no further change.
+- **21:** new `parsers/notam_time.py`. Results are unchanged for FAA times
+  and all stored NOTAMs. It no longer turns invalid 10-digit strings into
+  nonsense years, and the card image now converts offset times to UTC.
+- **22:** the "duplicated growth step" was duplicated *code*: the extra zoom
+  step after finding land is kept (removing it would change maps), only
+  written once now. Removing step 3 of `_parse_coords` also fixed a crash:
+  it recursed until `RecursionError` on an unpaired DMS token, which
+  `parse_coord_groups_from_text` did not catch.
 
 ---
 
