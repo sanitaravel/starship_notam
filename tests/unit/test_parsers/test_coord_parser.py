@@ -100,3 +100,18 @@ def test_returns_none_when_no_coordinates(raw):
 def test_parse_coords_is_deterministic():
     raw = "255950N0970921W TO 260500N0970500W TO 255400N0964800W"
     assert parse_coords_from_text(raw) == parse_coords_from_text(raw)
+
+
+# ---------------------------------------------------------------------------
+# Unpaired DMS tokens
+# ---------------------------------------------------------------------------
+def test_unpaired_dms_token_is_not_a_coordinate():
+    assert parse_coords_from_text("2358S 12.5 67.8") is None
+
+
+def test_unpaired_dms_token_does_not_break_other_areas():
+    from starship_notam.parsers.coord_parser import parse_coord_groups_from_text
+
+    # Used to raise RecursionError.
+    groups = parse_coord_groups_from_text("1500N06500W-1600N06600W AND 2358S")
+    assert groups == [[(15.0, -65.0), (16.0, -66.0)]]
