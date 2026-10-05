@@ -15,6 +15,7 @@ is raised.
 
 import functools
 import io
+import math
 from pathlib import Path
 
 from PIL import Image
@@ -218,45 +219,33 @@ def _expand_extent_until_land(extent, size):
 
         # Bound the search relative to the fitted geometry span so open-ocean
         # NOTAMs stay fitted instead of zooming out to reveal distant continents.
-        fitted_half_lon = half_lon
-        fitted_half_lat = half_lat
-        max_half_lon = fitted_half_lon * LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE
-        max_half_lat = fitted_half_lat * LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE
+        max_half_lon = half_lon * LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE
+        max_half_lat = half_lat * LAND_ZOOM_OUT_MAX_SPAN_MULTIPLE
 
-        for step in range(LAND_ZOOM_OUT_MAX_STEPS):
-            half_lon *= LAND_ZOOM_OUT_FACTOR
-            half_lat *= LAND_ZOOM_OUT_FACTOR
-            # Never grow past the bounded window (relative to the fitted span, and
-            # never beyond a near-global half-span).
-            half_lon = min(half_lon, max_half_lon, MAX_EXTENT_HALF_SPAN)
-            half_lat = min(half_lat, max_half_lat, MAX_EXTENT_HALF_SPAN)
-            new_min_lat = max(center_lat - half_lat, -90.0)
-            new_max_lat = min(center_lat + half_lat, 90.0)
-            candidate = [
+        def grown(half_lon, half_lat):
+            """Half-spans one zoom step out, capped to the bounded window
+            (relative to the fitted span, and never beyond near-global)."""
+            return (
+                min(half_lon * LAND_ZOOM_OUT_FACTOR, max_half_lon, MAX_EXTENT_HALF_SPAN),
+                min(half_lat * LAND_ZOOM_OUT_FACTOR, max_half_lat, MAX_EXTENT_HALF_SPAN),
+            )
+
+        def around_center(half_lon, half_lat):
+            return [
                 center_lon - half_lon,
                 center_lon + half_lon,
-                new_min_lat,
-                new_max_lat,
+                max(center_lat - half_lat, -90.0),
+                min(center_lat + half_lat, 90.0),
             ]
-            if _extent_has_visible_land(candidate, size):
+
+        for step in range(LAND_ZOOM_OUT_MAX_STEPS):
+            half_lon, half_lat = grown(half_lon, half_lat)
+            if _extent_has_visible_land(around_center(half_lon, half_lat), size):
                 logger.info(
                     "Expanded map extent to reveal land after %d zoom-out step(s)", step + 1
                 )
-                half_lon *= LAND_ZOOM_OUT_FACTOR
-                half_lat *= LAND_ZOOM_OUT_FACTOR
-                # Never grow past the bounded window (relative to the fitted span, and
-                # never beyond a near-global half-span).
-                half_lon = min(half_lon, max_half_lon, MAX_EXTENT_HALF_SPAN)
-                half_lat = min(half_lat, max_half_lat, MAX_EXTENT_HALF_SPAN)
-                new_min_lat = max(center_lat - half_lat, -90.0)
-                new_max_lat = min(center_lat + half_lat, 90.0)
-                candidate = [
-                    center_lon - half_lon,
-                    center_lon + half_lon,
-                    new_min_lat,
-                    new_max_lat,
-                ]
-                return candidate
+                # Go one step further so the land is not just at the edge.
+                return around_center(*grown(half_lon, half_lat))
             # Once we've reached the bounded window without finding land, stop:
             # the NOTAM is genuinely in open ocean, so keep it fitted rather than
             # ballooning to a near-global view.
@@ -394,8 +383,6 @@ def _order_by_centroid_angle(pts):
     simple (non-self-crossing) polygon for convex and mildly-concave shapes,
     which covers NOTAM hazard areas. ``pts`` is a list of ``(lat, lon)`` tuples.
     """
-    import math
-
     n = len(pts)
     cy = sum(p[0] for p in pts) / n  # centroid latitude
     cx = sum(p[1] for p in pts) / n  # centroid longitude
@@ -525,226 +512,157 @@ def _normalize_polygon_order(coords):
         return coords
 
 
-def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float | None = None) -> "Image.Image":
-    """Render a map image (PIL.Image) showing the given coords polygon or point using Cartopy.
+# Fill/outline used for every NOTAM area (polygon or circle).
+_AREA_STYLE = dict(
+    facecolor=(207 / 255, 0, 0, 0.18),
+    edgecolor=(207 / 255, 0, 0, 0.95),
+    linewidth=1.6,
+)
+# Place-name labels: lighter than the ocean (#262626 -> #858585).
+_LABEL_COLOR = "#858585"
+STARBASE_LAT = 25.9896
+STARBASE_LON = -97.1849
 
-    Returns an RGBA PIL Image of exact ``size``.
 
-    Parameters
-    ----------
-    coords :
-        Either a list of ``(lat, lon)`` tuples describing a polygon, a single
-        ``(lat, lon)`` tuple describing a point, or ``None``/empty for a default
-        global extent.
-    size : tuple[int, int]
-        The output image size in pixels as ``(width, height)``.
-    radius_nm : float or None
-        Optional radius in nautical miles used to draw a circle around a point.
+def _polygon_groups(coords):
+    """Return ``coords`` as a list of polygon groups, or None if not a polygon.
 
-    Raises
-    ------
-    ImportError
-        If Cartopy, Matplotlib, or Shapely are not installed when this function
-        is called.
+    A multi-area NOTAM (list of lists) gives one group per area; a single
+    polygon (list of ``(lat, lon)``) is treated as a list of one. Longitudes
+    are unwrapped first so a polygon crossing the 180° meridian is one
+    continuous ring (e.g. 165..215 instead of jumping 179 -> -175); the
+    wrap-around edges would otherwise look like self-intersections, blow the
+    extent up to the whole globe, and draw the area the long way round. Then
+    vertices listed out of geometric order (a "bowtie") are untangled.
     """
-    try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        import cartopy.crs as ccrs
-        import cartopy.feature as cfeature
-        from shapely.geometry import Polygon, Point
-    except Exception as e:
-        logger.exception("Cartopy/Matplotlib not available: %s", e)
-        raise ImportError(
-            "cartopy and matplotlib are required for map rendering; "
-            "install project dependencies via 'pip install .'"
-        ) from e
-
-    # Untangle polygon vertices whose listed order self-intersects (some NOTAMs
-    # list boundary points out of geometric order, producing a "bowtie"). This
-    # only reorders when the given order actually crosses; simple polygons are
-    # left exactly as provided. Done before extent/drawing so both stay in sync.
-    #
-    # ``coords`` may describe multiple distinct areas as a list-of-lists (e.g. a
-    # NOTAM defining two AND-separated debris-response-area boundaries). Detect
-    # that shape up front: keep each group intact for drawing, but build a flat
-    # point list so the existing extent/land-zoom logic (which only needs the
-    # overall bounding box) works unchanged.
-    #
-    # Longitudes are unwrapped first so a polygon crossing the 180° meridian is
-    # one continuous ring (e.g. 165..215 instead of jumping 179 -> -175). The
-    # wrap-around edges would otherwise look like self-intersections, blow the
-    # extent up to the whole globe, and draw the area the long way round.
-    polygon_groups: list[list] | None = None
     if _is_multi_polygon(coords):
-        polygon_groups = [_normalize_polygon_order(g) for g in _unwrap_groups(coords)]
-        # Flat combined point list drives extent fitting below.
-        coords = [pt for g in polygon_groups for pt in g]
+        groups = coords
     elif isinstance(coords, list) and coords:
-        coords = _normalize_polygon_order(_unwrap_longitudes(coords))
+        groups = [coords]
+    else:
+        return None
+    return [_normalize_polygon_order(g) for g in _unwrap_groups(groups)]
 
-    # compute extent
-    radius_value = None
+
+def _parse_radius(radius_nm) -> float | None:
+    """Return ``radius_nm`` as a positive float, or None."""
     try:
-        if radius_nm is not None:
-            radius_value = float(str(radius_nm).strip())
-            if radius_value <= 0:
-                radius_value = None
+        if radius_nm is None:
+            return None
+        value = float(str(radius_nm).strip())
     except Exception:
-        radius_value = None
+        return None
+    return value if value > 0 else None
 
-    if isinstance(coords, list) and coords:
-        logger.info("Rendering polygon with %d points on map", len(coords))
-        import math
-        lats = [p[0] for p in coords]
-        lons = [p[1] for p in coords]
-        min_lat, max_lat = min(lats), max(lats)
-        min_lon, max_lon = min(lons), max(lons)
-        lat_pad = max((max_lat - min_lat) * 0.1, 0.1)
-        lon_pad = max((max_lon - min_lon) * 0.1, 0.1)
-        # Adjust extent so the geographic box matches the image aspect ratio
-        map_w, map_h = size
-        desired_ratio = float(map_w) / float(map_h)
-        lat_span = max(max_lat - min_lat, 1e-6)
-        lon_span = max(max_lon - min_lon, 1e-6)
-        center_lat = (max_lat + min_lat) / 2.0
-        cos_lat = max(math.cos(math.radians(center_lat)), 1e-6)
-        # approximate longitudinal span in latitude-equivalent units
-        adj_lon_span = lon_span * cos_lat
-        current_ratio = adj_lon_span / lat_span
-        if current_ratio < desired_ratio:
-            # need wider longitudinal span
-            needed_adj_lon = desired_ratio * lat_span
-            needed_lon_span = needed_adj_lon / cos_lat
-            extra = (needed_lon_span - lon_span) / 2.0
-            min_lon -= extra
-            max_lon += extra
-        elif current_ratio > desired_ratio:
-            # need taller latitudinal span
-            needed_lat_span = adj_lon_span / desired_ratio
-            extra = (needed_lat_span - lat_span) / 2.0
-            min_lat -= extra
-            max_lat += extra
-        extent = [min_lon - lon_pad, max_lon + lon_pad, min_lat - lat_pad, max_lat + lat_pad]
-        # Apply global extent scale so the mapped area is slightly larger (zoom out).
-        try:
-            center_lon = (extent[0] + extent[1]) / 2.0
-            center_lat = (extent[2] + extent[3]) / 2.0
-            half_lon = (extent[1] - extent[0]) / 2.0
-            half_lat = (extent[3] - extent[2]) / 2.0
-            half_lon *= MAP_EXTENT_SCALE
-            half_lat *= MAP_EXTENT_SCALE
-            extent = [center_lon - half_lon, center_lon + half_lon, center_lat - half_lat, center_lat + half_lat]
-        except Exception:
-            pass
-    elif isinstance(coords, tuple) and coords:
-        logger.info("Rendering single point on map at lat=%.4f, lon=%.4f", coords[0], coords[1])
-        import math
-        lat, lon = coords
-        if radius_value is not None:
-            base_half_lat = max(radius_value / 60.0, 0.15)
-            cos_lat = max(math.cos(math.radians(lat)), 1e-6)
-            base_half_lon = max(radius_value / (60.0 * cos_lat), 0.15)
-        else:
-            # base half-spans (degrees)
-            base_half_lat = 1.0
-            base_half_lon = 1.0
-        map_w, map_h = size
-        desired_ratio = float(map_w) / float(map_h)
-        center_lat = lat
-        cos_lat = max(math.cos(math.radians(center_lat)), 1e-6)
-        adj_lon_span = (base_half_lon * 2.0) * cos_lat
-        lat_span = (base_half_lat * 2.0)
-        current_ratio = adj_lon_span / lat_span if lat_span > 0 else 1.0
-        if current_ratio < desired_ratio:
-            needed_adj_lon = desired_ratio * lat_span
-            needed_lon_span = needed_adj_lon / cos_lat
-            half_lon = needed_lon_span / 2.0
-            half_lat = base_half_lat
-        else:
-            needed_lat_span = adj_lon_span / desired_ratio
-            half_lat = needed_lat_span / 2.0
-            half_lon = base_half_lon
-        # Scale halves slightly so the point area appears smaller on the map (zoom out)
-        try:
-            half_lon *= MAP_EXTENT_SCALE
-            half_lat *= MAP_EXTENT_SCALE
-        except Exception:
-            pass
-        extent = [lon - half_lon, lon + half_lon, lat - half_lat, lat + half_lat]
+
+def _polygon_extent(points, size):
+    """Padded extent around ``points``, widened to the image aspect ratio."""
+    logger.info("Rendering polygon with %d points on map", len(points))
+    lats = [p[0] for p in points]
+    lons = [p[1] for p in points]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lon, max_lon = min(lons), max(lons)
+    lat_pad = max((max_lat - min_lat) * 0.1, 0.1)
+    lon_pad = max((max_lon - min_lon) * 0.1, 0.1)
+    # Adjust extent so the geographic box matches the image aspect ratio
+    map_w, map_h = size
+    desired_ratio = float(map_w) / float(map_h)
+    lat_span = max(max_lat - min_lat, 1e-6)
+    lon_span = max(max_lon - min_lon, 1e-6)
+    center_lat = (max_lat + min_lat) / 2.0
+    cos_lat = max(math.cos(math.radians(center_lat)), 1e-6)
+    # approximate longitudinal span in latitude-equivalent units
+    adj_lon_span = lon_span * cos_lat
+    current_ratio = adj_lon_span / lat_span
+    if current_ratio < desired_ratio:
+        # need wider longitudinal span
+        needed_adj_lon = desired_ratio * lat_span
+        needed_lon_span = needed_adj_lon / cos_lat
+        extra = (needed_lon_span - lon_span) / 2.0
+        min_lon -= extra
+        max_lon += extra
+    elif current_ratio > desired_ratio:
+        # need taller latitudinal span
+        needed_lat_span = adj_lon_span / desired_ratio
+        extra = (needed_lat_span - lat_span) / 2.0
+        min_lat -= extra
+        max_lat += extra
+    extent = [min_lon - lon_pad, max_lon + lon_pad, min_lat - lat_pad, max_lat + lat_pad]
+    # Apply the global extent scale around the centre (zooms out when > 1).
+    center_lon = (extent[0] + extent[1]) / 2.0
+    center_lat = (extent[2] + extent[3]) / 2.0
+    half_lon = (extent[1] - extent[0]) / 2.0
+    half_lat = (extent[3] - extent[2]) / 2.0
+    half_lon *= MAP_EXTENT_SCALE
+    half_lat *= MAP_EXTENT_SCALE
+    return [center_lon - half_lon, center_lon + half_lon, center_lat - half_lat, center_lat + half_lat]
+
+
+def _point_extent(point, radius_value, size):
+    """Extent around a point (or circle of ``radius_value`` NM) at the image aspect ratio."""
+    lat, lon = point
+    logger.info("Rendering single point on map at lat=%.4f, lon=%.4f", lat, lon)
+    cos_lat = max(math.cos(math.radians(lat)), 1e-6)
+    if radius_value is not None:
+        base_half_lat = max(radius_value / 60.0, 0.15)
+        base_half_lon = max(radius_value / (60.0 * cos_lat), 0.15)
+    else:
+        # base half-spans (degrees)
+        base_half_lat = 1.0
+        base_half_lon = 1.0
+    map_w, map_h = size
+    desired_ratio = float(map_w) / float(map_h)
+    adj_lon_span = (base_half_lon * 2.0) * cos_lat
+    lat_span = (base_half_lat * 2.0)
+    current_ratio = adj_lon_span / lat_span if lat_span > 0 else 1.0
+    if current_ratio < desired_ratio:
+        needed_adj_lon = desired_ratio * lat_span
+        needed_lon_span = needed_adj_lon / cos_lat
+        half_lon = needed_lon_span / 2.0
+        half_lat = base_half_lat
+    else:
+        needed_lat_span = adj_lon_span / desired_ratio
+        half_lat = needed_lat_span / 2.0
+        half_lon = base_half_lon
+    half_lon *= MAP_EXTENT_SCALE
+    half_lat *= MAP_EXTENT_SCALE
+    return [lon - half_lon, lon + half_lon, lat - half_lat, lat + half_lat]
+
+
+def _fit_extent(points, point, radius_value, size):
+    """Return the map extent ``[min_lon, max_lon, min_lat, max_lat]``.
+
+    Fits ``points`` (all polygon vertices) or the single ``point``, then makes
+    sure some land is visible for geographic reference: NOTAMs in the open
+    ocean can otherwise produce a featureless dark rectangle, so the view is
+    zoomed out (keeping the NOTAM centred) until land enters it. That step is
+    skipped for geometries that already span a large area: a big polygon is
+    its own reference, and zooming out to reach a distant coast would shrink
+    it to an unreadable sliver. With neither, the whole globe is shown.
+    """
+    if points:
+        extent = _polygon_extent(points, size)
+        lats = [p[0] for p in points]
+        lons = [p[1] for p in points]
+        geom_span_deg = max(max(lats) - min(lats), max(lons) - min(lons))
+    elif point:
+        extent = _point_extent(point, radius_value, size)
+        geom_span_deg = 0.0
     else:
         logger.info("No valid coordinates provided, using default global extent")
-        extent = [-180, 180, -90, 90]
+        return [-180, 180, -90, 90]
 
-    # Ensure at least one landmass is visible for geographic reference. NOTAMs
-    # in the open ocean can otherwise produce a featureless dark rectangle, so
-    # zoom out (keeping the NOTAM centered) until some land enters the view.
-    #
-    # Skip this for geometries that already span a large area: a big polygon is
-    # its own geographic reference, and zooming out to reach a distant coast
-    # would shrink it to an unreadable sliver (as happened for open-ocean
-    # South Pacific hazard areas).
-    if coords:
-        geom_span_deg = 0.0
-        try:
-            if isinstance(coords, list) and coords:
-                _lats = [p[0] for p in coords]
-                _lons = [p[1] for p in coords]
-                geom_span_deg = max(max(_lats) - min(_lats), max(_lons) - min(_lons))
-        except Exception:
-            geom_span_deg = 0.0
-        if geom_span_deg >= LAND_ZOOM_OUT_SKIP_SPAN_DEG:
-            logger.info(
-                "Geometry spans %.1f deg (>= %.1f); skipping land-visibility zoom-out",
-                geom_span_deg, LAND_ZOOM_OUT_SKIP_SPAN_DEG,
-            )
-        else:
-            extent = _expand_extent_until_land(extent, size)
+    if geom_span_deg >= LAND_ZOOM_OUT_SKIP_SPAN_DEG:
+        logger.info(
+            "Geometry spans %.1f deg (>= %.1f); skipping land-visibility zoom-out",
+            geom_span_deg, LAND_ZOOM_OUT_SKIP_SPAN_DEG,
+        )
+        return extent
+    return _expand_extent_until_land(extent, size)
 
-    # When the (unwrapped) extent leaves [-180, 180], centre the projection on
-    # it so the area is drawn in one piece. All geometry and text below is then
-    # placed in the axes' own CRS, with x = lon - central_lon. For every other
-    # NOTAM central_lon is 0 and this is identical to plain PlateCarree.
-    central_lon = 0.0
-    if extent[0] < -180.0 or extent[1] > 180.0:
-        central_lon = (extent[0] + extent[1]) / 2.0
-        logger.info("Extent crosses the antimeridian; centring map on %.1f deg", central_lon)
-    proj = ccrs.PlateCarree(central_longitude=central_lon)
 
-    def _x(lon: float) -> float:
-        """Map an (unwrapped) longitude to the axes' x coordinate."""
-        return lon - central_lon
-
-    fig_dpi = 100
-    fig_w = size[0] / fig_dpi
-    fig_h = size[1] / fig_dpi
-    logger.info("Creating map figure with size %dx%d pixels (%.2fx%.2f inches at %d DPI)", size[0], size[1], fig_w, fig_h, fig_dpi)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=fig_dpi, subplot_kw=dict(projection=proj))
-    # fill background
-    # Match figure and axes background to the canvas ocean color (#262626)
-    fig.patch.set_facecolor('#262626')
-    ax.set_facecolor('#262626')
-    # Some GeoAxes implementations may not have outline_patch; guard access
-    try:
-        if hasattr(ax, 'outline_patch') and ax.outline_patch is not None:
-            ax.outline_patch.set_visible(False)
-    except Exception:
-        logger.exception("Failed to hide axes outline, map may have unexpected border")
-
-    ax.set_extent([_x(extent[0]), _x(extent[1]), extent[2], extent[3]], crs=proj)
-
-    # Cartopy GeoAxes enforce an equal ('box') aspect by default, which
-    # letterboxes the map inside the axes and leaves dark bands at the top and
-    # bottom of the fixed-size figure. Our extent is already aspect-corrected to
-    # the image ratio (using a cos(lat) adjustment), so switch to 'auto' aspect
-    # to let the data stretch and fill the whole box with negligible distortion.
-    try:
-        ax.set_aspect('auto')
-    except Exception:
-        logger.exception("Failed to set axes aspect to 'auto'; map may be letterboxed")
-
-    # Add simple cartographic features with dark theme
+def _add_base_layers(ax, cfeature) -> None:
+    """Draw ocean, lakes, land, coastlines and country borders (dark theme)."""
     try:
         # Use requested ocean and land colors: ocean=#262626, land=#090909
         ax.add_feature(cfeature.OCEAN.with_scale('50m'), facecolor='#262626')
@@ -768,14 +686,16 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         except Exception:
             pass
 
-    # Draw latitude/longitude coordinate lines (graticule) sized to the current
-    # extent so they stay legible from close-in NOTAMs to near-global views.
-    # Labels are drawn *inline* (inside the map area) rather than on the axes
-    # edges, because the map is rendered full-bleed (axes fill the whole figure)
-    # so edge labels would be clipped. Both longitude (vertical) and latitude
-    # (horizontal) values are labelled.
+
+def _draw_graticule(ax, proj, extent, central_lon: float) -> None:
+    """Draw latitude/longitude lines sized to the extent, with inline labels.
+
+    Steps adapt so lines stay legible from close-in NOTAMs to near-global
+    views. Labels are drawn *inside* the map area rather than on the axes
+    edges, because the map is rendered full-bleed (axes fill the whole
+    figure) so edge labels would be clipped.
+    """
     try:
-        import math
         import matplotlib.ticker as mticker
         import matplotlib.patheffects as _pe
 
@@ -803,12 +723,9 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
             linestyle=(0, (4, 4)),
             zorder=6,
         )
-        gl.xlocator = mticker.FixedLocator([_x(t) for t in lon_ticks])
+        gl.xlocator = mticker.FixedLocator([t - central_lon for t in lon_ticks])
         gl.ylocator = mticker.FixedLocator(lat_ticks)
 
-        _grid_font = _label_font(None)
-
-        label_color = '#8a8a8a'
         # Subtle dark outline keeps labels readable over land or the NOTAM shape.
         stroke = [_pe.withStroke(linewidth=2.0, foreground='#1c1c1c')]
         # Inset labels slightly from the edges so they don't touch the border.
@@ -816,91 +733,126 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         lat_inset = extent[2] + lat_span * 0.018  # bottom inset for longitude labels
         text_kwargs = dict(
             transform=proj,
-            color=label_color,
+            color='#8a8a8a',
             fontsize=8,
             zorder=9,
             clip_on=True,
             path_effects=stroke,
         )
         if _jetbrains_font_path() is not None:
-            text_kwargs['fontproperties'] = _grid_font
+            text_kwargs['fontproperties'] = _label_font(None)
 
         # Longitude labels: one per vertical line, along the bottom edge.
         for lon_v in lon_ticks:
-            if lon_v < extent[0] or lon_v > extent[1]:
-                continue
-            ax.text(
-                _x(lon_v), lat_inset, _format_lon(lon_v),
-                ha='center', va='bottom', **text_kwargs,
-            )
+            if extent[0] <= lon_v <= extent[1]:
+                ax.text(
+                    lon_v - central_lon, lat_inset, _format_lon(lon_v),
+                    ha='center', va='bottom', **text_kwargs,
+                )
         # Latitude labels: one per horizontal line, along the left edge.
         for lat_v in lat_ticks:
-            if lat_v < extent[2] or lat_v > extent[3]:
-                continue
-            ax.text(
-                _x(lon_inset), lat_v, _format_lat(lat_v),
-                ha='left', va='center', **text_kwargs,
-            )
+            if extent[2] <= lat_v <= extent[3]:
+                ax.text(
+                    lon_inset - central_lon, lat_v, _format_lat(lat_v),
+                    ha='left', va='center', **text_kwargs,
+                )
     except Exception:
         logger.exception("Failed to draw coordinate gridlines")
 
-    # Label visible countries and large named water bodies
+
+def _label_layer(
+    ax, proj, extent, size, central_lon, records, name_keys, min_pixels,
+    font_size, zorder, bold=False,
+) -> None:
+    """Label each visible, large-enough feature of a layer at a point inside it.
+
+    ``records`` are ``(attributes, geometry)`` pairs; the name is the first
+    non-empty of ``name_keys``. Features smaller than ``min_pixels`` on screen
+    are skipped to avoid clutter, and ``font_size`` maps that pixel size to a
+    font size.
+    """
+    import matplotlib.patheffects as patheffects
+
+    ext_min_lon, ext_max_lon, ext_min_lat, ext_max_lat = extent
+    ext_lon_span = max(ext_max_lon - ext_min_lon, 1e-6)
+    ext_lat_span = max(ext_max_lat - ext_min_lat, 1e-6)
+    # small margin so labels don't sit right on the border
+    lon_margin = ext_lon_span * 0.03
+    lat_margin = ext_lat_span * 0.03
+    extra = {'fontweight': 'bold'} if bold else {}
+    for attrs, geom in records:
+        try:
+            name = next((attrs.get(k) for k in name_keys if attrs.get(k)), None)
+            if not name:
+                continue
+            minx, miny, maxx, maxy = geom.bounds
+            # quick intersection test against current extent
+            if not _bounds_visible((minx, miny, maxx, maxy), extent):
+                continue
+            # approximate pixel span of this feature within current extent
+            pixel_w = (maxx - minx) / ext_lon_span * size[0]
+            pixel_h = (maxy - miny) / ext_lat_span * size[1]
+            maxpix = max(pixel_w, pixel_h)
+            if maxpix < min_pixels:
+                continue
+            # choose a point guaranteed to lie within the geometry for label placement
+            try:
+                label_pt = geom.representative_point()
+            except Exception:
+                label_pt = geom.centroid
+            lx = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin)
+            ly = label_pt.y
+            # ensure label point is comfortably inside the visible extent
+            if lx is None or not (ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
+                continue
+            txt = ax.text(lx - central_lon, ly, name, fontproperties=_label_font(font_size(maxpix)), color=_LABEL_COLOR, transform=proj, ha='center', va='center', zorder=zorder, clip_on=True, **extra)
+            txt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
+            try:
+                txt.set_clip_path(ax.patch)
+            except Exception:
+                pass
+        except Exception:
+            # continue labeling other features even if one fails
+            continue
+
+
+def _draw_starbase(ax, proj, extent, size, central_lon) -> None:
+    """Draw the Starbase, TX marker and label when it is inside the extent."""
+    import matplotlib.patheffects as patheffects
+
+    ext_min_lon, ext_max_lon, ext_min_lat, ext_max_lat = extent
+    star_lon = _lon_shift_into(STARBASE_LON, ext_min_lon, ext_max_lon)
+    if star_lon is None or not ext_min_lat <= STARBASE_LAT <= ext_max_lat:
+        return
+    x = star_lon - central_lon
     try:
-        # imports localized so failure here doesn't break map drawing
-        import matplotlib.patheffects as patheffects
-        # choose a label color lighter than the ocean (#262626 -> #858585)
-        label_color = "#858585"
+        ax.scatter([x], [STARBASE_LAT], s=70, color='#FF8014', edgecolors='black', linewidths=0.8, transform=proj, zorder=13)
+    except Exception:
+        try:
+            ax.plot(x, STARBASE_LAT, marker='o', markersize=6, color='#FF8014', transform=proj, zorder=13)
+        except Exception:
+            pass
+    # label offset a bit to the right and up
+    try:
+        dx = max(ext_max_lon - ext_min_lon, 1e-6) * 0.02
+        dy = max(ext_max_lat - ext_min_lat, 1e-6) * 0.01
+        sfontsize = max(8, min(12, int(min(size) / 60)))
+        stxt = ax.text(x + dx, STARBASE_LAT + dy, 'Starbase, TX', fontproperties=_label_font(sfontsize), color=_LABEL_COLOR, transform=proj, ha='left', va='bottom', zorder=13, clip_on=True)
+        stxt.set_path_effects([patheffects.withStroke(linewidth=1.8, foreground='black')])
+        try:
+            stxt.set_clip_path(ax.patch)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
-        # Precompute extent and margins used by multiple labelers
-        ext_min_lon, ext_max_lon, ext_min_lat, ext_max_lat = extent[0], extent[1], extent[2], extent[3]
-        ext_lon_span = max(ext_max_lon - ext_min_lon, 1e-6)
-        ext_lat_span = max(ext_max_lat - ext_min_lat, 1e-6)
-        # small margin so labels don't sit right on the border
-        margin_factor = 0.03
-        lon_margin = ext_lon_span * margin_factor
-        lat_margin = ext_lat_span * margin_factor
 
-        def label_features(records, name_keys, min_pixels, font_size, zorder, bold=False):
-            """Label each visible, large-enough feature at a point inside it."""
-            for attrs, geom in records:
-                try:
-                    name = next((attrs.get(k) for k in name_keys if attrs.get(k)), None)
-                    if not name:
-                        continue
-                    minx, miny, maxx, maxy = geom.bounds
-                    # quick intersection test against current extent
-                    if not _bounds_visible((minx, miny, maxx, maxy), extent):
-                        continue
-                    # approximate pixel span of this feature within current extent
-                    pixel_w = (maxx - minx) / ext_lon_span * size[0]
-                    pixel_h = (maxy - miny) / ext_lat_span * size[1]
-                    maxpix = max(pixel_w, pixel_h)
-                    # skip small features to avoid clutter
-                    if maxpix < min_pixels:
-                        continue
-                    # choose a point guaranteed to lie within the geometry for label placement
-                    try:
-                        label_pt = geom.representative_point()
-                    except Exception:
-                        label_pt = geom.centroid
-                    lx = _lon_shift_into(label_pt.x, ext_min_lon + lon_margin, ext_max_lon - lon_margin)
-                    ly = label_pt.y
-                    # ensure label point is comfortably inside the visible extent
-                    if lx is None or not (ext_min_lat + lat_margin <= ly <= ext_max_lat - lat_margin):
-                        continue
-                    extra = {'fontweight': 'bold'} if bold else {}
-                    txt = ax.text(_x(lx), ly, name, fontproperties=_label_font(font_size(maxpix)), color=label_color, transform=proj, ha='center', va='center', zorder=zorder, clip_on=True, **extra)
-                    txt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
-                    try:
-                        txt.set_clip_path(ax.patch)
-                    except Exception:
-                        pass
-                except Exception:
-                    # continue labeling other features even if one fails
-                    continue
-
+def _draw_labels(ax, proj, extent, size, central_lon) -> None:
+    """Label visible countries and large water bodies, and mark Starbase."""
+    try:
         # Countries from Natural Earth admin_0_countries.
-        label_features(
+        _label_layer(
+            ax, proj, extent, size, central_lon,
             _natural_earth_records('50m', 'cultural', 'admin_0_countries'),
             ('ADMIN', 'NAME', 'NAME_LONG', 'SOVEREIGNT'),
             min_pixels=60,
@@ -911,96 +863,145 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         # Large named water bodies. Only the 50m layers are used, matching the
         # rest of the map; also loading 10m labelled the same lakes twice.
         for layer in ('ocean', 'lakes'):
-            label_features(
+            _label_layer(
+                ax, proj, extent, size, central_lon,
                 _natural_earth_records('50m', 'physical', layer),
                 ('name', 'NAME', 'NAME_EN', 'NAME_LONG', 'NAME_HI'),
                 min_pixels=60,
                 font_size=lambda px: max(8, min(18, int(px / 22))),
                 zorder=10,
             )
-
-        # Draw Starbase, TX marker and label if visible
         try:
-            star_lat = 25.9896
-            star_lon = -97.1849
-            star_lon = _lon_shift_into(star_lon, ext_min_lon, ext_max_lon)
-            if star_lon is not None and ext_min_lat <= star_lat <= ext_max_lat:
-                # marker
-                try:
-                    ax.scatter([_x(star_lon)], [star_lat], s=70, color='#FF8014', edgecolors='black', linewidths=0.8, transform=proj, zorder=13)
-                except Exception:
-                    try:
-                        ax.plot(_x(star_lon), star_lat, marker='o', markersize=6, color='#FF8014', transform=proj, zorder=13)
-                    except Exception:
-                        pass
-                # label offset a bit to the right and up
-                try:
-                    dx = ext_lon_span * 0.02
-                    dy = ext_lat_span * 0.01
-                    sname = 'Starbase, TX'
-                    sfontsize = max(8, min(12, int(min(size) / 60)))
-                    stxt = ax.text(_x(star_lon) + dx, star_lat + dy, sname, fontproperties=_label_font(sfontsize), color=label_color, transform=proj, ha='left', va='bottom', zorder=13, clip_on=True)
-                    stxt.set_path_effects([patheffects.withStroke(linewidth=1.8, foreground='black')])
-                    try:
-                        stxt.set_clip_path(ax.patch)
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
+            _draw_starbase(ax, proj, extent, size, central_lon)
         except Exception:
             logger.debug('Starbase marker placement failed')
-
     except Exception:
         # drawing labels is non-critical; do not fail the whole rendering if shapereader/patheffects unavailable
         logger.debug("Shapereader or patheffects not available; skipping labels")
-    # Draw polygon(s), circle, or point
+
+
+def _draw_geometry(ax, proj, polygon_groups, point, radius_value, central_lon) -> None:
+    """Draw each NOTAM polygon, or the circle around ``point``.
+
+    A point without a radius is not drawn (no centre marker, by request).
+    """
+    from shapely.geometry import Polygon
+
     if polygon_groups is not None:
-        # Multiple distinct areas (e.g. two AND-separated DRA boundaries):
-        # draw each group as its own polygon so they stay visually separate.
+        # Each area (e.g. two AND-separated DRA boundaries) is its own polygon
+        # so they stay visually separate.
         logger.info("Drawing %d polygon group(s) on cartopy map", len(polygon_groups))
         for gi, group in enumerate(polygon_groups):
             if not group:
                 continue
-            poly_coords = [(_x(lon), lat) for lat, lon in group]
             try:
-                poly = Polygon(poly_coords)
-                ax.add_geometries(
-                    [poly], crs=proj,
-                    facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95),
-                    linewidth=1.6,
-                )
+                poly = Polygon([(lon - central_lon, lat) for lat, lon in group])
+                ax.add_geometries([poly], crs=proj, **_AREA_STYLE)
             except Exception:
                 logger.exception("Failed to draw polygon group %d on cartopy map", gi)
-    elif isinstance(coords, list) and coords:
-        poly_coords = [(_x(lon), lat) for lat, lon in coords]
+    elif point and radius_value is not None:
+        lat, lon = point
+        logger.info("Drawing circle on cartopy map with radius %.2f NM", radius_value)
+        lat_deg = radius_value / 60.0
+        cos_lat = max(math.cos(math.radians(lat)), 1e-6)
+        lon_deg = radius_value / (60.0 * cos_lat)
+        circle_pts = []
+        for i in range(72):
+            ang = 2.0 * math.pi * (i / 72.0)
+            p_lat = lat + lat_deg * math.sin(ang)
+            p_lon = lon + lon_deg * math.cos(ang)
+            circle_pts.append((p_lon - central_lon, p_lat))
         try:
-            poly = Polygon(poly_coords)
-            logger.info("Drawing polygon on cartopy map")
-            ax.add_geometries([poly], crs=proj, facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95), linewidth=1.6)
+            ax.add_geometries([Polygon(circle_pts)], crs=proj, **_AREA_STYLE)
         except Exception:
-            logger.exception("Failed to draw polygon on cartopy map")
-    elif isinstance(coords, tuple) and coords:
-        lat, lon = coords
-        if radius_value is not None:
-            import math
-            logger.info("Drawing circle on cartopy map with radius %.2f NM", radius_value)
-            circle_pts = []
-            lat_deg = radius_value / 60.0
-            cos_lat = max(math.cos(math.radians(lat)), 1e-6)
-            lon_deg = radius_value / (60.0 * cos_lat)
-            for i in range(72):
-                ang = 2.0 * math.pi * (i / 72.0)
-                p_lat = lat + lat_deg * math.sin(ang)
-                p_lon = lon + lon_deg * math.cos(ang)
-                circle_pts.append((_x(p_lon), p_lat))
-            try:
-                circle = Polygon(circle_pts)
-                ax.add_geometries([circle], crs=proj, facecolor=(207/255, 0, 0, 0.18), edgecolor=(207/255, 0, 0, 0.95), linewidth=1.6)
-            except Exception:
-                logger.exception("Failed to draw circle geometry on cartopy map")
-        else:
-            logger.info("Drawing point on cartopy map")
-            # Intentionally do not draw a center marker or coordinate label per request
+            logger.exception("Failed to draw circle geometry on cartopy map")
+    elif point:
+        logger.info("Drawing point on cartopy map")
+
+
+def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float | None = None) -> "Image.Image":
+    """Render a map image (PIL.Image) showing the given coords polygon or point using Cartopy.
+
+    Returns an RGBA PIL Image of exact ``size``.
+
+    Parameters
+    ----------
+    coords :
+        A list of ``(lat, lon)`` tuples describing a polygon, a list of such
+        lists (one polygon per area), a single ``(lat, lon)`` tuple describing
+        a point, or ``None``/empty for a default global extent.
+    size : tuple[int, int]
+        The output image size in pixels as ``(width, height)``.
+    radius_nm : float or None
+        Optional radius in nautical miles used to draw a circle around a point.
+
+    Raises
+    ------
+    ImportError
+        If Cartopy, Matplotlib, or Shapely are not installed when this function
+        is called.
+    """
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+        import shapely.geometry  # noqa: F401 - fail early if shapely is missing
+    except Exception as e:
+        logger.exception("Cartopy/Matplotlib not available: %s", e)
+        raise ImportError(
+            "cartopy and matplotlib are required for map rendering; "
+            "install project dependencies via 'pip install .'"
+        ) from e
+
+    polygon_groups = _polygon_groups(coords)
+    point = coords if isinstance(coords, tuple) and coords else None
+    radius_value = _parse_radius(radius_nm)
+    points = [pt for g in polygon_groups for pt in g] if polygon_groups else None
+    extent = _fit_extent(points, point, radius_value, size)
+
+    # When the (unwrapped) extent leaves [-180, 180], centre the projection on
+    # it so the area is drawn in one piece. All geometry and text is then
+    # placed in the axes' own CRS, with x = lon - central_lon. For every other
+    # NOTAM central_lon is 0 and this is identical to plain PlateCarree.
+    central_lon = 0.0
+    if extent[0] < -180.0 or extent[1] > 180.0:
+        central_lon = (extent[0] + extent[1]) / 2.0
+        logger.info("Extent crosses the antimeridian; centring map on %.1f deg", central_lon)
+    proj = ccrs.PlateCarree(central_longitude=central_lon)
+
+    fig_dpi = 100
+    fig_w = size[0] / fig_dpi
+    fig_h = size[1] / fig_dpi
+    logger.info("Creating map figure with size %dx%d pixels (%.2fx%.2f inches at %d DPI)", size[0], size[1], fig_w, fig_h, fig_dpi)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=fig_dpi, subplot_kw=dict(projection=proj))
+    # Match figure and axes background to the canvas ocean color (#262626)
+    fig.patch.set_facecolor('#262626')
+    ax.set_facecolor('#262626')
+    # Some GeoAxes implementations may not have outline_patch; guard access
+    try:
+        if hasattr(ax, 'outline_patch') and ax.outline_patch is not None:
+            ax.outline_patch.set_visible(False)
+    except Exception:
+        logger.exception("Failed to hide axes outline, map may have unexpected border")
+
+    ax.set_extent([extent[0] - central_lon, extent[1] - central_lon, extent[2], extent[3]], crs=proj)
+
+    # Cartopy GeoAxes enforce an equal ('box') aspect by default, which
+    # letterboxes the map inside the axes and leaves dark bands at the top and
+    # bottom of the fixed-size figure. Our extent is already aspect-corrected to
+    # the image ratio (using a cos(lat) adjustment), so switch to 'auto' aspect
+    # to let the data stretch and fill the whole box with negligible distortion.
+    try:
+        ax.set_aspect('auto')
+    except Exception:
+        logger.exception("Failed to set axes aspect to 'auto'; map may be letterboxed")
+
+    _add_base_layers(ax, cfeature)
+    _draw_graticule(ax, proj, extent, central_lon)
+    _draw_labels(ax, proj, extent, size, central_lon)
+    _draw_geometry(ax, proj, polygon_groups, point, radius_value, central_lon)
 
     # remove axes and padding
     ax.set_xticks([])
