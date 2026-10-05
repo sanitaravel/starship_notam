@@ -21,7 +21,7 @@ caller and is fail-safe (returns ``[]`` and never raises to the caller on any
 search/navigation failure).
 """
 
-import time
+import calendar
 from datetime import date
 from urllib.parse import urljoin
 
@@ -63,14 +63,13 @@ _DETAIL_MAX_ATTEMPTS = 3
 _PAGE_LOAD_TIMEOUT = 30
 
 
-def _last_day_of_month(year: int, month: int) -> int:
-    """Return the last valid day number for ``year``/``month``."""
-    if month == 12:
-        next_month_first = date(year + 1, 1, 1)
-    else:
-        next_month_first = date(year, month + 1, 1)
-    # The day before the first of the following month is the last day.
-    return (next_month_first.toordinal() - 1 - date(year, month, 1).toordinal()) + 1
+def _fill(field, value: str) -> None:
+    """Clear a form ``field`` (best-effort) and type ``value`` into it."""
+    try:
+        field.clear()
+    except Exception:
+        pass
+    field.send_keys(value)
 
 
 def _receipt_date_to(today: date | None = None) -> str:
@@ -108,7 +107,7 @@ def _receipt_date_from(today: date | None = None) -> str:
         target_year = today.year
         target_month = today.month - 1
 
-    target_day = min(today.day, _last_day_of_month(target_year, target_month))
+    target_day = min(today.day, calendar.monthrange(target_year, target_month)[1])
     return date(target_year, target_month, target_day).strftime("%m/%d/%Y")
 
 
@@ -174,32 +173,12 @@ def fetch_fcc_els_applications() -> list[dict]:
             receipt_to,
             config.FCC_ELS_RECORD_LIMIT,
         )
-        try:
-            licensee_field.clear()
-        except Exception:
-            pass
-        licensee_field.send_keys(config.FCC_ELS_SEARCH_TERM)
-
-        try:
-            receipt_from_field.clear()
-        except Exception:
-            pass
-        receipt_from_field.send_keys(receipt_from)
-
-        try:
-            receipt_to_field.clear()
-        except Exception:
-            pass
-        receipt_to_field.send_keys(receipt_to)
-
+        _fill(licensee_field, config.FCC_ELS_SEARCH_TERM)
+        _fill(receipt_from_field, receipt_from)
+        _fill(receipt_to_field, receipt_to)
         # show-records is a plain text input pre-filled with a default of "10".
-        # Clear the default before typing the configured record limit.
         try:
-            show_records_field.clear()
-        except Exception:
-            pass
-        try:
-            show_records_field.send_keys(str(config.FCC_ELS_RECORD_LIMIT))
+            _fill(show_records_field, str(config.FCC_ELS_RECORD_LIMIT))
         except Exception as e:
             logger.info(f"Could not set FCC ELS show-records field: {e}")
 
