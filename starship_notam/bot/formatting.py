@@ -49,6 +49,27 @@ def _hashtag_line(*tags: str) -> str:
     return " ".join(t for t in tags if t)
 
 
+def _coerce_json(value, default):
+    """Return ``value`` decoded from JSON if it is a string.
+
+    Sub-payloads arrive either already decoded or as the JSON text stored in
+    the database. Returns ``default`` when decoding fails or the result is not
+    of the same type as ``default`` (e.g. ``[]`` for a list, ``{}`` for a dict).
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return default
+    return value if isinstance(value, type(default)) else default
+
+
+def _fmt_utc(iso_str: str) -> str:
+    """Format an ISO UTC timestamp (``Z`` or ``+00:00``) as ``dd.mm.yyyy HH:MM UTC``."""
+    dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    return dt.strftime("%d.%m.%Y %H:%M UTC")
+
+
 def _sanitize_tag(value: str) -> str:
     """Turn arbitrary text into a single ``#Tag`` token.
 
@@ -152,11 +173,6 @@ def format_faa_activity(activity: dict) -> str:
 def format_road_alert(alert: dict) -> str:
     """Format a road-delay alert dict into an HTML message string."""
 
-    def fmt_time(iso_str: str):
-        # expects ISO UTC like "2026-06-25T04:59:00+00:00"
-        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return dt.strftime("%d.%m.%Y %H:%M UTC")
-
     origin = translate_place(alert.get("origin"))
     destination = translate_place(alert.get("destination"))
 
@@ -166,7 +182,7 @@ def format_road_alert(alert: dict) -> str:
 
     if alert.get("start_utc") and alert.get("end_utc"):
         parts.append(
-            f"<b>Время:</b> {html.escape(fmt_time(alert['start_utc']))} – {html.escape(fmt_time(alert['end_utc']))}"
+            f"<b>Время:</b> {html.escape(_fmt_utc(alert['start_utc']))} – {html.escape(_fmt_utc(alert['end_utc']))}"
         )
 
     parts.append(_hashtag_line(*_TAGS_ROAD))
@@ -177,28 +193,16 @@ def format_road_alert(alert: dict) -> str:
 def format_beach_alert(alert: dict) -> str:
     """Format a beach-closure alert dict into an HTML message string."""
 
-    def fmt_time(iso_str: str):
-        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return dt.strftime("%d.%m.%Y %H:%M UTC")
-
     def period_text(period: dict) -> str:
         start_utc = period.get("start_utc")
         end_utc = period.get("end_utc")
         if start_utc and end_utc:
-            return f"{fmt_time(start_utc)} – {fmt_time(end_utc)}"
+            return f"{_fmt_utc(start_utc)} – {_fmt_utc(end_utc)}"
 
         raw_date = period.get("raw_date")
         return html.escape(str(raw_date)) if raw_date else ""
 
-    periods = alert.get("periods_json")
-
-    if isinstance(periods, str):
-        try:
-            periods = json.loads(periods)
-        except Exception:
-            periods = []
-    if not isinstance(periods, list):
-        periods = []
+    periods = _coerce_json(alert.get("periods_json"), [])
 
     primary_period = periods[0] if periods else {
         "start_utc": alert.get("start_utc"),
@@ -271,16 +275,7 @@ def format_fcc_els_application(app: dict) -> str:
     parts.append(f"<b>Дата получения:</b> {html.escape(receipt_date)}")
     parts.append(f"<b>Дата статуса:</b> {html.escape(status_date)}")
 
-    # Detail fields: accept either a dict or a JSON string (mirrors how
-    # format_beach_alert handles periods_json).
-    detail = app.get("detail_json")
-    if isinstance(detail, str):
-        try:
-            detail = json.loads(detail)
-        except Exception:
-            detail = {}
-    if not isinstance(detail, dict):
-        detail = {}
+    detail = _coerce_json(app.get("detail_json"), {})
 
     # Build the expandable blockquote from the purpose-of-operation and the STA
     # explanation, each under its own bold label. Include only the fields that
@@ -446,14 +441,7 @@ def format_faa_license(item: dict) -> str:
     and ``format_fcc_els_application`` tolerate serialized sub-payloads).
     Performs no network I/O; uses the standard library only.
     """
-    details = item.get("details")
-    if isinstance(details, str):
-        try:
-            details = json.loads(details)
-        except Exception:
-            details = {}
-    if not isinstance(details, dict):
-        details = {}
+    details = _coerce_json(item.get("details"), {})
 
     # Fall back to the flat columns for the headline fields when ``details`` is
     # missing an entry (both are populated by the parser, but stay defensive).
