@@ -19,9 +19,10 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from urllib.parse import urljoin
 
+from starship_notam.parsers.notam_time import parse_notam_time
 from starship_notam.parsers.schedule import (
     parse_notam_windows,
     parse_notam_windows_with_dates,
@@ -325,39 +326,18 @@ def build_notam_caption(name: str, parsed: dict) -> str:
     display_name = str(name or '').replace('_', '/')
     parts.append(f"<b>Код NOTAM:</b> {html.escape(display_name)}")
 
-    def _parse_dt(s):
-        """Parse a NOTAM B/C timestamp into a UTC-naive-ish datetime or None."""
-        if not s:
-            return None
-        try:
-            s_str = str(s).strip()
-            if s_str.endswith('Z'):
-                s_str = s_str[:-1]
-            s_iso = s_str.replace('T', ' ')
-            dt = datetime.fromisoformat(s_iso)
-            if dt.tzinfo is not None:
-                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-            return dt
-        except Exception:
-            return None
-
     def _fmt_dt(s):
-        dt = _parse_dt(s)
+        dt = parse_notam_time(s)
         if dt is not None:
             return dt.strftime('%d.%m.%Y %H:%M UTC')
-        if not s:
-            return ''
-        s_str = str(s).strip()
-        if s_str.endswith('Z'):
-            s_str = s_str[:-1]
-        return s_str.replace('T', ' ')
+        return str(s or '').strip().removesuffix('Z').replace('T', ' ')
 
     # Dates. Prefer the same per-day schedule breakdown used on the image
     # (parsed from field D), so daily/multi-day NOTAMs list each active date
     # with its window instead of a single "B → C" span. Fall back to the
     # B → C line when D is empty or unparseable.
-    start_dt = _parse_dt(parsed.get('B'))
-    end_dt = _parse_dt(parsed.get('C'))
+    start_dt = parse_notam_time(parsed.get('B'))
+    end_dt = parse_notam_time(parsed.get('C'))
     windows = parse_notam_windows_with_dates(
         parsed.get('D'), parsed.get('E'), start_dt, end_dt
     )

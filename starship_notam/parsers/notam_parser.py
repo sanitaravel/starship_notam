@@ -5,11 +5,11 @@ text, CARF/TFR-style messages, and Q-line qualifiers into structured dicts.
 """
 
 import re
-from datetime import datetime
 from typing import Dict, Optional, List, Any
 
 from starship_notam.core.logging import logger
 from starship_notam.parsers.coord_parser import _dms_token_to_decimal
+from starship_notam.parsers.notam_time import parse_notam_time
 
 # Compact coordinate token, e.g. 1700N07140W or 260000N0955500W.
 _COORD_RE = re.compile(r'\d{4,6}[NS]\d{5,7}[EW]')
@@ -54,52 +54,15 @@ def _find_fields(text: str) -> Dict[str, str]:
     return fields
 
 
-def _try_parse_dt(s: str) -> Optional[str]:
+def _try_parse_dt(s) -> Optional[str]:
+    """Return a NOTAM time as ``YYYY-MM-DDTHH:MM:SSZ``, or the raw text if unparseable."""
     if s is None:
         return None
-    # Coerce non-string inputs (e.g., numeric JSON values) to string
-    if not isinstance(s, str):
-        s = str(s)
-    s = s.strip()
-    # common NOTAM formats: YYYYMMDDhhmm, YYMMDDhhmm, YYYYMMDDThhmm, YYYY-MM-DDTHH:MMZ
-    fmt_candidates = [
-        '%Y%m%d%H%M', '%y%m%d%H%M', '%Y%m%dT%H%M', '%y%m%dT%H%M', '%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M'
-    ]
-    # remove obvious noise but keep digits, T, Z, colon, dash and space
-    cleaned = re.sub(r'(?i)[^0-9TZt:\-:\s]', '', s)
-
-    # Extract all compact numeric tokens (12-digit YYYYMMDDHHMM or 10-digit YYMMDDHHMM)
-    tokens = re.findall(r'\d{12}|\d{10}', cleaned)
-
-    # Try parsing each token in a sensible order
-    for token in tokens:
-        try:
-            if len(token) == 12:
-                dt = datetime.strptime(token, '%Y%m%d%H%M')
-                parsed = dt.isoformat() + 'Z'
-                logger.debug(f"Parsed datetime token '{token}' from '{s}' as {parsed} using %Y format")
-                return parsed
-            elif len(token) == 10:
-                # Interpret 10-digit token as YYMMDDHHMM (e.g., 2106231700 -> 2021-06-23T17:00Z)
-                dt = datetime.strptime(token, '%y%m%d%H%M')
-                parsed = dt.isoformat() + 'Z'
-                logger.debug(f"Parsed datetime token '{token}' from '{s}' as {parsed} using %y format")
-                return parsed
-        except Exception:
-            continue
-
-    # Fallback: try candidate formats against the cleaned string
-    for fmt in fmt_candidates:
-        try:
-            dt = datetime.strptime(cleaned, fmt)
-            parsed = dt.isoformat() + 'Z'
-            logger.debug(f"Parsed datetime '{s}' as {parsed} using fmt {fmt}")
-            return parsed
-        except Exception:
-            continue
-
-    logger.info(f"Could not parse datetime string: {s}; returning raw")
-    return s
+    dt = parse_notam_time(s)
+    if dt is None:
+        logger.info(f"Could not parse datetime string: {s}; returning raw")
+        return str(s).strip()
+    return dt.isoformat() + 'Z'
 
 
 def _parse_q_line(q: str) -> Dict[str, Optional[str]]:

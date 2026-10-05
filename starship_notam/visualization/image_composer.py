@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import functools
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 from starship_notam.core.logging import logger
@@ -30,6 +29,7 @@ from starship_notam.parsers.coord_parser import (
     parse_coord_groups_from_text,
     parse_coords_from_text,
 )
+from starship_notam.parsers.notam_time import parse_notam_time
 from starship_notam.parsers.schedule import (
     parse_notam_windows,  # noqa: F401  (re-exported for tests / callers)
     parse_notam_windows_with_dates,
@@ -107,67 +107,6 @@ def load_font(name: str, size: int, weight: str | None = None):
 
     logger.warning("Falling back to default PIL font for size %s", size)
     return ImageFont.load_default()
-
-
-def _parse_notam_time(raw):
-    """Parse various NOTAM time formats into a datetime (UTC) or None."""
-    if not raw:
-        return None
-    if isinstance(raw, datetime):
-        return raw
-    s = str(raw).strip()
-
-    # ISO with trailing Z
-    try:
-        if s.endswith('Z') and 'T' in s:
-            s2 = s[:-1] + '+00:00'
-            dt = datetime.fromisoformat(s2)
-            return dt
-    except Exception:
-        pass
-
-    # Look for compact numeric tokens like YYYYMMDDHHMM, YYMMDDHHMM or YYYYMMDD
-    m = re.search(r'(\d{12}|\d{10}|\d{8})', s)
-    if m:
-        tok = m.group(1)
-        try:
-            if len(tok) == 12:
-                return datetime.strptime(tok, '%Y%m%d%H%M').replace(tzinfo=timezone.utc)
-            if len(tok) == 10:
-                dt = datetime.strptime(tok, '%y%m%d%H%M')
-                if dt.year < 100:
-                    dt = dt.replace(year=dt.year + 2000)
-                return dt.replace(tzinfo=timezone.utc)
-            if len(tok) == 8:
-                if tok.startswith('20') or tok.startswith('19'):
-                    return datetime.strptime(tok, '%Y%m%d').replace(tzinfo=timezone.utc)
-                dt = datetime.strptime(tok, '%y%m%d')
-                if dt.year < 100:
-                    dt = dt.replace(year=dt.year + 2000)
-                return dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
-
-    # Try common ISO / human formats
-    try:
-        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
-        return dt
-    except Exception:
-        pass
-
-    patterns = [
-        '%d.%m.%Y %H:%M', '%d.%m.%Y %H:%M:%S', '%d.%m.%Y',
-        '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M',
-        '%d %b %Y %H:%M', '%d %b %Y', '%d %B %Y %H:%M', '%d %B %Y'
-    ]
-    for fmt in patterns:
-        try:
-            dt = datetime.strptime(s, fmt)
-            return dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
-
-    return None
 
 
 def extract_starship_template(notam: str) -> str | None:
@@ -393,8 +332,8 @@ def _notam_from_db_row(name: str, parsed: dict) -> dict:
     if not end_raw:
         end_raw = parsed.get('end') if isinstance(parsed, dict) else None
 
-    start_dt = _parse_notam_time(start_raw)
-    end_dt = _parse_notam_time(end_raw)
+    start_dt = parse_notam_time(start_raw)
+    end_dt = parse_notam_time(end_raw)
     start_str = start_dt.strftime('%d.%m.%Y, %H:%M UTC') if start_dt else None
     end_str = end_dt.strftime('%d.%m.%Y, %H:%M UTC') if end_dt else None
 
