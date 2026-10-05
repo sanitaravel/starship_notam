@@ -65,7 +65,6 @@ def _parse_coords(raw: str) -> list[tuple[float, float]] | None:
     Strategies (in order):
     - DMS paired lat/lon like '1500N06500W' or '195700N0820100W'
     - Standalone DMS tokens paired by direction (e.g. '2358S' then '07500E')
-    - Split DMS like '23 58S 075 00E'
     - Decimal comma-separated pairs like '12.345, 67.890'
     - Whitespace-separated decimal pairs like '12.345 67.890'
 
@@ -112,22 +111,11 @@ def _parse_coords(raw: str) -> list[tuple[float, float]] | None:
                 coords_out.append((lat_val, lon_val))
                 lat_val = None
                 lon_val = None
-        if coords_out:
-            return coords_out
+        # DMS tokens that don't form a lat/lon pair are not coordinates; don't
+        # fall through to the decimal steps, which would misread their digits.
+        return coords_out or None
 
-    # 3) Try to find patterns like '23 58S 075 00E' (split numbers with directions)
-    parts = re.findall(r"([0-9]{1,3}\s*[0-9]{2}\s*[NSWE])", s, flags=re.IGNORECASE)
-    if parts:
-        # attempt simple parsing by removing spaces and reusing token_re
-        for p in parts:
-            m_tok = token_re.search(p)
-            if m_tok:
-                # reuse above logic by calling recursively
-                res = _parse_coords(m_tok.group(0))
-                if res:
-                    return res
-
-    # 4) Try to find explicit decimal coordinate pairs like 'lat, lon' or 'lat lon'.
+    # 3) Try to find explicit decimal coordinate pairs like 'lat, lon' or 'lat lon'.
     #    Reject pairs outside real geographic ranges (|lat|<=90, |lon|<=180) so
     #    unrelated numbers in the prose - e.g. NOTAM backup dates like
     #    "260929, 260930" - are not mistaken for coordinates.

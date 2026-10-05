@@ -217,17 +217,6 @@ def _extract_coord_chain(text: str) -> Optional[str]:
     return ' TO '.join(coords)
 
 
-def _extract_altitude(text: str) -> Optional[str]:
-    """Best-effort extraction of a TFR altitude block.
-
-    Supports common forms like ``SFC-5000FT AGL ONLY`` or ``FL180-FL240``.
-    """
-    altitude_info = _parse_tfr_altitude(text)
-    if altitude_info:
-        return altitude_info['raw']
-    return None
-
-
 def _normalize_altitude_token(token: str) -> Dict[str, Optional[str]]:
     token = ' '.join(token.upper().split()).strip(' ,.;')
     if token in {'SFC', 'GND', 'GROUND'}:
@@ -373,14 +362,6 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
     out['notam_id'] = notam_id
     out['artcc'] = artcc
 
-    # find first coordinate token to delimit the operation string
-    coord_re = re.compile(r'^\d{4,6}[NS]\d{5,7}[EW]$')
-    coord_index = None
-    for i in range(op_start_idx, len(toks)):
-        if coord_re.match(toks[i].strip(',.')):
-            coord_index = i
-            break
-
     remainder = ' '.join(toks[op_start_idx:]).strip()
     circle_def = _extract_circle_definition(remainder)
     chain_str = _extract_coord_chain(remainder)
@@ -425,16 +406,6 @@ def parse_carf_message(text: str) -> Dict[str, Any]:
             out['radius_nm'] = circle_def['radius_nm']
             out['center'] = circle_def.get('center')
         out['Q'] = q
-
-        alt_token = _extract_altitude(remainder)
-        if alt_token:
-            out['altitude'] = alt_token
-            try:
-                lower, upper = alt_token.split('-', 1)
-                out['Q']['lower'] = lower.strip()
-                out['Q']['upper'] = upper.strip()
-            except Exception:
-                pass
 
         if altitude_info:
             out['Q']['lower'] = altitude_info['min']
