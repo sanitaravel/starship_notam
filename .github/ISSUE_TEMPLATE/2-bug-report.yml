@@ -1,0 +1,78 @@
+name: Bug report
+description: Something is wrong, such as a missing or duplicated post, a wrong message, a crash or a broken map.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Remove your Telegram bot token, passwords and other secrets** from anything you paste below.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did the bot do, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - NOTAMs
+        - FAA advisories
+        - Starbase closures
+        - FCC ELS
+        - FAA DRS licence
+        - COMPASS
+        - NOTAM map cards
+        - Telegram posting
+        - Docker / deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we see the problem? Link the Telegram post or the source item (NOTAM number, FCC file number, ...) if there is one.
+      placeholder: |
+        1. ...
+        2. ...
+
+  - type: dropdown
+    id: run-mode
+    attributes:
+      label: How do you run the bot?
+      options:
+        - Docker Compose
+        - Without Docker (RUN_MODE=standalone)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - PostgreSQL
+        - SQLite
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `git rev-parse --short HEAD`.
+      placeholder: 00329fd
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant part of `docker compose logs bot` (or the console output). It is formatted as code automatically.
+      render: text
