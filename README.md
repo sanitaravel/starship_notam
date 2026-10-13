@@ -12,8 +12,8 @@ posts updates to a Telegram channel. On a fixed schedule it checks:
 | [FAA DRS](https://drs.faa.gov) | Changes to the Starship launch licence |
 | [COMPASS (CADENA ATFM)](https://compass.atfm.aero) | New files on the Master Slide Deck page |
 
-New or changed items are stored in a SQLite database, so each one is posted
-only once.
+New or changed items are stored in a database (SQLite or PostgreSQL), so each
+one is posted only once.
 
 ## Requirements
 
@@ -34,9 +34,34 @@ cp .env.example .env              # then fill in TELEGRAM_BOT_TOKEN and TELEGRAM
 
 All settings are documented in [`.env.example`](.env.example).
 
+### Run mode
+
+`RUN_MODE` says where the bot runs:
+
+| `RUN_MODE` | Selenium |
+| --- | --- |
+| `docker` (default) | Connects to the Selenium grid at `http://selenium:4444/wd/hub` |
+| `standalone` | Launches a local Chrome |
+
+### Database
+
+By default the bot uses a SQLite file (`NOTAM_DB_PATH`, default `notams.db`).
+To use PostgreSQL instead, install the extra and set `DATABASE_URL`:
+
+```sh
+pip install -e ".[postgres]"
+```
+
+```sh
+DATABASE_URL=postgresql://notam:secret@localhost:5432/notam
+```
+
+The tables are created on startup. Data is not copied from an existing
+SQLite file.
+
 ### Running locally
 
-Set `DEBUG_MODE=1` in `.env` so Selenium launches a local Chrome. Then:
+Set `RUN_MODE=standalone` in `.env`, then:
 
 ```sh
 python prefill_compass.py         # once, so the existing COMPASS files are not announced
@@ -45,10 +70,10 @@ python -m starship_notam          # or: python main.py, or: starship-notam
 
 ### Running in Docker
 
-Leave `DEBUG_MODE` unset. Selenium then connects to a Selenium grid at
-`http://selenium:4444/wd/hub`, so the stack needs a `selenium` service, for
-example `selenium/standalone-chrome`. Put the database on a volume, e.g.
-`NOTAM_DB_PATH=/app/data/notams.db`.
+Use `RUN_MODE=docker` (the default). The stack needs a `selenium` service,
+for example `selenium/standalone-chrome`. Either put the SQLite database on a
+volume (e.g. `NOTAM_DB_PATH=/app/data/notams.db`) or point `DATABASE_URL` at a
+PostgreSQL service.
 
 ## Tests
 
@@ -57,6 +82,10 @@ pip install -e ".[dev]"
 pytest
 ```
 
+The PostgreSQL tests in `tests/unit/test_data/test_postgres.py` are skipped
+unless `TEST_DATABASE_URL` points at a disposable PostgreSQL database. They
+drop and recreate the bot's tables. CI runs them against a PostgreSQL service.
+
 ## Project layout
 
 ```text
@@ -64,7 +93,7 @@ starship_notam/
   core/           configuration (.env) and logging
   scrapers/       fetch raw data from each source
   parsers/        turn raw HTML/JSON/NOTAM text into dicts
-  data/           SQLite schema and one repository per source
+  data/           database schema (SQLite/PostgreSQL) and one repository per source
   visualization/  map rendering and NOTAM card images
   bot/            message formatting, Telegram transport, main loop
 tests/            unit and integration tests (pytest + Hypothesis)
