@@ -1,10 +1,13 @@
 name: CI
 
+# Tests gate releases only: they run on pull requests into main (and on main
+# after a merge). Pull requests into development are not tested; run the
+# workflow by hand from the Actions tab to test any branch.
 on:
   push:
-    branches: [development, main]
+    branches: [main]
   pull_request:
-    branches: [development, main]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
