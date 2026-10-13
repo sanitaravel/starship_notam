@@ -207,17 +207,20 @@ layer boundaries are checked by `tests/integration/test_dependency_boundaries.py
 
 ## Contributing
 
-All work goes through pull requests:
+Ideas and problems go in [issues](https://github.com/sanitaravel/starship_notam/issues/new/choose).
+Use the feature request or bug report form.
+
+All code changes go through pull requests:
 
 1. Branch off `development` (e.g. `feat/...`, `fix/...`) and open a pull
-   request into `development`.
-2. CI runs the test suite on every pull request. A pull request can be merged
-   only when the `tests` check passes.
-3. To release, open a pull request from `development` into `main`. `main`
-   accepts pull requests **only from `development`**. The `source-branch`
-   check fails for any other branch, and `tests` must pass. Merge it with a
-   merge commit (squash and rebase are disabled on `main`) so the two
-   branches keep the same history.
+   request into `development`. Run `pytest` locally before opening it. CI
+   does not run on pull requests into `development`, but you can start it for
+   any branch from the Actions tab (**CI → Run workflow**).
+2. To release, open a pull request from `development` into `main`. `main`
+   accepts pull requests **only from `development`**: the `source-branch`
+   check fails for any other branch. The `tests` check must also pass. Merge
+   it with a merge commit (squash and rebase are disabled on `main`) so the
+   two branches keep the same history.
 
 Direct pushes, force pushes and deletion are blocked on both `main` and
 `development`.
