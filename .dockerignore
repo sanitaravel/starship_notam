@@ -1,0 +1,9 @@
+# Only the files the Dockerfile copies are needed; keep secrets and local
+# state out of the build context.
+*
+!pyproject.toml
+!fonts/
+!starship_notam/
+!main.py
+!prefill_compass.py
+**/__pycache__
