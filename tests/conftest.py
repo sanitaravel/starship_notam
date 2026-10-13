@@ -39,6 +39,11 @@ if os.environ.get("CI"):
 # before any test module imports the package.
 os.environ["NOTAM_LOG_DIR"] = tempfile.mkdtemp(prefix="notam-test-logs-")
 
+# core.config refuses to load without Telegram credentials. Tests never talk to
+# Telegram, so placeholders let the suite run on a checkout without a .env (CI).
+os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
+os.environ.setdefault("TELEGRAM_CHANNEL_ID", "@test-channel")
+
 
 # ---------------------------------------------------------------------------
 # Database fixtures

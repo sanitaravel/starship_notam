@@ -59,7 +59,7 @@ pytest
 
 ## Project layout
 
-```
+```text
 starship_notam/
   core/           configuration (.env) and logging
   scrapers/       fetch raw data from each source
