@@ -58,6 +58,9 @@ def db_path(tmp_path, monkeypatch) -> str:
     ``notams.db``.
     """
     path = tmp_path / "test_notams.db"
+    # DATABASE_URL takes precedence over NOTAM_DB_PATH; drop it so a
+    # PostgreSQL URL in the developer's .env never reaches the tests.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("NOTAM_DB_PATH", str(path))
     return str(path)
 

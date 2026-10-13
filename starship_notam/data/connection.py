@@ -1,7 +1,11 @@
-"""SQLite connection management and schema creation/migration logic.
+"""Database connection management and schema creation/migration logic.
 
 Provides a connection factory and database initialization that creates all
-required tables and performs schema migrations when needed.
+required tables and performs schema migrations when needed. Two backends are
+supported: SQLite (a file path) and PostgreSQL (a ``postgresql://`` URL). The
+repositories write SQLite-style SQL (``?`` placeholders, rows read by column
+name); the PostgreSQL connection is wrapped so the same SQL runs on both.
+psycopg is imported lazily, so it is only needed when PostgreSQL is used.
 
 This module does NOT import from Telegram, parsing, or visualization modules.
 """
@@ -28,25 +32,87 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
 
-def get_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
-    """Return a new SQLite connection with Row factory enabled.
+_POSTGRES_SCHEMES = ("postgresql://", "postgres://")
+
+
+def is_postgres(db_path: str) -> bool:
+    """Return True when *db_path* is a PostgreSQL URL rather than a file path."""
+    return db_path.startswith(_POSTGRES_SCHEMES)
+
+
+class _PgCursor:
+    """psycopg cursor that accepts the ``?`` placeholders used by the repositories."""
+
+    def __init__(self, cur):
+        self._cur = cur
+
+    def execute(self, sql: str, params=None):
+        if params:
+            sql = sql.replace("?", "%s")
+        self._cur.execute(sql, params or None)
+        return self
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class _PgConnection:
+    """psycopg connection exposing the parts of the sqlite3 API the data layer uses."""
+
+    is_postgres = True
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self) -> _PgCursor:
+        return _PgCursor(self._conn.cursor())
+
+    def executescript(self, script: str) -> None:
+        # Without parameters psycopg sends the text as-is, so several
+        # statements can run in one call.
+        self._conn.execute(script)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def resolve_db_path(db_path: Optional[str] = None) -> str:
+    """Return *db_path*, or the configured database when it is *None*.
+
+    The fallback is read from the ``DATABASE_URL`` environment variable, then
+    ``NOTAM_DB_PATH``, then :data:`core.config.DB_PATH`.
+    """
+    return (
+        db_path
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("NOTAM_DB_PATH")
+        or DB_PATH
+    )
+
+
+def get_connection(db_path: Optional[str] = None):
+    """Return a new database connection whose rows are readable by column name.
 
     Parameters
     ----------
     db_path : str or None
-        Explicit path to the database file. When *None*, the path is resolved
-        by reading the ``NOTAM_DB_PATH`` environment variable; if that variable
-        is not set, falls back to :data:`core.config.DB_PATH` (default
-        ``"notams.db"``).
+        A PostgreSQL URL (``postgresql://...``) or the path to a SQLite file.
+        When *None*, it is resolved by :func:`resolve_db_path`.
     """
-    path = db_path or os.environ.get("NOTAM_DB_PATH") or DB_PATH
+    path = resolve_db_path(db_path)
+    if is_postgres(path):
+        import psycopg
+        from psycopg.rows import dict_row
+
+        return _PgConnection(psycopg.connect(path, row_factory=dict_row, connect_timeout=30))
+
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 @contextmanager
-def transaction(conn: sqlite3.Connection) -> Generator[sqlite3.Cursor, None, None]:
+def transaction(conn) -> Generator[sqlite3.Cursor, None, None]:
     """Yield a cursor on *conn*; commit on success, roll back on error, always close.
 
     Takes an already-open connection (rather than opening one) so each
@@ -89,7 +155,7 @@ def upsert(
     now = utc_now_iso()
     if existing:
         cols = {**fields, "updated_at": now, hash_col: payload_hash, **(reset or {})}
-        set_clause = ", ".join(f"{c} = ?" for c in cols)
+        set_clause = ", ".join(f'"{c}" = ?' for c in cols)
         cur.execute(
             f"UPDATE {table} SET {set_clause} WHERE {key_col} = ?",
             [*cols.values(), key],
@@ -106,21 +172,24 @@ def upsert(
     }
     placeholders = ", ".join("?" for _ in cols)
     cur.execute(
-        f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})",
+        f"INSERT INTO {table} ({', '.join(f'"{c}"' for c in cols)}) VALUES ({placeholders})",
         list(cols.values()),
     )
     return "inserted"
 
 
+# Written for SQLite; _schema_for() adapts it to PostgreSQL. The NOTAM field
+# columns are quoted so PostgreSQL keeps their case (it lowercases unquoted
+# names); SQLite treats the quoted and unquoted forms as the same column.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    A TEXT, B TEXT, C TEXT, D TEXT, E TEXT, F TEXT, G TEXT,
-    Q_location TEXT, Q_q_code TEXT, Q_traffic TEXT, Q_traffic_rule TEXT,
-    Q_lower TEXT, Q_upper TEXT, Q_coordinates TEXT, Q_radius_nm TEXT,
+    "A" TEXT, "B" TEXT, "C" TEXT, "D" TEXT, "E" TEXT, "F" TEXT, "G" TEXT,
+    "Q_location" TEXT, "Q_q_code" TEXT, "Q_traffic" TEXT, "Q_traffic_rule" TEXT,
+    "Q_lower" TEXT, "Q_upper" TEXT, "Q_coordinates" TEXT, "Q_radius_nm" TEXT,
     parsed_hash TEXT,
     image_generated INTEGER DEFAULT 0,
     image_generated_at TEXT
@@ -316,10 +385,32 @@ _ADDED_COLUMNS = {
 }
 
 
-def _ensure_columns(cur: sqlite3.Cursor, table: str, spec: Dict[str, str]) -> None:
-    """Add each column in *spec* (name -> SQL type) that *table* lacks."""
+def _schema_for(conn) -> str:
+    """Return :data:`_SCHEMA` in the SQL dialect of *conn*."""
+    if getattr(conn, "is_postgres", False):
+        return _SCHEMA.replace(
+            "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY",
+        )
+    return _SCHEMA
+
+
+def _existing_columns(conn, cur, table: str) -> set:
+    """Return the column names of *table*."""
+    if getattr(conn, "is_postgres", False):
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = current_schema() AND table_name = ?",
+            (table,),
+        )
+        return {r["column_name"] for r in cur.fetchall()}
     cur.execute(f"PRAGMA table_info({table})")
-    existing = {r["name"] for r in cur.fetchall()}
+    return {r["name"] for r in cur.fetchall()}
+
+
+def _ensure_columns(conn, cur, table: str, spec: Dict[str, str]) -> None:
+    """Add each column in *spec* (name -> SQL type) that *table* lacks."""
+    existing = _existing_columns(conn, cur, table)
     for col_name, col_def in spec.items():
         if col_name not in existing:
             logger.info("Adding %s column to %s table", col_name, table)
@@ -338,6 +429,6 @@ def init_db(db_path: Optional[str] = None) -> None:
     """
     conn = get_connection(db_path)
     with transaction(conn) as cur:
-        conn.executescript(_SCHEMA)
+        conn.executescript(_schema_for(conn))
         for table, spec in _ADDED_COLUMNS.items():
-            _ensure_columns(cur, table, spec)
+            _ensure_columns(conn, cur, table, spec)
