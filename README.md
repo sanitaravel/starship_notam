@@ -73,24 +73,29 @@ python -m starship_notam          # or: python main.py, or: starship-notam
 [`compose.yaml`](compose.yaml) runs the bot with a Selenium Chrome container:
 
 ```sh
-cp .env.example .env              # fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
+cp .env.example .env              # fill in TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID and POSTGRES_PASSWORD
 docker compose up -d --build
 docker compose logs -f bot
 ```
 
 The services start in order:
 
-1. `selenium` (`selenium/standalone-chrome`) is the browser the scrapers drive.
-   The others wait until it is healthy.
+1. `postgres` (PostgreSQL 17) holds the bot's data, and `selenium`
+   (`selenium/standalone-chrome`) is the browser the scrapers drive. The
+   others wait until both are healthy.
 2. `prefill` runs `prefill_compass.py --if-empty` and exits. On the first
    start it records the files already on the COMPASS slide list as posted, so
    they are not announced. Later starts skip it, so files uploaded while the
    bot was down are still posted.
 3. `bot` starts after `prefill` exits successfully, and restarts unless stopped.
 
-Compose reads `.env` but sets the container paths itself. The database, logs,
-rendered maps and the cartopy map data are kept in named volumes (`data`,
-`logs`, `maps`, `cartopy`). `.env` is not copied into the image.
+Compose reads `.env` but sets `RUN_MODE`, `DATABASE_URL` and the container
+paths itself. `DATABASE_URL` is built from `POSTGRES_PASSWORD` (and optionally
+`POSTGRES_USER` and `POSTGRES_DB`). The database, logs, rendered maps and the
+cartopy map data are kept in named volumes (`postgres`, `logs`, `maps`,
+`cartopy`). PostgreSQL is not published to the host; to query it, run
+`docker compose exec postgres psql -U notam`. `.env` is not copied into the
+image.
 
 **The first start posts everything that is currently active.** A new database
 treats all current NOTAMs, FAA advisories and closures as new, so they are all
