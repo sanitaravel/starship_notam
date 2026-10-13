@@ -1,0 +1,27 @@
+name: Branch policy
+
+# main only accepts pull requests from development. The main ruleset requires
+# the source-branch check, so a pull request from any other branch cannot be
+# merged.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  source-branch:
+    name: source-branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require development as the source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$HEAD_REF" != "development" ] || [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::main only accepts pull requests from development (got $HEAD_REPO:$HEAD_REF). Target development instead."
+            exit 1
+          fi
+          echo "Source branch is development."
