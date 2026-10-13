@@ -112,7 +112,7 @@ def test_build_notam_caption_full(sample_parsed_notam):
     # the details blockquote is closed before the trailing hashtag line
     assert "</blockquote>" in caption
     # hashtags close out the caption for channel search
-    assert caption.rstrip().endswith("#Starship #NOTAM #06123")
+    assert caption.rstrip().endswith("#SpaceUpdates #NOTAM #06123")
 
 
 def test_build_notam_caption_replaces_underscores():
@@ -158,7 +158,7 @@ def test_build_notam_caption_truncates_to_1024_with_blockquote_close():
     # blockquote must still be closed after truncation
     assert "</blockquote>" in caption
     # the hashtag line survives truncation and closes the caption
-    assert caption.rstrip().endswith("#Starship #NOTAM #x")
+    assert caption.rstrip().endswith("#SpaceUpdates #NOTAM #x")
 
 
 # ---------------------------------------------------------------------------
@@ -392,25 +392,25 @@ def test_notam_caption_includes_hashtags_with_code_tag():
         "B1882_26", {"B": "2026-09-28T12:15:00Z", "C": "2026-10-04T14:14:00Z"}
     )
 
-    assert caption.rstrip().endswith("#Starship #NOTAM #B188226")
+    assert caption.rstrip().endswith("#SpaceUpdates #NOTAM #B188226")
 
 
 def test_faa_activity_includes_hashtags():
     msg = formatting.format_faa_activity({"mission": "Flight"})
 
-    assert msg.rstrip().endswith("#Starship #FAA #Запуск")
+    assert msg.rstrip().endswith("#SpaceUpdates #FAA #Запуск")
 
 
 def test_road_alert_includes_hashtags():
     msg = formatting.format_road_alert({"origin": "Pad", "destination": "Port"})
 
-    assert msg.rstrip().endswith("#Starship #Дорога #Перекрытие")
+    assert msg.rstrip().endswith("#SpaceUpdates #Дорога #Перекрытие")
 
 
 def test_beach_alert_includes_hashtags():
     msg = formatting.format_beach_alert({"raw_date": "July 8"})
 
-    assert msg.rstrip().endswith("#Starship #Пляж #Перекрытие")
+    assert msg.rstrip().endswith("#SpaceUpdates #Пляж #Перекрытие")
 
 
 def test_fcc_application_includes_hashtags():
@@ -418,10 +418,10 @@ def test_fcc_application_includes_hashtags():
         {"applicant_name": "SpaceX", "file_number": "1", "status": "Granted"}
     )
 
-    assert msg.rstrip().endswith("#Starship #FCC #Заявка")
+    assert msg.rstrip().endswith("#SpaceUpdates #FCC #Заявка")
 
 
 def test_faa_license_includes_hashtags():
     msg = formatting.format_faa_license({"is_new": True, "doc_number": "X"})
 
-    assert msg.rstrip().endswith("#Starship #FAA #Лицензия")
+    assert msg.rstrip().endswith("#SpaceUpdates #FAA #Лицензия")

@@ -254,7 +254,7 @@ def recognized_template_cases(draw):
         )
         return text, (
             "\u0417\u041e\u041d\u0410 \u0412\u0425\u041e\u0414\u0410 \u0412 \u0410\u0422\u041c\u041e\u0421\u0424\u0415\u0420\u0423 \u0418 \u041f\u0420\u0418\u0412\u041e\u0414\u041d\u0415\u041d\u0418\u042f "
-            "\u041a\u041e\u0421\u041c\u0418\u0427\u0415\u0421\u041a\u041e\u0413\u041e \u041a\u041e\u0420\u0410\u0411\u041b\u042f SPACEX STARSHIP "
+            "SPACEX STARSHIP "
             f"FLT-{f}"
         )
 

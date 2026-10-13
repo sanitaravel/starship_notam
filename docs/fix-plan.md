@@ -252,7 +252,7 @@ Notes on how these were done:
 - `[?]` Remove the legacy flat-module re-export layer in
   `starship_notam/__init__.py` once nothing outside the package needs it
   (and its test, `tests/integration/test_backward_compat.py`).
-- `[ ]` Fix the 10 tests that already fail on `main`: 8 in
+- `[x]` Fix the 10 tests that already fail on `main`: 8 in
   `tests/unit/test_bot/test_formatting.py` still expect the old `#Starship`
   hashtag (now `#SpaceUpdates`), `test_recognized_templates_unchanged`
   fails, and the Hypothesis test

@@ -204,7 +204,7 @@ def extract_starship_template(notam: str) -> str | None:
         and "SPLASHDOWN" in text
     ):
         return (
-            f"ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ  "
+            f"ЗОНА ВХОДА В АТМОСФЕРУ И ПРИВОДНЕНИЯ "
             f"SPACEX STARSHIP FLT-{flight}"
         )
 

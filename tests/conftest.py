@@ -26,6 +26,13 @@ import os
 import tempfile
 
 import pytest
+from hypothesis import settings
+
+# CI runners are slower and noisier than a workstation; drop Hypothesis's
+# per-example deadline there so timing alone never fails a property test.
+settings.register_profile("ci", deadline=None)
+if os.environ.get("CI"):
+    settings.load_profile("ci")
 
 # Keep test runs out of the bot's real ``logs/notam.log``. The logger is set up
 # when ``starship_notam.core.logging`` is first imported, so this must run
