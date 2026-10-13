@@ -36,7 +36,31 @@ if not TELEGRAM_CHANNEL_ID:
 
 # --- Optional configuration with defaults ---
 
-DB_PATH: str = os.environ.get("NOTAM_DB_PATH", "notams.db")
+# How the bot runs: "docker" (inside the compose stack, using the Selenium grid
+# container) or "standalone" (directly on the host, launching a local Chrome).
+RUN_MODES = ("docker", "standalone")
+
+if "DEBUG_MODE" in os.environ:
+    raise RuntimeError(
+        "DEBUG_MODE has been replaced by RUN_MODE. "
+        "Use RUN_MODE=standalone (was DEBUG_MODE=1) or RUN_MODE=docker."
+    )
+
+RUN_MODE: str = os.environ.get("RUN_MODE", "docker").strip().lower()
+if RUN_MODE not in RUN_MODES:
+    raise RuntimeError(
+        f"RUN_MODE must be one of {', '.join(RUN_MODES)}; got {RUN_MODE!r}."
+    )
+
+# Selenium grid used in docker mode.
+SELENIUM_GRID_URL: str = "http://selenium:4444/wd/hub"
+
+# Database target: a PostgreSQL URL (postgresql://user:pass@host:5432/db) when
+# DATABASE_URL is set, otherwise the SQLite file at NOTAM_DB_PATH.
+DB_PATH: str = (
+    os.environ.get("DATABASE_URL", "").strip()
+    or os.environ.get("NOTAM_DB_PATH", "notams.db")
+)
 
 KEYWORD: str = os.environ.get("KEYWORD", "STARSHIP")
 

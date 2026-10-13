@@ -4,13 +4,7 @@ Selenium is imported lazily inside :func:`create_driver` so that importing
 this module does not require Selenium to be installed.
 """
 
-import os
-
-# Whether to run a local Chrome instance (DEBUG_MODE) or connect to a remote
-# Selenium grid. Read once at import time to preserve prior behavior.
-DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
-
-SELENIUM_GRID_URL = "http://selenium:4444/wd/hub"
+from starship_notam.core import config
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -21,8 +15,8 @@ USER_AGENT = (
 def create_driver():
     """Create a headless, bot-detection-resistant Chrome WebDriver.
 
-    Returns a local ``webdriver.Chrome`` when ``DEBUG_MODE`` is set, otherwise a
-    ``Remote`` driver connected to the Selenium grid.
+    Returns a local ``webdriver.Chrome`` in standalone mode, otherwise (docker
+    mode) a ``Remote`` driver connected to the Selenium grid container.
 
     Raises:
         ImportError: if Selenium is not installed.
@@ -43,6 +37,6 @@ def create_driver():
     options.add_experimental_option("useAutomationExtension", False)
     options.add_argument(f"user-agent={USER_AGENT}")
 
-    if DEBUG_MODE:
+    if config.RUN_MODE == "standalone":
         return webdriver.Chrome(options=options)
-    return Remote(command_executor=SELENIUM_GRID_URL, options=options)
+    return Remote(command_executor=config.SELENIUM_GRID_URL, options=options)
