@@ -70,10 +70,31 @@ python -m starship_notam          # or: python main.py, or: starship-notam
 
 ### Running in Docker
 
-Use `RUN_MODE=docker` (the default). The stack needs a `selenium` service,
-for example `selenium/standalone-chrome`. Either put the SQLite database on a
-volume (e.g. `NOTAM_DB_PATH=/app/data/notams.db`) or point `DATABASE_URL` at a
-PostgreSQL service.
+[`compose.yaml`](compose.yaml) runs the bot with a Selenium Chrome container:
+
+```sh
+cp .env.example .env              # fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
+docker compose up -d --build
+docker compose logs -f bot
+```
+
+The services start in order:
+
+1. `selenium` (`selenium/standalone-chrome`) is the browser the scrapers drive.
+   The others wait until it is healthy.
+2. `prefill` runs `prefill_compass.py --if-empty` and exits. On the first
+   start it records the files already on the COMPASS slide list as posted, so
+   they are not announced. Later starts skip it, so files uploaded while the
+   bot was down are still posted.
+3. `bot` starts after `prefill` exits successfully, and restarts unless stopped.
+
+Compose reads `.env` but sets the container paths itself. The database, logs,
+rendered maps and the cartopy map data are kept in named volumes (`data`,
+`logs`, `maps`, `cartopy`). `.env` is not copied into the image.
+
+**The first start posts everything that is currently active.** A new database
+treats all current NOTAMs, FAA advisories and closures as new, so they are all
+posted to the channel in the first cycle.
 
 ## Tests
 

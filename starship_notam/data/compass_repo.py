@@ -48,6 +48,13 @@ def save_compass_file(record: Dict, db_path: Optional[str] = None) -> str:
     return result
 
 
+def count_compass_files(db_path: Optional[str] = None) -> int:
+    """Return how many COMPASS files the database has recorded."""
+    with transaction(get_connection(db_path)) as cur:
+        cur.execute("SELECT COUNT(*) AS n FROM compass_files")
+        return cur.fetchone()["n"]
+
+
 def get_compass_files_needing_post(db_path: Optional[str] = None) -> List[Dict]:
     """Return COMPASS files not yet posted to Telegram, in insertion order."""
     logger.info("Fetching COMPASS files needing Telegram posting")

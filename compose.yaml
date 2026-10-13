@@ -1,0 +1,56 @@
+# Starship NOTAM bot stack.
+#
+#   cp .env.example .env    # fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
+#   docker compose up -d --build
+#
+# Start-up order: selenium (healthy) -> prefill (exits successfully) -> bot.
+
+x-app: &app
+  build: .
+  image: starship-notam:local
+  env_file: .env
+  # Container paths win over whatever .env says for local runs.
+  environment:
+    RUN_MODE: docker
+    NOTAM_DB_PATH: /app/data/notams.db
+    NOTAM_LOG_DIR: /app/logs
+    # Rich wraps log lines at 80 columns when there is no terminal.
+    COLUMNS: "160"
+  volumes:
+    - data:/app/data
+    - logs:/app/logs
+    - maps:/app/maps
+    - cartopy:/home/app/.local/share/cartopy
+
+services:
+  selenium:
+    image: selenium/standalone-chrome:4.49.0-20260909
+    shm_size: 2gb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4444/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  # Records the COMPASS files already online as posted, so the bot announces
+  # only new ones. --if-empty makes it a no-op after the first start.
+  prefill:
+    <<: *app
+    command: ["python", "prefill_compass.py", "--if-empty"]
+    restart: "no"
+
+  bot:
+    <<: *app
+    restart: unless-stopped
+    depends_on:
+      selenium:
+        condition: service_healthy
+      prefill:
+        condition: service_completed_successfully
+
+volumes:
+  data:
+  logs:
+  maps:
+  cartopy:

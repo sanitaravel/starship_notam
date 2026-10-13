@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from starship_notam.data.compass_repo import (
+    count_compass_files,
     get_compass_files_needing_post,
     mark_compass_file_posted,
     mark_compass_files_posted,
@@ -62,3 +63,13 @@ def test_bulk_mark_skips_already_posted(db_path):
 def test_record_without_uuid_is_skipped(db_path):
     assert save_compass_file({"filename": "x"}, db_path) == "skipped"
     assert get_compass_files_needing_post(db_path) == []
+
+
+def test_count_compass_files(db_path):
+    assert count_compass_files(db_path) == 0
+
+    save_compass_file(_file("u1"), db_path)
+    save_compass_file(_file("u2"), db_path)
+    mark_compass_files_posted(["u1"], None, db_path)
+
+    assert count_compass_files(db_path) == 2
