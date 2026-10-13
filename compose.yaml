@@ -1,0 +1,77 @@
+# Starship NOTAM bot stack.
+#
+#   cp .env.example .env    # fill in TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
+#                           # and POSTGRES_PASSWORD
+#   docker compose up -d --build
+#
+# Start-up order: postgres and selenium (healthy) -> prefill (exits
+# successfully) -> bot.
+
+x-app: &app
+  build: .
+  image: starship-notam:local
+  env_file: .env
+  # Container paths win over whatever .env says for local runs.
+  environment:
+    RUN_MODE: docker
+    DATABASE_URL: postgresql://${POSTGRES_USER:-notam}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-notam}
+    NOTAM_LOG_DIR: /app/logs
+    # Rich wraps log lines at 80 columns when there is no terminal.
+    COLUMNS: "160"
+  volumes:
+    - logs:/app/logs
+    - maps:/app/maps
+    - cartopy:/home/app/.local/share/cartopy
+
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-notam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-notam}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  selenium:
+    image: selenium/standalone-chrome:4.49.0-20260909
+    shm_size: 2gb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4444/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  # Records the COMPASS files already online as posted, so the bot announces
+  # only new ones. --if-empty makes it a no-op after the first start.
+  prefill:
+    <<: *app
+    command: ["python", "prefill_compass.py", "--if-empty"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  bot:
+    <<: *app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      selenium:
+        condition: service_healthy
+      prefill:
+        condition: service_completed_successfully
+
+volumes:
+  postgres:
+  logs:
+  maps:
+  cartopy:

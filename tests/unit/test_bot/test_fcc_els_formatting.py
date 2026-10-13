@@ -17,7 +17,7 @@ import html
 import json
 import re
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 
 from starship_notam.bot import formatting
 
@@ -122,7 +122,9 @@ def _strip_allowed_tags(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Property 13
 # ---------------------------------------------------------------------------
-@settings(max_examples=100)
+# The first st.characters() draw builds Hypothesis's Unicode table, which can
+# take over a second on a busy machine and trip the too_slow health check.
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
 @given(app=_app_strategy())
 def test_formatter_output_is_well_formed_and_escaped(app):
     # Feature: fcc-els-scraper, Property 13: Formatter output is well-formed and escaped

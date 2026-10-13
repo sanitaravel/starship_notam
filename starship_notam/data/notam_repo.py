@@ -9,14 +9,14 @@ This module imports only from ``starship_notam.data.connection``,
 
 import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from starship_notam.core.config import DB_PATH
 from starship_notam.core.logging import logger
 from starship_notam.data.connection import (
     get_connection,
+    is_postgres,
+    resolve_db_path,
     transaction,
     upsert,
     utc_now_iso,
@@ -37,8 +37,9 @@ Q_COLS = {
     "radius_nm": "Q_radius_nm",
 }
 
-_SELECT_PARSED = (
-    f"SELECT name, {', '.join(FIELD_COLS)}, {', '.join(Q_COLS.values())} FROM notams"
+# Columns are quoted so PostgreSQL keeps their case.
+_SELECT_PARSED = "SELECT name, {} FROM notams".format(
+    ", ".join(f'"{c}"' for c in (*FIELD_COLS, *Q_COLS.values()))
 )
 
 
@@ -91,11 +92,11 @@ def save_notam(name: str, parsed: Dict, db_path: Optional[str] = None) -> None:
 def _load_parsed(where: str, db_path: Optional[str]) -> List[Tuple[str, Dict]]:
     """Return ``(name, parsed_dict)`` for rows matching *where*, ordered by name.
 
-    Returns an empty list when the database file does not exist, rather than
-    creating it.
+    Returns an empty list when the SQLite database file does not exist, rather
+    than creating it.
     """
-    resolved_path = db_path or os.environ.get("NOTAM_DB_PATH") or DB_PATH
-    if not Path(resolved_path).exists():
+    resolved_path = resolve_db_path(db_path)
+    if not is_postgres(resolved_path) and not Path(resolved_path).exists():
         return []
     with transaction(get_connection(db_path)) as cur:
         cur.execute(f"{_SELECT_PARSED} {where} ORDER BY name")

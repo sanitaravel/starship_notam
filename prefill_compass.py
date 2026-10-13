@@ -6,6 +6,11 @@ instead of posting the whole existing list on its first cycle. Safe to run
 again: files already known keep their posting state, and any not yet posted
 are marked as posted without sending anything.
 
+With ``--if-empty`` it does nothing when the database already has COMPASS
+files. Docker Compose runs it that way before every bot start, so only the
+first start prefills, and files that appear while the bot is down are still
+announced.
+
 The work is done by
 :func:`starship_notam.bot.orchestrator.prefill_compass_files`; this script
 only reports the result.
@@ -13,14 +18,32 @@ only reports the result.
 
 from __future__ import annotations
 
+import argparse
 import sys
 
 from starship_notam.bot.orchestrator import prefill_compass_files
+from starship_notam.core import config
 from starship_notam.core.logging import logger
+from starship_notam.data import init_db
+from starship_notam.data.compass_repo import count_compass_files
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="do nothing if the database already has COMPASS files",
+    )
+    args = parser.parse_args(argv)
+
     try:
+        if args.if_empty:
+            init_db(config.DB_PATH)
+            known = count_compass_files(config.DB_PATH)
+            if known:
+                logger.info(f"COMPASS prefill skipped: {known} file(s) already known")
+                return 0
         marked = prefill_compass_files()
     except Exception:
         logger.exception("COMPASS prefill failed")
