@@ -49,11 +49,15 @@ services:
       timeout: 5s
       retries: 24
 
-  # Records the COMPASS files already online as posted, so the bot announces
-  # only new ones. --if-empty makes it a no-op after the first start.
+  # Records the COMPASS files and Federal Register documents already online
+  # as posted, so the bot announces only new ones. --if-empty makes each
+  # script a no-op once its table has rows.
   prefill:
     <<: *app
-    command: ["python", "prefill_compass.py", "--if-empty"]
+    command:
+      - sh
+      - -c
+      - python prefill_compass.py --if-empty && python prefill_federal_register.py --if-empty
     restart: "no"
     depends_on:
       postgres:

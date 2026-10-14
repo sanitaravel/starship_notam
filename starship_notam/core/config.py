@@ -10,9 +10,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load .env from the project root (two levels up from this file:
-# starship_notam/core/config.py -> starship_notam/ -> project root)
+# starship_notam/core/config.py -> starship_notam/ -> project root), or the
+# file named by NOTAM_ENV_FILE (the test suite uses .env.test, so tests and
+# manual checks never pick up the real token or database).
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_dotenv_path = _PROJECT_ROOT / ".env"
+_dotenv_path = Path(os.environ.get("NOTAM_ENV_FILE") or _PROJECT_ROOT / ".env")
 load_dotenv(dotenv_path=str(_dotenv_path), override=True)
 
 # --- Required configuration ---
@@ -136,8 +138,3 @@ FEDERAL_REGISTER_PARAMS: dict = {
         "comments_close_on",
     ],
 }
-
-# A document seen for the first time is announced only if it was published
-# within this many days; older ones are recorded as already posted. This keeps
-# the first run from posting the whole back catalogue, without a prefill step.
-FEDERAL_REGISTER_MAX_AGE_DAYS: int = 30

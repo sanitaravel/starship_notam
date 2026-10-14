@@ -11,7 +11,7 @@ posts updates to a Telegram channel. On a fixed schedule it checks:
 | [FCC ELS](https://apps.fcc.gov/oetcf/els/reports/GenericSearch.cfm) | SpaceX experimental licence applications |
 | [FAA DRS](https://drs.faa.gov) | Changes to the Starship launch licence |
 | [COMPASS (CADENA ATFM)](https://compass.atfm.aero) | New files on the Master Slide Deck page |
-| [Federal Register](https://www.federalregister.gov/documents/search?conditions%5Bagencies%5D%5B%5D=federal-aviation-administration&conditions%5Bterm%5D=spacex&order=newest) | New FAA documents mentioning SpaceX (environmental reviews, comment periods, rules). On first run only documents from the last 30 days are posted |
+| [Federal Register](https://www.federalregister.gov/documents/search?conditions%5Bagencies%5D%5B%5D=federal-aviation-administration&conditions%5Bterm%5D=spacex&order=newest) | New FAA documents mentioning SpaceX (environmental reviews, comment periods, rules) |
 
 New or changed items are stored in a database (SQLite or PostgreSQL), so each
 one is posted only once.
@@ -72,11 +72,12 @@ The services start in this order:
 1. **`postgres`** (PostgreSQL 17) and **`selenium`**
    (`selenium/standalone-chrome`) start first. Everything else waits until
    both report healthy.
-2. **`prefill`** runs `prefill_compass.py --if-empty` once and exits. On the
-   very first start it records the files already on the COMPASS slide list as
-   posted, so the bot does not announce the whole existing list. On later
-   starts it does nothing, so files uploaded while the bot was down are still
-   announced.
+2. **`prefill`** runs `prefill_compass.py --if-empty` and then
+   `prefill_federal_register.py --if-empty` once, and exits. On the very first
+   start they record the files already on the COMPASS slide list and the FAA
+   documents already in the Federal Register as posted, so the bot does not
+   announce the whole existing back catalogue. On later starts they do
+   nothing, so items published while the bot was down are still announced.
 3. **`bot`** starts after `prefill` succeeds. It runs a check cycle
    immediately, then `RUNS_PER_HOUR` times per hour on the clock (by default
    at :00 and :30). It restarts automatically unless you stop it.
@@ -123,8 +124,8 @@ Data lives in named Docker volumes:
 | `cartopy` | Natural Earth map data, downloaded on the first render |
 
 To start over with an empty database, run `docker compose down -v`. **This
-deletes all volumes.** The next start prefills COMPASS again and re-posts
-everything that is currently active.
+deletes all volumes.** The next start prefills COMPASS and the Federal
+Register again and re-posts everything that is currently active.
 
 ### Troubleshooting
 
@@ -132,8 +133,8 @@ everything that is currently active.
   `POSTGRES_PASSWORD` in `.env`.
 - **`bot` never starts and `prefill` exited with code 1**: check
   `docker compose logs prefill`. The usual cause is that the COMPASS site
-  could not be reached. Run `docker compose up -d` again once it is
-  reachable.
+  or the Federal Register API could not be reached. Run
+  `docker compose up -d` again once they are reachable.
 - **`Unauthorized` in the bot log**: the token in `TELEGRAM_BOT_TOKEN` is
   wrong.
 - **`Forbidden` or `chat not found` in the bot log**: the bot is not an admin
@@ -159,8 +160,9 @@ Set `RUN_MODE=standalone` in `.env` so Selenium launches your local Chrome
 (the default, `docker`, expects the Selenium container). Then:
 
 ```sh
-python prefill_compass.py         # once, so the existing COMPASS files are not announced
-python -m starship_notam          # or: python main.py, or: starship-notam
+python prefill_compass.py          # once, so the existing COMPASS files are not announced
+python prefill_federal_register.py # once, so the existing Federal Register documents are not announced
+python -m starship_notam           # or: python main.py, or: starship-notam
 ```
 
 ### Database
@@ -184,6 +186,15 @@ SQLite file.
 ```sh
 pip install -e ".[dev]"
 pytest
+```
+
+The tests read [`.env.test`](.env.test) instead of `.env`, so they never see
+your real token or database. To run a script against the test settings, set
+`NOTAM_ENV_FILE`; it then uses `test_notams.db`. Also set `NOTAM_LOG_DIR` so
+the bot's own `logs/notam.log` is left alone:
+
+```sh
+NOTAM_ENV_FILE=.env.test NOTAM_LOG_DIR=logs/test python prefill_federal_register.py
 ```
 
 The PostgreSQL tests in `tests/unit/test_data/test_postgres.py` are skipped

@@ -28,7 +28,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from starship_notam.core import config
@@ -439,48 +439,18 @@ def prefill_compass_files() -> int:
     )
 
 
-def _is_stale_federal_register_document(record: dict, today: date) -> bool:
-    """True when the document was published more than the configured days ago.
-
-    A missing or unreadable publication date counts as fresh, so the document
-    is announced rather than silently dropped.
-    """
-    try:
-        published = date.fromisoformat(record.get("publication_date") or "")
-    except ValueError:
-        return False
-    return (today - published).days > config.FEDERAL_REGISTER_MAX_AGE_DAYS
-
-
 def _save_federal_register_documents(documents: list[dict]) -> None:
     """Persist fetched Federal Register documents, oldest first.
 
     The API lists documents newest first; saving in reverse gives new rows
     ascending ids, so several documents found in one cycle are posted in
-    publication order. A newly seen document that is already older than
-    ``FEDERAL_REGISTER_MAX_AGE_DAYS`` is recorded as posted without being
-    announced, so the first run does not post the whole back catalogue.
+    publication order.
     """
-    today = date.today()
-    stale = []
     for record in reversed(documents):
         try:
-            result = save_federal_register_document(record, config.DB_PATH)
+            save_federal_register_document(record, config.DB_PATH)
         except Exception:
             logger.exception(f"Failed to save Federal Register document {record}")
-            continue
-        if result == "inserted" and _is_stale_federal_register_document(record, today):
-            stale.append(record["document_number"])
-
-    if stale:
-        logger.info(
-            f"Not announcing {len(stale)} Federal Register document(s) older than "
-            f"{config.FEDERAL_REGISTER_MAX_AGE_DAYS} days: {', '.join(stale)}"
-        )
-        try:
-            mark_federal_register_documents_posted(stale, None, config.DB_PATH)
-        except Exception:
-            logger.exception("Failed to mark old Federal Register documents as posted")
 
 
 async def _process_federal_register_documents(chat_list: list[str]) -> None:
@@ -501,6 +471,23 @@ async def _process_federal_register_documents(chat_list: list[str]) -> None:
         mark_fn=lambda key, ids: mark_federal_register_document_posted(
             key, ids, config.DB_PATH
         ),
+    )
+
+
+def prefill_federal_register_documents() -> int:
+    """Record every document the Federal Register search returns as already posted.
+
+    Run once before starting the bot so it announces only documents published
+    afterwards. Returns the number of documents marked; raises
+    ``RuntimeError`` when the search could not be fetched.
+    """
+    init_db(config.DB_PATH)
+    documents = fetch_federal_register_documents()
+    if documents is None:
+        raise RuntimeError("Could not fetch the Federal Register documents")
+    _save_federal_register_documents(documents)
+    return mark_federal_register_documents_posted(
+        [d["document_number"] for d in documents], None, config.DB_PATH
     )
 
 

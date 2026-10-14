@@ -6,4 +6,5 @@
 !starship_notam/
 !main.py
 !prefill_compass.py
+!prefill_federal_register.py
 **/__pycache__

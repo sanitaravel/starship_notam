@@ -64,6 +64,13 @@ def save_federal_register_document(record: Dict, db_path: Optional[str] = None) 
     return result
 
 
+def count_federal_register_documents(db_path: Optional[str] = None) -> int:
+    """Return how many Federal Register documents the database has recorded."""
+    with transaction(get_connection(db_path)) as cur:
+        cur.execute("SELECT COUNT(*) AS n FROM federal_register_documents")
+        return cur.fetchone()["n"]
+
+
 def get_federal_register_documents_needing_post(db_path: Optional[str] = None) -> List[Dict]:
     """Return Federal Register documents not yet posted, in insertion order."""
     logger.info("Fetching Federal Register documents needing Telegram posting")
@@ -106,8 +113,8 @@ def mark_federal_register_documents_posted(
     """Mark several Federal Register documents as posted; return rows changed.
 
     Rows already marked posted are left alone, so their recorded message IDs
-    are kept. Called with ``telegram_message_id=None`` for documents that
-    should never be announced (already too old when first seen).
+    are kept. Called with ``telegram_message_id=None`` to prefill the database
+    with documents that should never be announced.
     """
     now = utc_now_iso()
     changed = 0
