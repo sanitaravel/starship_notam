@@ -112,3 +112,32 @@ COMPASS_BASE_URL: str = "https://compass.atfm.aero"
 COMPASS_SLIDE_LIST_URL: str = (
     f"{COMPASS_BASE_URL}/public_svcdynamic/?key=public_getpublicslidelist"
 )
+
+# --- Federal Register (FAA documents mentioning SpaceX) configuration ---
+
+# Public Federal Register search API (no key needed, plain JSON).
+FEDERAL_REGISTER_API_URL: str = "https://www.federalregister.gov/api/v1/documents.json"
+
+# Query sent to FEDERAL_REGISTER_API_URL: the newest FAA documents whose text
+# mentions SpaceX, with only the fields the bot posts.
+FEDERAL_REGISTER_PARAMS: dict = {
+    "conditions[agencies][]": "federal-aviation-administration",
+    "conditions[term]": "spacex",
+    "order": "newest",
+    "per_page": 20,
+    "fields[]": [
+        "document_number",
+        "title",
+        "type",
+        "abstract",
+        "publication_date",
+        "html_url",
+        "pdf_url",
+        "comments_close_on",
+    ],
+}
+
+# A document seen for the first time is announced only if it was published
+# within this many days; older ones are recorded as already posted. This keeps
+# the first run from posting the whole back catalogue, without a prefill step.
+FEDERAL_REGISTER_MAX_AGE_DAYS: int = 30

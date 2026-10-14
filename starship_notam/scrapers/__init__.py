@@ -12,6 +12,9 @@ from starship_notam.scrapers.compass_fetcher import fetch_compass_files
 from starship_notam.scrapers.faa_fetcher import fetch_faa_advisory
 from starship_notam.scrapers.faa_license_fetcher import fetch_faa_license
 from starship_notam.scrapers.fcc_els_fetcher import fetch_fcc_els_applications
+from starship_notam.scrapers.federal_register_fetcher import (
+    fetch_federal_register_documents,
+)
 from starship_notam.scrapers.notam_scraper import search_notams, search_notams_many
 from starship_notam.scrapers.starbase_fetcher import fetch_starbase_status
 
@@ -23,4 +26,5 @@ __all__ = [
     "fetch_starbase_status",
     "fetch_fcc_els_applications",
     "fetch_compass_files",
+    "fetch_federal_register_documents",
 ]
