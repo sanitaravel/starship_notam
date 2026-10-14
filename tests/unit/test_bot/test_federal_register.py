@@ -1,11 +1,10 @@
-"""Tests for Federal Register document formatting and posting."""
+"""Tests for Federal Register document formatting, posting and prefill."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-
 import pytest
 
+import prefill_federal_register
 from starship_notam.bot import orchestrator
 from starship_notam.bot.formatting import format_federal_register_document
 from starship_notam.data.federal_register_repo import (
@@ -88,14 +87,10 @@ def fr_env(initialized_db, monkeypatch):
     return sent, set_documents
 
 
-def _days_ago(n):
-    return (date.today() - timedelta(days=n)).isoformat()
-
-
 async def test_new_documents_are_posted_oldest_first_once(fr_env):
     sent, set_documents = fr_env
     set_documents(  # newest first, as the API returns them
-        [_doc("new", _days_ago(0), title="Newer"), _doc("old", _days_ago(3), title="Older")]
+        [_doc("new", "2026-10-14", title="Newer"), _doc("old", "2026-10-11", title="Older")]
     )
 
     await orchestrator._process_federal_register_documents(["chat"])
@@ -106,22 +101,43 @@ async def test_new_documents_are_posted_oldest_first_once(fr_env):
     assert "Newer" in sent[1]
 
 
-async def test_documents_too_old_when_first_seen_are_not_announced(fr_env):
+async def test_prefill_suppresses_existing_documents(fr_env):
     sent, set_documents = fr_env
-    max_age = orchestrator.config.FEDERAL_REGISTER_MAX_AGE_DAYS
-    set_documents(
-        [
-            _doc("fresh", _days_ago(max_age), title="Fresh"),
-            _doc("stale", _days_ago(max_age + 1), title="Stale"),
-            _doc("undated", "", title="Undated"),
-        ]
-    )
+    set_documents([_doc("new", "2026-10-14"), _doc("old", "2026-09-29")])
+
+    assert orchestrator.prefill_federal_register_documents() == 2
+    assert get_federal_register_documents_needing_post() == []
 
     await orchestrator._process_federal_register_documents(["chat"])
+    assert sent == []
 
-    assert len(sent) == 2
-    assert not any("Stale" in text for text in sent)
+    set_documents([_doc("newer", "2026-10-20", title="Newer"), _doc("new", "2026-10-14")])
+    await orchestrator._process_federal_register_documents(["chat"])
+    assert len(sent) == 1
+    assert "Newer" in sent[0]
+
+
+def test_prefill_raises_when_fetch_fails(initialized_db, monkeypatch):
+    monkeypatch.setattr(orchestrator.config, "DB_PATH", initialized_db)
+    monkeypatch.setattr(orchestrator, "fetch_federal_register_documents", lambda: None)
+
+    with pytest.raises(RuntimeError):
+        orchestrator.prefill_federal_register_documents()
+
+
+async def test_prefill_script_if_empty_runs_only_on_empty_table(fr_env):
+    sent, set_documents = fr_env
+    set_documents([_doc("a", "2026-10-14")])
+    assert prefill_federal_register.main(["--if-empty"]) == 0
     assert get_federal_register_documents_needing_post() == []
+
+    # The table now has rows, so a second run must not suppress "b".
+    set_documents([_doc("b", "2026-10-20", title="Later"), _doc("a", "2026-10-14")])
+    assert prefill_federal_register.main(["--if-empty"]) == 0
+    await orchestrator._process_federal_register_documents(["chat"])
+
+    assert len(sent) == 1
+    assert "Later" in sent[0]
 
 
 async def test_unsent_document_is_retried_even_when_fetch_fails(fr_env, monkeypatch):
@@ -131,7 +147,7 @@ async def test_unsent_document_is_retried_even_when_fetch_fails(fr_env, monkeypa
     async def failing_send(chat_id, text):
         return None
 
-    set_documents([_doc("a", _days_ago(1))])
+    set_documents([_doc("a", "2026-10-14")])
     monkeypatch.setattr(orchestrator, "send_message", failing_send)
     await orchestrator._process_federal_register_documents(["chat"])
     assert sent == []
