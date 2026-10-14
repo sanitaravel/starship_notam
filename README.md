@@ -11,6 +11,7 @@ posts updates to a Telegram channel. On a fixed schedule it checks:
 | [FCC ELS](https://apps.fcc.gov/oetcf/els/reports/GenericSearch.cfm) | SpaceX experimental licence applications |
 | [FAA DRS](https://drs.faa.gov) | Changes to the Starship launch licence |
 | [COMPASS (CADENA ATFM)](https://compass.atfm.aero) | New files on the Master Slide Deck page |
+| [Federal Register](https://www.federalregister.gov/documents/search?conditions%5Bagencies%5D%5B%5D=federal-aviation-administration&conditions%5Bterm%5D=spacex&order=newest) | New FAA documents mentioning SpaceX (environmental reviews, comment periods, rules). On first run only documents from the last 30 days are posted |
 
 New or changed items are stored in a database (SQLite or PostgreSQL), so each
 one is posted only once.

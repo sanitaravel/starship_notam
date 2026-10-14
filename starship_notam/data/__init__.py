@@ -20,6 +20,12 @@ from starship_notam.data.faa_license_repo import (
     mark_faa_license_posted,
     save_faa_license,
 )
+from starship_notam.data.federal_register_repo import (
+    get_federal_register_documents_needing_post,
+    mark_federal_register_document_posted,
+    mark_federal_register_documents_posted,
+    save_federal_register_document,
+)
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,
     mark_fcc_els_application_posted,
@@ -60,6 +66,10 @@ __all__ = [
     "get_compass_files_needing_post",
     "mark_compass_file_posted",
     "mark_compass_files_posted",
+    "save_federal_register_document",
+    "get_federal_register_documents_needing_post",
+    "mark_federal_register_document_posted",
+    "mark_federal_register_documents_posted",
     "save_beach_alert",
     "save_road_alert",
     "get_beach_alerts_needing_post",
