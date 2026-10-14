@@ -28,7 +28,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from starship_notam.core import config
@@ -41,6 +41,7 @@ from starship_notam.bot.formatting import (
     format_faa_activity,
     format_faa_license,
     format_fcc_els_application,
+    format_federal_register_document,
     format_road_alert,
 )
 from starship_notam.bot.transport import (
@@ -60,6 +61,7 @@ from starship_notam.data import (
     get_faa_activities_needing_post,
     get_faa_licenses_needing_post,
     get_fcc_els_applications_needing_post,
+    get_federal_register_documents_needing_post,
     get_notams_needing_images,
     get_road_alerts_needing_post,
     init_db,
@@ -69,6 +71,8 @@ from starship_notam.data import (
     mark_faa_activity_posted,
     mark_faa_license_posted,
     mark_fcc_els_application_posted,
+    mark_federal_register_document_posted,
+    mark_federal_register_documents_posted,
     mark_image_generated,
     mark_road_posted,
     save_beach_alert,
@@ -76,6 +80,7 @@ from starship_notam.data import (
     save_faa_activity,
     save_faa_license,
     save_fcc_els_application,
+    save_federal_register_document,
     save_notam,
     save_road_alert,
 )
@@ -88,6 +93,7 @@ from starship_notam.scrapers import (
     fetch_faa_advisory,
     fetch_faa_license,
     fetch_fcc_els_applications,
+    fetch_federal_register_documents,
     fetch_starbase_status,
     search_notams_many,
 )
@@ -433,6 +439,71 @@ def prefill_compass_files() -> int:
     )
 
 
+def _is_stale_federal_register_document(record: dict, today: date) -> bool:
+    """True when the document was published more than the configured days ago.
+
+    A missing or unreadable publication date counts as fresh, so the document
+    is announced rather than silently dropped.
+    """
+    try:
+        published = date.fromisoformat(record.get("publication_date") or "")
+    except ValueError:
+        return False
+    return (today - published).days > config.FEDERAL_REGISTER_MAX_AGE_DAYS
+
+
+def _save_federal_register_documents(documents: list[dict]) -> None:
+    """Persist fetched Federal Register documents, oldest first.
+
+    The API lists documents newest first; saving in reverse gives new rows
+    ascending ids, so several documents found in one cycle are posted in
+    publication order. A newly seen document that is already older than
+    ``FEDERAL_REGISTER_MAX_AGE_DAYS`` is recorded as posted without being
+    announced, so the first run does not post the whole back catalogue.
+    """
+    today = date.today()
+    stale = []
+    for record in reversed(documents):
+        try:
+            result = save_federal_register_document(record, config.DB_PATH)
+        except Exception:
+            logger.exception(f"Failed to save Federal Register document {record}")
+            continue
+        if result == "inserted" and _is_stale_federal_register_document(record, today):
+            stale.append(record["document_number"])
+
+    if stale:
+        logger.info(
+            f"Not announcing {len(stale)} Federal Register document(s) older than "
+            f"{config.FEDERAL_REGISTER_MAX_AGE_DAYS} days: {', '.join(stale)}"
+        )
+        try:
+            mark_federal_register_documents_posted(stale, None, config.DB_PATH)
+        except Exception:
+            logger.exception("Failed to mark old Federal Register documents as posted")
+
+
+async def _process_federal_register_documents(chat_list: list[str]) -> None:
+    """Fetch FAA Federal Register documents about SpaceX and post new ones."""
+    logger.info("Refreshing Federal Register documents needing Telegram post")
+    try:
+        documents = await asyncio.to_thread(fetch_federal_register_documents)
+        _save_federal_register_documents(documents or [])
+    except Exception:
+        logger.exception("Failed to fetch and parse Federal Register documents")
+
+    await _post_pending(
+        get_federal_register_documents_needing_post(config.DB_PATH),
+        chat_list,
+        label="Federal Register document",
+        format_fn=format_federal_register_document,
+        key_fn=lambda d: d["document_number"],
+        mark_fn=lambda key, ids: mark_federal_register_document_posted(
+            key, ids, config.DB_PATH
+        ),
+    )
+
+
 async def _ingest_starbase_alerts() -> None:
     """Fetch Starbase status and persist beach/road alerts."""
     logger.info("Refreshing Starbase alerts needing Telegram post")
@@ -490,6 +561,7 @@ async def generate_and_send() -> None:
     await _process_fcc_els_applications(chat_list)
     await _process_faa_licenses(chat_list)
     await _process_compass_files(chat_list)
+    await _process_federal_register_documents(chat_list)
     await _ingest_starbase_alerts()
     await _process_beach_alerts(chat_list)
     await _process_road_alerts(chat_list)
