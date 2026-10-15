@@ -24,11 +24,10 @@ import math
 
 import pytest
 
-from starship_notam.visualization.map_renderer import (
+from starship_notam.visualization.map_renderer import MAP_H, MAP_W
+from starship_notam.visualization.map_renderer.extent import (
     MAP_EXTENT_SCALE,
-    MAP_H,
-    MAP_W,
-    _expand_extent_until_land,
+    expand_extent_until_land,
 )
 from starship_notam.visualization.image_composer import extract_starship_template
 
@@ -80,7 +79,7 @@ BOUNDED_ZOOM_MULTIPLE = 3.0
 # The fitting math below mirrors the polygon branch of ``render_map`` up to (but
 # not including) the ``MAP_EXTENT_SCALE`` multiplication. The scale factor and the
 # land-search expansion are driven through the REAL production constant
-# (``MAP_EXTENT_SCALE``) and the REAL helper (``_expand_extent_until_land``), so
+# (``MAP_EXTENT_SCALE``) and the REAL helper (``expand_extent_until_land``), so
 # these tests exercise genuine production behavior and will flip to passing once
 # task 3.1 relaxes the scale and bounds the expansion.
 # ---------------------------------------------------------------------------
@@ -90,7 +89,7 @@ def _fitted_extent(coords, size):
     """Return the aspect-corrected, padded fit for ``coords`` (pre-scale).
 
     Mirrors ``render_map``'s polygon branch before ``MAP_EXTENT_SCALE`` is
-    applied and before ``_expand_extent_until_land`` runs.
+    applied and before ``expand_extent_until_land`` runs.
     """
     lats = [p[0] for p in coords]
     lons = [p[1] for p in coords]
@@ -142,7 +141,7 @@ def _rendered_extent(coords, size):
     """
     fitted = _fitted_extent(coords, size)
     scaled = _apply_scale(fitted, MAP_EXTENT_SCALE)
-    return _expand_extent_until_land(scaled, size)
+    return expand_extent_until_land(scaled, size)
 
 
 def _half_spans(extent):
@@ -160,7 +159,7 @@ def test_ocean_polyline_extent_stays_bounded_to_fitted_span():
     a near-global view.
 
     UNFIXED behavior (expected to FAIL): MAP_EXTENT_SCALE=2 then
-    ``_expand_extent_until_land`` grow the half-spans to roughly 20x the fitted
+    ``expand_extent_until_land`` grow the half-spans to roughly 20x the fitted
     span (near-global, ~75 deg lon / ~69 deg lat half-span).
     """
     fitted = _fitted_extent(TAHITI_FIR_POLYLINE, MAP_SIZE)
@@ -191,7 +190,7 @@ def test_land_adjacent_polygon_extent_not_scaled_out():
 
     UNFIXED behavior (expected to FAIL): the shared MAP_EXTENT_SCALE=2 doubles
     both half-spans, so the rendered half-span equals ~2x the fitted half-span.
-    (Land is adjacent, so ``_expand_extent_until_land`` does not further enlarge
+    (Land is adjacent, so ``expand_extent_until_land`` does not further enlarge
     it and the 2x scale is isolated.)
     """
     fitted = _fitted_extent(LAND_ADJACENT_POLYGON, MAP_SIZE)
