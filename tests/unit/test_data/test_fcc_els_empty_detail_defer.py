@@ -34,7 +34,7 @@ import pytest
 
 from hypothesis import HealthCheck, given, settings, strategies as st
 
-from starship_notam.data.connection import init_db
+from starship_notam.data.schema import init_db
 from starship_notam.bot.formatting import format_fcc_els_application
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,

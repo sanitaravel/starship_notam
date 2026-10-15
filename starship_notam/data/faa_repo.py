@@ -1,76 +1,46 @@
-"""FAA activity persistence functions — save, query, and update FAA records.
+"""FAA activity persistence — save, query, and update FAA planned activities.
 
-Provides CRUD-like operations for the ``faa_activities`` table. Functions
-accept and return plain Python dictionaries; no domain models are required.
+Stores rows of the ``faa_activities`` table through
+:class:`~starship_notam.data.repository.PostedItemRepository`. A changed
+activity (e.g. a moved launch window) is posted again.
 
-This module imports only from ``starship_notam.data.connection``,
-``starship_notam.core``, and the Python standard library.
+This module imports only from ``starship_notam.data`` and ``starship_notam.core``.
 """
 
-import hashlib
-import json
 from typing import Dict, List, Optional
 
-from starship_notam.core.logging import logger
-from starship_notam.data.connection import (
-    get_connection,
-    transaction,
-    upsert,
-    utc_now_iso,
-)
+from starship_notam.data.repository import PostedItemRepository
 
 
-def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> None:
-    """Insert or update an FAA activity by *mission*.
+class FaaActivityRepository(PostedItemRepository):
+    table = "faa_activities"
+    key_col = "mission"
+    label = "FAA activity"
+    columns = ("mission", "primary_window", "backup_window")
+    repost_on_change = True
 
-    Uses a SHA-256 hash of the JSON-serialised payload to detect changes and
-    maintains ``created_at`` / ``updated_at`` timestamps. A changed activity
-    has ``telegram_posted`` reset so it is re-posted.
-    """
-    payload_hash = hashlib.sha256(
-        json.dumps(activity, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    def prepare(self, activity: Dict):
+        # The whole parsed activity is hashed (kept as-is: see repository.py).
+        fields = {
+            "primary_window": activity["primary_window"],
+            "backup_window": activity["backup_window"],
+        }
+        return activity["mission"], fields, activity
 
-    with transaction(get_connection(db_path)) as cur:
-        result = upsert(
-            cur,
-            "faa_activities",
-            "mission",
-            activity["mission"],
-            {
-                "primary_window": activity["primary_window"],
-                "backup_window": activity["backup_window"],
-            },
-            payload_hash,
-            reset={"telegram_posted": 0},
-        )
-    logger.info("FAA activity '%s': %s", activity["mission"], result)
+
+_repo = FaaActivityRepository()
+
+
+def save_faa_activity(activity: Dict, db_path: Optional[str] = None) -> str:
+    """Insert or update an FAA activity by *mission*; a change re-flags it for posting."""
+    return _repo.save(activity, db_path)
 
 
 def get_faa_activities_needing_post(db_path: Optional[str] = None) -> List[Dict]:
     """Return FAA activities that have not yet been posted to Telegram."""
-    logger.info("Fetching FAA activities needing Telegram posting")
-    with transaction(get_connection(db_path)) as cur:
-        cur.execute("""
-            SELECT mission, primary_window, backup_window
-            FROM faa_activities
-            WHERE telegram_posted = 0
-            ORDER BY created_at
-        """)
-        rows = cur.fetchall()
-
-    logger.debug("Found %d FAA activities needing Telegram posting", len(rows))
-    return [dict(r) for r in rows]
+    return _repo.needing_post(db_path)
 
 
 def mark_faa_activity_posted(mission, telegram_message_id, db_path: Optional[str] = None) -> None:
     """Mark an FAA activity as posted to Telegram with its message ID."""
-    logger.info("Marking FAA activity '%s' as posted to Telegram with message ID %s", mission, telegram_message_id)
-    with transaction(get_connection(db_path)) as cur:
-        cur.execute("""
-            UPDATE faa_activities
-            SET telegram_posted = 1,
-                telegram_posted_at = ?,
-                telegram_message_id = ?
-            WHERE mission = ?
-        """, (utc_now_iso(), telegram_message_id, mission))
+    _repo.mark_posted(mission, telegram_message_id, db_path)

@@ -1,23 +1,17 @@
-"""FCC ELS application persistence functions — save, query, and update records.
+"""FCC ELS application persistence — save, query, and update records.
 
-Provides CRUD-like operations for the ``fcc_els_applications`` table. Functions
-accept and return plain Python dictionaries; no domain models are required.
+Stores rows of the ``fcc_els_applications`` table through
+:class:`~starship_notam.data.repository.PostedItemRepository`. A changed
+application is posted again; applications whose detail page is still empty
+are held back until it is filled in.
 
-This module imports only from ``starship_notam.data.connection``,
-``starship_notam.core``, and the Python standard library.
+This module imports only from ``starship_notam.data`` and ``starship_notam.core``.
 """
 
-import hashlib
 import json
 from typing import Dict, List, Optional
 
-from starship_notam.core.logging import logger
-from starship_notam.data.connection import (
-    get_connection,
-    transaction,
-    upsert,
-    utc_now_iso,
-)
+from starship_notam.data.repository import PostedItemRepository
 
 
 def _is_empty_detail_json(value: Optional[str]) -> bool:
@@ -35,113 +29,77 @@ def _is_empty_detail_json(value: Optional[str]) -> bool:
     return stripped == "" or stripped == "{}"
 
 
-def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> None:
+class FccElsApplicationRepository(PostedItemRepository):
+    table = "fcc_els_applications"
+    key_col = "file_number"
+    label = "FCC ELS application"
+    columns = (
+        "id",
+        "file_number",
+        "application_seq",
+        "applicant_name",
+        "call_sign",
+        "receipt_date",
+        "status",
+        "status_date",
+        "current_detail_url",
+        "detail_json",
+        "created_at",
+        "updated_at",
+        "payload_hash",
+        "telegram_posted",
+        "telegram_posted_at",
+        "telegram_message_id",
+    )
+    repost_on_change = True
+
+    def prepare(self, app: Dict):
+        detail_json = json.dumps(
+            app.get("detail") or {}, sort_keys=True, ensure_ascii=False
+        )
+        file_number = app.get("file_number")
+        # The hash covers the key too (kept as-is: see repository.py).
+        payload = {
+            "file_number": file_number,
+            "application_seq": app.get("application_seq"),
+            "applicant_name": app.get("applicant_name"),
+            "call_sign": app.get("call_sign"),
+            "receipt_date": app.get("receipt_date"),
+            "status": app.get("status"),
+            "status_date": app.get("status_date"),
+            "current_detail_url": app.get("current_detail_url"),
+            "detail_json": detail_json,
+        }
+        fields = {k: v for k, v in payload.items() if k != "file_number"}
+        return file_number, fields, payload
+
+    def after_load(self, rows: List[Dict]) -> List[Dict]:
+        # Filtered in Python, not SQL: SQLite's TRIM only strips ASCII spaces,
+        # so _is_empty_detail_json stays the one definition of "empty".
+        return [r for r in rows if not _is_empty_detail_json(r["detail_json"])]
+
+
+_repo = FccElsApplicationRepository()
+
+
+def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> str:
     """Insert or update an FCC ELS application by *file_number*.
 
-    Serialises the application's detail field set to JSON and computes a
-    deterministic SHA-256 payload hash to detect changes. New applications are
-    inserted with ``telegram_posted = 0``; unchanged applications are left
-    untouched (including their Telegram posting state); changed applications
-    have all fields refreshed, ``updated_at`` bumped, and ``telegram_posted``
-    reset to 0 so they are re-posted.
+    The detail fields are stored as JSON. Unchanged applications keep their
+    posting state; changed ones are refreshed and re-flagged for posting.
     """
-
-    detail_json = json.dumps(
-        app.get("detail") or {}, sort_keys=True, ensure_ascii=False
-    )
-
-    file_number = app.get("file_number")
-
-    payload = {
-        "file_number": file_number,
-        "application_seq": app.get("application_seq"),
-        "applicant_name": app.get("applicant_name"),
-        "call_sign": app.get("call_sign"),
-        "receipt_date": app.get("receipt_date"),
-        "status": app.get("status"),
-        "status_date": app.get("status_date"),
-        "current_detail_url": app.get("current_detail_url"),
-        "detail_json": detail_json,
-    }
-    payload_hash = hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
-
-    fields = {k: v for k, v in payload.items() if k != "file_number"}
-    with transaction(get_connection(db_path)) as cur:
-        result = upsert(
-            cur,
-            "fcc_els_applications",
-            "file_number",
-            file_number,
-            fields,
-            payload_hash,
-            reset={"telegram_posted": 0},
-        )
-    logger.info("FCC ELS application '%s': %s", file_number, result)
+    return _repo.save(app, db_path)
 
 
 def get_fcc_els_applications_needing_post(
     db_path: Optional[str] = None,
 ) -> List[Dict]:
-    """Return FCC ELS applications that have not yet been posted to Telegram."""
-    logger.info("Fetching FCC ELS applications needing Telegram posting")
-    with transaction(get_connection(db_path)) as cur:
-        cur.execute(
-            """
-            SELECT id,
-                   file_number,
-                   application_seq,
-                   applicant_name,
-                   call_sign,
-                   receipt_date,
-                   status,
-                   status_date,
-                   current_detail_url,
-                   detail_json,
-                   created_at,
-                   updated_at,
-                   payload_hash,
-                   telegram_posted,
-                   telegram_posted_at,
-                   telegram_message_id
-            FROM fcc_els_applications
-            WHERE telegram_posted = 0
-            ORDER BY created_at
-            """
-        )
-        rows = cur.fetchall()
-    # Exclude empty-detail rows in Python using ``_is_empty_detail_json`` as
-    # the single source of truth. SQLite's ``TRIM`` only strips ASCII spaces
-    # (not tabs/newlines), so gating in SQL would diverge from the Python
-    # helper on whitespace-only ``detail_json``; filtering here keeps the
-    # "empty detail" definition in exactly one place (Requirement 2.1).
-    result = [
-        dict(r) for r in rows if not _is_empty_detail_json(r["detail_json"])
-    ]
-    logger.debug(
-        "Found %d FCC ELS applications needing Telegram posting", len(result)
-    )
-    return result
+    """Return FCC ELS applications not yet posted whose detail is filled in."""
+    return _repo.needing_post(db_path)
 
 
 def mark_fcc_els_application_posted(
     file_number, telegram_message_id, db_path: Optional[str] = None
 ) -> None:
     """Mark an FCC ELS application as posted to Telegram with its message ID."""
-    logger.info(
-        "Marking FCC ELS application '%s' as posted to Telegram with message ID %s",
-        file_number,
-        telegram_message_id,
-    )
-    with transaction(get_connection(db_path)) as cur:
-        cur.execute(
-            """
-            UPDATE fcc_els_applications
-            SET telegram_posted = 1,
-                telegram_posted_at = ?,
-                telegram_message_id = ?
-            WHERE file_number = ?
-            """,
-            (utc_now_iso(), telegram_message_id, file_number),
-        )
+    _repo.mark_posted(file_number, telegram_message_id, db_path)

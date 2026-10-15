@@ -28,8 +28,8 @@ _DB_SETTINGS = settings(
     suppress_health_check=[HealthCheck.too_slow],
 )
 
-from starship_notam.data.connection import init_db
-from starship_notam.data import fcc_els_repo
+from starship_notam.data.schema import init_db
+from starship_notam.data import repository
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,
     mark_fcc_els_application_posted,
@@ -337,20 +337,20 @@ def test_save_rolls_back_and_reraises_on_db_error_leaving_no_partial_row(
         def __getattr__(self, name):
             return getattr(self._inner, name)
 
-    real_get_connection = fcc_els_repo.get_connection
+    real_get_connection = repository.get_connection
 
     def fake_get_connection(path=None):
         return _FailingCommitConnection(real_get_connection(path))
 
-    # Patch only the repo module's reference so init_db still works normally.
-    monkeypatch.setattr(fcc_els_repo, "get_connection", fake_get_connection)
+    # Patch only the repositories' reference so init_db still works normally.
+    monkeypatch.setattr(repository, "get_connection", fake_get_connection)
 
     app = _app()
     with pytest.raises(sqlite3.OperationalError):
         save_fcc_els_application(app, db_path)
 
     # Restore so we can read cleanly.
-    monkeypatch.setattr(fcc_els_repo, "get_connection", real_get_connection)
+    monkeypatch.setattr(repository, "get_connection", real_get_connection)
 
     # The failed insert was rolled back: no partial row remains.
     assert _count_rows(db_path, app["file_number"]) == 0
