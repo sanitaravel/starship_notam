@@ -13,7 +13,7 @@ caller and raises an exception (or returns an empty list) on failure.
 """
 
 from starship_notam.core.logging import logger
-from starship_notam.scrapers.driver import create_driver
+from starship_notam.scrapers.driver import browser_session
 
 NOTAM_SEARCH_URL = "https://notams.aim.faa.gov/notamSearch/nsapp.html#/"
 
@@ -143,11 +143,8 @@ def search_notams(keyword: str) -> list[dict]:
         Exception: propagated from the underlying WebDriver on unrecoverable
             navigation/setup errors.
     """
-    driver = create_driver()
-    try:
+    with browser_session() as driver:
         return _search_with_driver(driver, keyword)
-    finally:
-        driver.quit()
 
 
 def search_notams_many(keywords) -> dict[str, list[dict]]:
@@ -160,9 +157,8 @@ def search_notams_many(keywords) -> dict[str, list[dict]]:
     Raises:
         ImportError / Exception: if the browser itself cannot be started.
     """
-    driver = create_driver()
     results: dict[str, list[dict]] = {}
-    try:
+    with browser_session() as driver:
         for index, keyword in enumerate(keywords):
             consent_timeout = _STEP_TIMEOUT if index == 0 else _REPEAT_CONSENT_TIMEOUT
             try:
@@ -170,8 +166,6 @@ def search_notams_many(keywords) -> dict[str, list[dict]]:
             except Exception:
                 logger.exception(f"NOTAM search failed for keyword: {keyword}")
                 results[keyword] = []
-    finally:
-        driver.quit()
     return results
 
 

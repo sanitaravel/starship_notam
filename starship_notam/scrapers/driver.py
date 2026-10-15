@@ -1,10 +1,15 @@
 """Shared Selenium WebDriver factory for the Selenium-based scrapers.
 
-Selenium is imported lazily inside :func:`create_driver` so that importing
-this module does not require Selenium to be installed.
+Scrapers open a browser with :func:`browser_session`, which always quits it
+afterwards. Selenium is imported lazily inside :func:`create_driver` so that
+importing this module does not require Selenium to be installed.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from starship_notam.core import config
+from starship_notam.core.logging import logger
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -40,3 +45,24 @@ def create_driver():
     if config.RUN_MODE == "standalone":
         return webdriver.Chrome(options=options)
     return Remote(command_executor=config.SELENIUM_GRID_URL, options=options)
+
+
+@contextmanager
+def browser_session() -> Iterator:
+    """Yield a WebDriver from :func:`create_driver` and always quit it afterwards.
+
+    A failure to quit is logged rather than raised, so it cannot replace the
+    scrape's own result or error.
+
+    Raises:
+        ImportError: if Selenium is not installed.
+        Exception: from :func:`create_driver` if the browser cannot be started.
+    """
+    driver = create_driver()
+    try:
+        yield driver
+    finally:
+        try:
+            driver.quit()
+        except Exception:
+            logger.warning("Failed to quit the browser session", exc_info=True)
