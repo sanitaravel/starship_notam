@@ -21,6 +21,7 @@ from src.scrapers.regulations_gov_fetcher import (
     RegulationsGovFiles,
     fetch_regulations_gov_documents,
 )
+from src.scrapers.sec_edgar_fetcher import sec_edgar_filings_fetcher
 from src.scrapers.starbase_fetcher import starbase_status_fetcher
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "federal_register_documents_fetcher",
     "fetch_regulations_gov_documents",
     "RegulationsGovFiles",
+    "sec_edgar_filings_fetcher",
 ]

@@ -70,8 +70,8 @@ services:
       retries: 24
 
   # Records the COMPASS files, Federal Register and Regulations.gov documents
-  # already online as posted, so the bot announces only new ones. --if-empty
-  # makes each script a no-op once its table has rows.
+  # and SEC EDGAR filings already online as posted, so the bot announces only
+  # new ones. --if-empty makes each script a no-op once its table has rows.
   prefill:
     <<: *app
     command:
@@ -81,6 +81,7 @@ services:
         python prefill_compass.py --if-empty
         && python prefill_federal_register.py --if-empty
         && python prefill_regulations_gov.py --if-empty
+        && python prefill_sec_edgar.py --if-empty
     restart: "no"
     depends_on:
       postgres:

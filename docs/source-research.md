@@ -238,6 +238,10 @@ Fields to extract:
 
 ## 3. SEC EDGAR (SpaceX, SPCX)
 
+> **Implemented** (`feat/sec-edgar`): `src/scrapers/sec_edgar_fetcher.py`
+> and `prefill_sec_edgar.py`. The optional "mentions Starship" tag is not
+> done yet.
+
 SpaceX is a public company now: **Space Exploration Technologies Corp**,
 Nasdaq **SPCX**, **CIK 0001181412**, incorporated in Texas, HQ Starbase TX,
 fiscal year ending 31 December, non-accelerated filer. S-1 filed 2026-05-20,

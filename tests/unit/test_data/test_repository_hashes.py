@@ -23,6 +23,7 @@ from src.data import (
     federal_register_documents,
     regulations_gov_documents,
     road_alerts,
+    sec_edgar_filings,
 )
 from src.data.connection import get_connection
 
@@ -86,12 +87,25 @@ REGULATIONS_GOV_DOCUMENT = {
     "comment_end_date": "2026-12-01T04:59:59Z",
 }
 
+SEC_EDGAR_FILING = {
+    "accession_number": "0001628280-26-056945",
+    "form": "8-K",
+    "items": "2.01,3.02,9.01",
+    "filing_date": "2026-08-14",
+    "report_date": "2026-08-14",
+    "acceptance_datetime": "2026-08-14T12:23:02.000Z",
+    "description": "8-K",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/1181412/000162828026056945/spcx-20260814.htm",
+    "index_url": "https://www.sec.gov/Archives/edgar/data/1181412/000162828026056945/0001628280-26-056945-index.htm",
+}
+
 EXPECTED_FAA_ACTIVITY = "192ff71ec0fe2b0074c8070078b237d717641730194a5cebd10e51166606816e"
 EXPECTED_FCC = "1432405b56c7b924a288e7bef4d68246763a5dff16a82152c7514a68f1c79e46"
 EXPECTED_LICENSE = "ca0fa1f8eaeef96e54d4a974b040b0b9baf630f4ce7c82b8ae5c369caadb9600"
 EXPECTED_COMPASS = "27f2633f9ac9895d8676f35203e39f274d203710d292de691d0f1a430a0814eb"
 EXPECTED_FR = "0a828313cd958511ccd4d6d265eef996880eb826bc6a46bf248ce89c47ee079d"
 EXPECTED_REGULATIONS_GOV = "19c9521d3e70e2c27fe07cd9136ab0dda475e5489a2f924f1c3c8224961ec54d"
+EXPECTED_SEC_EDGAR = "1c14e3d59c18ba67834e2214bf09ed83b675768c093a762dd18ca4e4b2f062db"
 
 CASES = [
     (faa_activities.save, FAA_ACTIVITY, "faa_activities", "mission",
@@ -106,6 +120,8 @@ CASES = [
      "federal_register_documents", "document_number", EXPECTED_FR),
     (regulations_gov_documents.save, REGULATIONS_GOV_DOCUMENT,
      "regulations_gov_documents", "document_id", EXPECTED_REGULATIONS_GOV),
+    (sec_edgar_filings.save, SEC_EDGAR_FILING,
+     "sec_edgar_filings", "accession_number", EXPECTED_SEC_EDGAR),
 ]
 
 

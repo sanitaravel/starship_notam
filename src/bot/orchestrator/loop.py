@@ -20,6 +20,7 @@ from src.bot.orchestrator.notams import (
 from src.bot.orchestrator.regulations_gov import (
     process_regulations_gov_documents,
 )
+from src.bot.orchestrator.sec_edgar import process_sec_edgar_filings
 from src.bot.orchestrator.starbase import (
     ingest_starbase_alerts,
     process_beach_alerts,
@@ -52,6 +53,7 @@ async def generate_and_send() -> None:
         # After the Federal Register step, so a notice it just stored is not
         # announced a second time (see regulations_gov).
         partial(process_regulations_gov_documents, chat_list),
+        partial(process_sec_edgar_filings, chat_list),
         ingest_starbase_alerts,
         partial(process_beach_alerts, chat_list),
         partial(process_road_alerts, chat_list),

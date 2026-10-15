@@ -16,6 +16,7 @@ shared helpers live in ``_common``:
     compass           format_compass_file(item) -> str
     federal_register  format_federal_register_document(item) -> str
     regulations_gov   format_regulations_gov_document(item) -> str
+    sec_edgar         format_sec_edgar_filing(item) -> str
 """
 
 from src.bot.formatting.compass import format_compass_file
@@ -26,6 +27,7 @@ from src.bot.formatting.federal_register import (
 )
 from src.bot.formatting.notam import _CAPTION_LIMIT, build_notam_caption
 from src.bot.formatting.regulations_gov import format_regulations_gov_document
+from src.bot.formatting.sec_edgar import format_sec_edgar_filing
 from src.bot.formatting.starbase import (
     DEST_TRANSLATION,
     format_beach_alert,
@@ -44,5 +46,6 @@ __all__ = [
     "format_federal_register_document",
     "format_regulations_gov_document",
     "format_road_alert",
+    "format_sec_edgar_filing",
     "translate_place",
 ]

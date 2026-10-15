@@ -19,7 +19,7 @@ RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['p
 # relative to the project root.
 COPY fonts ./fonts
 COPY src ./src
-COPY main.py prefill_compass.py prefill_federal_register.py prefill_regulations_gov.py ./
+COPY main.py prefill_compass.py prefill_federal_register.py prefill_regulations_gov.py prefill_sec_edgar.py ./
 
 RUN useradd --create-home --uid 1000 app \
     && mkdir -p maps logs /home/app/.local/share/cartopy \
