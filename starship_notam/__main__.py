@@ -7,7 +7,7 @@ top-level coroutine that drives the whole application.
 ``main_loop`` already performs the full startup sequence:
 
     1. ``ensure_setup()`` validates ``TELEGRAM_BOT_TOKEN`` and initializes the
-       database schema via ``data.connection.init_db(config.DB_PATH)``.
+       database schema via ``data.schema.init_db(config.DB_PATH)``.
     2. The scheduled monitoring loop begins, repeatedly calling
        ``generate_and_send()`` and sleeping until the next scheduled run.
 

@@ -1,4 +1,4 @@
-"""Data layer package — SQLite database initialization, connection management, and repositories.
+"""Data layer package — database schema, connections, and one repository per source.
 
 Re-exports public functions from submodules for convenient access.
 """
@@ -9,7 +9,7 @@ from starship_notam.data.compass_repo import (
     mark_compass_files_posted,
     save_compass_file,
 )
-from starship_notam.data.connection import get_connection, init_db
+from starship_notam.data.connection import get_connection
 from starship_notam.data.faa_repo import (
     get_faa_activities_needing_post,
     mark_faa_activity_posted,
@@ -31,6 +31,7 @@ from starship_notam.data.fcc_els_repo import (
     mark_fcc_els_application_posted,
     save_fcc_els_application,
 )
+from starship_notam.data.schema import init_db
 from starship_notam.data.notam_repo import (
     get_notams_needing_images,
     load_all_notams,

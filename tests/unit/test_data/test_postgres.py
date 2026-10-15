@@ -37,7 +37,8 @@ from starship_notam.data import (
     save_notam,
     save_road_alert,
 )
-from starship_notam.data.connection import _ADDED_COLUMNS, is_postgres
+from starship_notam.data.connection import is_postgres
+from starship_notam.data.schema import _ADDED_COLUMNS
 
 PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 

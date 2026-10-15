@@ -28,7 +28,7 @@ _DB_SETTINGS = settings(
     suppress_health_check=[HealthCheck.too_slow],
 )
 
-from starship_notam.data.connection import init_db
+from starship_notam.data.schema import init_db
 from starship_notam.data import fcc_els_repo
 from starship_notam.data.fcc_els_repo import (
     get_fcc_els_applications_needing_post,

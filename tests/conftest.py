@@ -76,10 +76,10 @@ def db_path(tmp_path, monkeypatch) -> str:
 def initialized_db(db_path) -> str:
     """Return the path to a temporary database with the schema created.
 
-    Uses the real :func:`starship_notam.data.connection.init_db` so that tests
+    Uses the real :func:`starship_notam.data.schema.init_db` so that tests
     exercise the production schema-creation and migration logic.
     """
-    from starship_notam.data.connection import init_db
+    from starship_notam.data.schema import init_db
 
     init_db(db_path)
     return db_path
