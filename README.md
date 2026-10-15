@@ -21,6 +21,10 @@ one is posted only once.
 [`compose.yaml`](compose.yaml) runs everything the bot needs: the bot, a
 PostgreSQL database and a Selenium Chrome browser. You only need Docker.
 
+The steps below run the bot by hand on any machine. To run it on a Linux
+server that deploys every release from `main` automatically, follow
+[docs/deployment.md](docs/deployment.md) instead.
+
 ### 1. Prerequisites
 
 - Docker Engine with the Compose plugin (`docker compose version` should print
@@ -96,9 +100,9 @@ docker compose logs -f bot
 
 A cycle takes one to three minutes. It ends with a line like
 `Next run scheduled for 2026-10-13 11:00:00`. By then the first messages
-should be in your channel. The bot shows `health: starting` until that first
-cycle finishes, then `healthy`. It turns `unhealthy` if no cycle has finished
-for the run interval plus 15 minutes.
+should be in your channel. The bot shows `health: starting` until the first
+step of that cycle finishes, then `healthy`. It turns `unhealthy` if it makes
+no progress for the run interval plus 15 minutes.
 
 `docker compose stop` and `docker compose down` let the bot finish the item
 it is posting before it exits, so nothing is posted twice after a restart.
@@ -112,7 +116,7 @@ Items it did not reach are posted after the next start.
 | Stop everything (data is kept) | `docker compose down` |
 | Start again | `docker compose up -d` |
 | Restart only the bot | `docker compose restart bot` |
-| Update to the latest code | `git pull && docker compose up -d --build` |
+| Update to the latest code | `git pull && docker compose up -d --build` (a server [updates itself](docs/deployment.md)) |
 | Open a database shell | `docker compose exec postgres psql -U notam` |
 | Back up the database | `docker compose exec postgres pg_dump -U notam notam > backup.sql` |
 | Restore a backup into an empty database | `docker compose exec -T postgres psql -U notam notam < backup.sql` |

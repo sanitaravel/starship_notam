@@ -1,0 +1,4 @@
+# Scripts and systemd units run on Linux servers; keep LF even when committed from Windows.
+*.sh text eol=lf
+deploy/*.service text eol=lf
+deploy/*.timer text eol=lf

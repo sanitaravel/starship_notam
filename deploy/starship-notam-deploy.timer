@@ -1,0 +1,11 @@
+# Checks for a new release every 5 minutes. See docs/deployment.md.
+[Unit]
+Description=Check for a new Starship NOTAM bot release every 5 minutes
+
+[Timer]
+OnBootSec=2min
+# Counted from the last start; a deploy still running is never started twice.
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

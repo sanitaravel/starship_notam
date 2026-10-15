@@ -183,6 +183,32 @@ async def test_stop_skips_the_remaining_steps(monkeypatch):
     assert ran == ["refresh"]
 
 
+async def test_heartbeat_after_every_step(monkeypatch):
+    events = []
+    monkeypatch.setattr(orchestrator, "write_heartbeat", lambda: events.append("heartbeat"))
+
+    async def step(*args):
+        events.append("step")
+
+    for name in (
+        "_refresh_notams_from_source",
+        "_process_notam_images",
+        "_process_faa_activities",
+        "_process_fcc_els_applications",
+        "_process_faa_licenses",
+        "_process_compass_files",
+        "_process_federal_register_documents",
+        "_ingest_starbase_alerts",
+        "_process_beach_alerts",
+        "_process_road_alerts",
+    ):
+        monkeypatch.setattr(orchestrator, name, step)
+
+    await orchestrator.generate_and_send()
+
+    assert events == ["step", "heartbeat"] * 10
+
+
 async def test_stop_flag_is_cleared_after_the_loop(monkeypatch, loop_harness):
     set_cycle, _ = loop_harness
     captured = capture_stop_event(monkeypatch)

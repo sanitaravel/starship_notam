@@ -1,10 +1,10 @@
 """Heartbeat and container healthcheck for the bot loop.
 
-The orchestrator calls :func:`write_heartbeat` after every cycle. Docker runs
-``python -m starship_notam.healthcheck``, which exits 0 while the last
-heartbeat is recent and 1 otherwise, so a bot that crashed at start-up or
-whose loop hangs shows up as ``unhealthy``. The deploy script uses that status
-to accept or roll back a new version.
+The orchestrator calls :func:`write_heartbeat` after every step of a cycle
+and after every cycle. Docker runs ``python -m starship_notam.healthcheck``,
+which exits 0 while the last heartbeat is recent and 1 otherwise, so a bot
+that crashed at start-up or whose loop hangs shows up as ``unhealthy``. The
+deploy script uses that status to accept or roll back a new version.
 
 Standard library only and no package imports: the check runs every minute and
 must not load the configuration, truncate the log file or touch the database.
