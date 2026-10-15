@@ -172,6 +172,7 @@ async def test_stop_skips_the_remaining_steps(monkeypatch):
         "process_faa_licenses",
         "process_compass_files",
         "process_federal_register_documents",
+        "process_regulations_gov_documents",
         "ingest_starbase_alerts",
         "process_beach_alerts",
         "process_road_alerts",
@@ -198,6 +199,7 @@ async def test_heartbeat_after_every_step(monkeypatch):
         "process_faa_licenses",
         "process_compass_files",
         "process_federal_register_documents",
+        "process_regulations_gov_documents",
         "ingest_starbase_alerts",
         "process_beach_alerts",
         "process_road_alerts",
@@ -206,7 +208,7 @@ async def test_heartbeat_after_every_step(monkeypatch):
 
     await loop.generate_and_send()
 
-    assert events == ["step", "heartbeat"] * 10
+    assert events == ["step", "heartbeat"] * 11
 
 
 async def test_stop_flag_is_cleared_after_the_loop(monkeypatch, loop_harness):

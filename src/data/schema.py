@@ -200,6 +200,34 @@ CREATE TABLE IF NOT EXISTS federal_register_documents (
     telegram_posted_at TEXT,
     telegram_message_id TEXT
 );
+
+-- FAA/USCG Regulations.gov documents matching the Starship search terms.
+-- document_id is the Regulations.gov document id (UNIQUE key); a row is
+-- posted once, when the document first appears (see regulations_gov_repo).
+-- fr_doc_num links it to federal_register_documents.document_number.
+CREATE TABLE IF NOT EXISTS regulations_gov_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    document_id TEXT UNIQUE NOT NULL,
+
+    docket_id TEXT,
+    agency_id TEXT,
+    document_type TEXT,
+    subtype TEXT,
+    title TEXT,
+    fr_doc_num TEXT,
+    posted_date TEXT,
+    comment_end_date TEXT,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    payload_hash TEXT,
+
+    telegram_posted INTEGER DEFAULT 0,
+    telegram_posted_at TEXT,
+    telegram_message_id TEXT
+);
 """
 
 # Columns added after a table was first released. Databases created before
@@ -282,7 +310,7 @@ def init_db(db_path: Optional[str] = None) -> None:
 
     Ensures that all required tables (notams, faa_activities, starbase_beach,
     starbase_road, fcc_els_applications, faa_licenses, compass_files,
-    federal_register_documents) exist and have every
+    federal_register_documents, regulations_gov_documents) exist and have every
     column listed in ``_ADDED_COLUMNS``.
 
     On failure, any pending transaction is rolled back so the database is never

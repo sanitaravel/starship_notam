@@ -18,6 +18,7 @@ from src.data.notam_repo import (
     mark_image_generated,
     save_notam,
 )
+from src.data.regulations_gov_repo import regulations_gov_documents
 from src.data.schema import init_db
 from src.data.starbase_repo import beach_alerts, road_alerts
 
@@ -33,6 +34,7 @@ __all__ = [
     "faa_licenses",
     "compass_files",
     "federal_register_documents",
+    "regulations_gov_documents",
     "beach_alerts",
     "road_alerts",
 ]

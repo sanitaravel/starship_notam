@@ -142,3 +142,25 @@ FEDERAL_REGISTER_PARAMS: dict = {
         "comments_close_on",
     ],
 }
+
+# --- Regulations.gov (FAA/USCG Starship docket documents) configuration ---
+
+# api.data.gov key for the Regulations.gov API (free sign-up at
+# https://open.gsa.gov/api/regulationsgov/). The source is skipped while unset.
+REGULATIONS_GOV_API_KEY: str = (
+    os.environ.get("REGULATIONS_GOV_API_KEY", "").strip().strip('"')
+)
+
+REGULATIONS_GOV_API_URL: str = "https://api.regulations.gov/v4"
+
+# One search per term, merged by document id: "Starship" alone misses e.g. the
+# USCG "Rocket Test Site" safety zone at Boca Chica.
+REGULATIONS_GOV_SEARCH_TERMS: tuple = ("SpaceX", "Starship", "Boca Chica", "Starbase")
+
+# Query sent with each search term: the newest FAA and USCG documents (other
+# agencies, mostly EPA, only add noise for these terms).
+REGULATIONS_GOV_PARAMS: dict = {
+    "filter[agencyId]": "FAA,USCG",
+    "sort": "-postedDate",
+    "page[size]": 25,
+}

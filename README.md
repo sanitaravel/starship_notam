@@ -12,6 +12,7 @@ posts updates to a Telegram channel. On a fixed schedule it checks:
 | [FAA DRS](https://drs.faa.gov) | Changes to the Starship launch licence |
 | [COMPASS (CADENA ATFM)](https://compass.atfm.aero) | New files on the Master Slide Deck page |
 | [Federal Register](https://www.federalregister.gov/documents/search?conditions%5Bagencies%5D%5B%5D=federal-aviation-administration&conditions%5Bterm%5D=spacex&order=newest) | New FAA documents mentioning SpaceX (environmental reviews, comment periods, rules) |
+| [Regulations.gov](https://www.regulations.gov/search?filter=Starship) | New FAA and USCG docket documents about Starship, with their PDFs: final EAs and FONSIs, safety zones, and other material the Federal Register does not print. Needs a free `REGULATIONS_GOV_API_KEY`; skipped without one |
 
 New or changed items are stored in a database (SQLite or PostgreSQL), so each
 one is posted only once.
@@ -76,10 +77,12 @@ The services start in this order:
 1. **`postgres`** (PostgreSQL 17) and **`selenium`**
    (`selenium/standalone-chrome`) start first. Everything else waits until
    both report healthy.
-2. **`prefill`** runs `prefill_compass.py --if-empty` and then
-   `prefill_federal_register.py --if-empty` once, and exits. On the very first
-   start they record the files already on the COMPASS slide list and the FAA
-   documents already in the Federal Register as posted, so the bot does not
+2. **`prefill`** runs `prefill_compass.py --if-empty`,
+   `prefill_federal_register.py --if-empty` and
+   `prefill_regulations_gov.py --if-empty` once, and exits. On the very first
+   start they record the files already on the COMPASS slide list and the
+   documents already in the Federal Register and on Regulations.gov as
+   posted, so the bot does not
    announce the whole existing back catalogue. On later starts they do
    nothing, so items published while the bot was down are still announced.
 3. **`bot`** starts after `prefill` succeeds. It runs a check cycle
@@ -134,8 +137,8 @@ Data lives in named Docker volumes:
 | `cartopy` | Natural Earth map data, downloaded on the first render |
 
 To start over with an empty database, run `docker compose down -v`. **This
-deletes all volumes.** The next start prefills COMPASS and the Federal
-Register again and re-posts everything that is currently active.
+deletes all volumes.** The next start prefills COMPASS, the Federal
+Register and Regulations.gov again and re-posts everything that is currently active.
 
 ### Troubleshooting
 
@@ -143,7 +146,8 @@ Register again and re-posts everything that is currently active.
   `POSTGRES_PASSWORD` in `.env`.
 - **`bot` never starts and `prefill` exited with code 1**: check
   `docker compose logs prefill`. The usual cause is that the COMPASS site
-  or the Federal Register API could not be reached. Run
+  or the Federal Register or Regulations.gov API could not be reached (or
+  `REGULATIONS_GOV_API_KEY` is wrong). Run
   `docker compose up -d` again once they are reachable.
 - **`Unauthorized` in the bot log**: the token in `TELEGRAM_BOT_TOKEN` is
   wrong.
@@ -172,6 +176,7 @@ Set `RUN_MODE=standalone` in `.env` so Selenium launches your local Chrome
 ```sh
 python prefill_compass.py          # once, so the existing COMPASS files are not announced
 python prefill_federal_register.py # once, so the existing Federal Register documents are not announced
+python prefill_regulations_gov.py  # once (with REGULATIONS_GOV_API_KEY set), likewise for Regulations.gov
 python -m src                      # or: python main.py, or: starship-notam
 ```
 
