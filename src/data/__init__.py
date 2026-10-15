@@ -20,6 +20,7 @@ from src.data.notam_repo import (
 )
 from src.data.regulations_gov_repo import regulations_gov_documents
 from src.data.schema import init_db
+from src.data.sec_edgar_repo import sec_edgar_filings
 from src.data.starbase_repo import beach_alerts, road_alerts
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "compass_files",
     "federal_register_documents",
     "regulations_gov_documents",
+    "sec_edgar_filings",
     "beach_alerts",
     "road_alerts",
 ]

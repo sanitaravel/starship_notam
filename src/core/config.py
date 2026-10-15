@@ -164,3 +164,31 @@ REGULATIONS_GOV_PARAMS: dict = {
     "sort": "-postedDate",
     "page[size]": 25,
 }
+
+# --- SEC EDGAR (SpaceX filings as a public company) configuration ---
+
+# User-Agent sent to SEC, which blocks requests without a descriptive one
+# naming a contact, e.g. "starship_notam bot admin@example.org"
+# (https://www.sec.gov/os/accessing-edgar-data). The source is skipped while
+# unset.
+SEC_USER_AGENT: str = os.environ.get("SEC_USER_AGENT", "").strip().strip('"')
+
+# Space Exploration Technologies Corp (Nasdaq: SPCX).
+SEC_EDGAR_CIK: str = "0001181412"
+
+# Every filing of the company, newest first (one request per cycle).
+SEC_EDGAR_SUBMISSIONS_URL: str = (
+    f"https://data.sec.gov/submissions/CIK{SEC_EDGAR_CIK}.json"
+)
+
+# Forms that are posted: material events, periodic reports (with late-filing
+# notices) and securities offerings, plus their amendments. Insider forms
+# (3/4/144), 13G, S-8, Form D and SEC correspondence are left out: frequent
+# and never about Starship.
+SEC_EDGAR_FORMS: tuple = (
+    "8-K", "8-K/A",
+    "10-Q", "10-Q/A", "NT 10-Q",
+    "10-K", "10-K/A", "NT 10-K",
+    "S-1", "S-1/A", "S-3", "S-3/A",
+    "424B1", "424B2", "424B3", "424B4", "424B5", "424B7", "424B8",
+)

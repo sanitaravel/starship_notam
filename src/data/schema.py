@@ -228,6 +228,33 @@ CREATE TABLE IF NOT EXISTS regulations_gov_documents (
     telegram_posted_at TEXT,
     telegram_message_id TEXT
 );
+
+-- SpaceX filings on SEC EDGAR of the posted form types (config.SEC_EDGAR_FORMS).
+-- accession_number is the EDGAR accession number (UNIQUE key); a row is
+-- posted once, when the filing first appears (see sec_edgar_repo).
+CREATE TABLE IF NOT EXISTS sec_edgar_filings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    accession_number TEXT UNIQUE NOT NULL,
+
+    form TEXT,
+    items TEXT,
+    filing_date TEXT,
+    report_date TEXT,
+    acceptance_datetime TEXT,
+    description TEXT,
+    document_url TEXT,
+    index_url TEXT,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    payload_hash TEXT,
+
+    telegram_posted INTEGER DEFAULT 0,
+    telegram_posted_at TEXT,
+    telegram_message_id TEXT
+);
 """
 
 # Columns added after a table was first released. Databases created before
@@ -310,8 +337,8 @@ def init_db(db_path: Optional[str] = None) -> None:
 
     Ensures that all required tables (notams, faa_activities, starbase_beach,
     starbase_road, fcc_els_applications, faa_licenses, compass_files,
-    federal_register_documents, regulations_gov_documents) exist and have every
-    column listed in ``_ADDED_COLUMNS``.
+    federal_register_documents, regulations_gov_documents, sec_edgar_filings)
+    exist and have every column listed in ``_ADDED_COLUMNS``.
 
     On failure, any pending transaction is rolled back so the database is never
     left in a partially committed state.
