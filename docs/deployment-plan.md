@@ -136,7 +136,7 @@ post.
 
 ## Part 2 — Publish the image from CI (`ci/publish-image`)
 
-### 2.1 `publish` job `[ ]`
+### 2.1 `publish` job `[x]`
 
 - **Where:** `.github/workflows/ci.yml`
 - **Change:** a job with `needs: tests` and
@@ -145,14 +145,20 @@ post.
   Steps: `docker/setup-buildx-action`, `docker/login-action` (ghcr.io,
   `GITHUB_TOKEN`), `docker/metadata-action`, `docker/build-push-action` with
   `platforms: linux/amd64`, `build-args: GIT_SHA=${{ github.sha }}` and
-  `cache-from/cache-to: type=gha`.
+  `cache-from/cache-to: type=gha`. It builds from the pushed commit (Git
+  context), so there is no checkout step.
+- **First real run:** the job only runs on `main`, so it is first exercised
+  by the release that contains it. Check the Actions tab after that merge.
 - **Tags:** `sha-<full commit sha>` (immutable; what gets deployed) and `main`
   (moving; for manual runs).
 
-### 2.2 Pin actions to commit SHAs `[ ]`
+### 2.2 Pin actions to commit SHAs `[x]`
 
 - **Why:** the publish job can write packages; a moved tag on a third-party
   action must not be able to push an image.
+- **Pinned:** setup-buildx-action v4.4.1, login-action v4.6.0,
+  metadata-action v6.2.0, build-push-action v7.4.0 (the release tag is in a
+  comment next to each SHA; update both together).
 
 ### 2.3 Make the package public `[ ]`
 
