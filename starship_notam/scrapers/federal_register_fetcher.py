@@ -10,13 +10,35 @@ The fetcher performs no persistence and never raises: on failure it logs and
 returns ``None`` so callers can tell "fetch failed" apart from "no documents".
 """
 
-import requests
-
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.parsers.federal_register_parser import (
     parse_federal_register_documents,
 )
+from starship_notam.scrapers.http_fetcher import HttpFetcher
+
+
+class FederalRegisterFetcher(HttpFetcher):
+    """Federal Register API search -> newest FAA documents mentioning SpaceX."""
+
+    name = "Federal Register documents"
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    @property
+    def url(self) -> str:
+        return config.FEDERAL_REGISTER_API_URL
+
+    def params(self) -> dict:
+        return config.FEDERAL_REGISTER_PARAMS
+
+    def parse(self, text: str) -> list[dict]:
+        return parse_federal_register_documents(text)
+
+    def failure(self) -> None:
+        return None
+
+    def describe(self, result: list[dict]) -> str:
+        return f"{len(result)} document(s)"
 
 
 def fetch_federal_register_documents() -> list[dict] | None:
@@ -29,23 +51,7 @@ def fetch_federal_register_documents() -> list[dict] | None:
         :func:`parse_federal_register_documents`), or ``None`` when the
         request failed.
     """
-    url = config.FEDERAL_REGISTER_API_URL
-    logger.info("Fetching Federal Register documents from %s", url)
-    try:
-        response = requests.get(
-            url,
-            params=config.FEDERAL_REGISTER_PARAMS,
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
-        )
-        response.raise_for_status()
-    except requests.RequestException:
-        logger.exception("Failed to fetch Federal Register documents from %s", url)
-        return None
-
-    documents = parse_federal_register_documents(response.text)
-    logger.info("Parsed %d Federal Register documents", len(documents))
-    return documents
+    return FederalRegisterFetcher().fetch()
 
 
 if __name__ == "__main__":
