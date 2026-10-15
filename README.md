@@ -224,7 +224,7 @@ starship_notam/
 tests/            unit and integration tests (pytest + Hypothesis)
 ```
 
-`bot/orchestrator.py` is the only module that ties the layers together. The
+`bot/orchestrator/` is the only package that ties the layers together. The
 layer boundaries are checked by `tests/integration/test_dependency_boundaries.py`.
 
 ## Contributing

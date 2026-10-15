@@ -36,7 +36,7 @@ telegram_chats.json
 # Tests
 .hypothesis/
 _*.py
-!__init__.py
+!__*__.py
 _*.html
 _*.txt
 

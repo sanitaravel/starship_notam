@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.bot import orchestrator
+from starship_notam.bot.orchestrator import notams
 
 LA_ROCHELLE = (
     "A6286/26 NOTAMN Q) LFBB/QPFCA/V/NBO/E/000/050/4617N00107W023 A) LFBH "
@@ -34,13 +34,13 @@ BROWNSVILLE_TFR = (
 def saved(monkeypatch):
     names: list[str] = []
     monkeypatch.setattr(
-        orchestrator, "save_notam", lambda name, parsed, db_path: names.append(name)
+        notams, "save_notam", lambda name, parsed, db_path: names.append(name)
     )
     return names
 
 
 def test_vfr_entry_notice_is_not_saved_for_reentry_search(saved):
-    orchestrator._persist_notam_results(
+    notams.persist_notam_results(
         [{"number": "A6286/26", "icao_message": LA_ROCHELLE}], "re-entry"
     )
 
@@ -48,7 +48,7 @@ def test_vfr_entry_notice_is_not_saved_for_reentry_search(saved):
 
 
 def test_real_reentry_notam_is_saved(saved):
-    orchestrator._persist_notam_results(
+    notams.persist_notam_results(
         [{"number": "6/1234", "icao_message": REENTRY}], "re-entry"
     )
 
@@ -57,7 +57,7 @@ def test_real_reentry_notam_is_saved(saved):
 
 def test_multi_word_keyword_matches_in_any_order(saved):
     # The TFR says BROWNSVILLE before SPACEX.
-    orchestrator._persist_notam_results(
+    notams.persist_notam_results(
         [{"number": "6/5082", "icao_message": BROWNSVILLE_TFR}], "spacex brownsville"
     )
 
@@ -75,4 +75,4 @@ def test_multi_word_keyword_matches_in_any_order(saved):
     ],
 )
 def test_hyphenated_keyword_variants(text, expected):
-    assert orchestrator._matches_keyword(text, "re-entry") is expected
+    assert notams.matches_keyword(text, "re-entry") is expected
