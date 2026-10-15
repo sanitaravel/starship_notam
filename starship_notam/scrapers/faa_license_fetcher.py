@@ -28,7 +28,7 @@ import json
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.parsers.faa_license_parser import parse_faa_license_summary
-from starship_notam.scrapers.driver import create_driver
+from starship_notam.scrapers.driver import browser_session
 
 # Seconds to wait for the viewer page (and its Angular app) to load and set the
 # edge/session cookies before we call the summary API.
@@ -82,76 +82,69 @@ def fetch_faa_license() -> dict | None:
         ``None`` when the license could not be fetched/parsed for any reason.
         Never raises to the caller. Performs no database writes.
     """
-    # Lazy imports -- selenium is an optional heavy dependency only needed at
-    # call time (keeps the scrapers package importable without selenium).
     try:
-        driver = create_driver()
-    except Exception as e:  # pragma: no cover - environment-dependent
-        logger.error(f"Selenium is not available for FAA DRS license scrape: {e}")
-        return None
-
-    try:
-        viewer_url = config.FAA_LICENSE_VIEWER_URL
-        summary_url = config.FAA_LICENSE_SUMMARY_URL
-
-        # 1) Load the viewer page so the edge/session cookies are established.
-        logger.info("Opening FAA DRS license viewer page: %s", viewer_url)
-        try:
-            driver.set_page_load_timeout(_PAGE_LOAD_TIMEOUT)
-            driver.get(viewer_url)
-        except Exception as e:
-            # A page-load timeout is not fatal on its own: the cookies are
-            # typically set well before the heavy PDF viewer finishes. Proceed
-            # to the summary fetch and let it decide.
-            logger.info(
-                "FAA DRS viewer page load did not fully complete (continuing "
-                "to summary fetch): %s",
-                e,
-            )
-
-        # 2) Fetch the summary JSON from within the page context (cookies are
-        #    attached automatically by the browser).
-        logger.info("Fetching FAA DRS license summary JSON: %s", summary_url)
-        try:
-            driver.set_script_timeout(_SUMMARY_FETCH_TIMEOUT_MS / 1000 + 10)
-            payload = driver.execute_async_script(
-                _FETCH_SUMMARY_JS, summary_url, _SUMMARY_FETCH_TIMEOUT_MS
-            )
-        except Exception as e:
-            logger.error(f"FAA DRS license summary fetch failed: {e}")
-            return None
-
-        if isinstance(payload, dict) and payload.get("__error__"):
-            logger.error(
-                "FAA DRS license summary request unsuccessful: %s",
-                json.dumps(payload, ensure_ascii=False),
-            )
-            return None
-
-        record = parse_faa_license_summary(payload)
-        if not record:
-            logger.error(
-                "FAA DRS license summary parsed to an empty record; discarding"
-            )
-            return None
-
-        logger.info(
-            "Fetched FAA DRS license '%s' (status=%r, revision=%r)",
-            record.get("doc_number"),
-            record.get("status"),
-            record.get("revision_number"),
-        )
-        return record
-
+        with browser_session() as driver:
+            return _fetch_with_driver(driver)
     except Exception as e:
-        # Any unexpected navigation/fetch failure is fail-safe.
+        # Selenium missing, the browser not starting, or any unexpected
+        # navigation/fetch failure is fail-safe.
         logger.error(f"FAA DRS license scrape failed: {e}")
         return None
-    finally:
-        try:
-            driver.quit()
-        except Exception:
-            pass
+
+
+def _fetch_with_driver(driver) -> dict | None:
+    """Load the viewer page, then fetch and parse the summary JSON in-page."""
+    viewer_url = config.FAA_LICENSE_VIEWER_URL
+    summary_url = config.FAA_LICENSE_SUMMARY_URL
+
+    # 1) Load the viewer page so the edge/session cookies are established.
+    logger.info("Opening FAA DRS license viewer page: %s", viewer_url)
+    try:
+        driver.set_page_load_timeout(_PAGE_LOAD_TIMEOUT)
+        driver.get(viewer_url)
+    except Exception as e:
+        # A page-load timeout is not fatal on its own: the cookies are
+        # typically set well before the heavy PDF viewer finishes. Proceed
+        # to the summary fetch and let it decide.
+        logger.info(
+            "FAA DRS viewer page load did not fully complete (continuing "
+            "to summary fetch): %s",
+            e,
+        )
+
+    # 2) Fetch the summary JSON from within the page context (cookies are
+    #    attached automatically by the browser).
+    logger.info("Fetching FAA DRS license summary JSON: %s", summary_url)
+    try:
+        driver.set_script_timeout(_SUMMARY_FETCH_TIMEOUT_MS / 1000 + 10)
+        payload = driver.execute_async_script(
+            _FETCH_SUMMARY_JS, summary_url, _SUMMARY_FETCH_TIMEOUT_MS
+        )
+    except Exception as e:
+        logger.error(f"FAA DRS license summary fetch failed: {e}")
+        return None
+
+    if isinstance(payload, dict) and payload.get("__error__"):
+        logger.error(
+            "FAA DRS license summary request unsuccessful: %s",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        return None
+
+    record = parse_faa_license_summary(payload)
+    if not record:
+        logger.error(
+            "FAA DRS license summary parsed to an empty record; discarding"
+        )
+        return None
+
+    logger.info(
+        "Fetched FAA DRS license '%s' (status=%r, revision=%r)",
+        record.get("doc_number"),
+        record.get("status"),
+        record.get("revision_number"),
+    )
+    return record
 
 
 if __name__ == "__main__":

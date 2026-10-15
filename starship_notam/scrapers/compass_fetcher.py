@@ -9,11 +9,30 @@ The fetcher performs no persistence and never raises: on failure it logs and
 returns ``None`` so callers can tell "fetch failed" apart from "no files".
 """
 
-import requests
-
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.parsers.compass_parser import parse_compass_file_list
+from starship_notam.scrapers.http_fetcher import HttpFetcher
+
+
+class CompassFileListFetcher(HttpFetcher):
+    """COMPASS public slide-list endpoint -> Master Slide Deck files."""
+
+    name = "COMPASS file list"
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    @property
+    def url(self) -> str:
+        return config.COMPASS_SLIDE_LIST_URL
+
+    def parse(self, text: str) -> list[dict]:
+        return parse_compass_file_list(text)
+
+    def failure(self) -> None:
+        return None
+
+    def describe(self, result: list[dict]) -> str:
+        return f"{len(result)} file(s)"
 
 
 def fetch_compass_files() -> list[dict] | None:
@@ -25,18 +44,7 @@ def fetch_compass_files() -> list[dict] | None:
         The parsed file records (newest first, see
         :func:`parse_compass_file_list`), or ``None`` when the request failed.
     """
-    url = config.COMPASS_SLIDE_LIST_URL
-    logger.info("Fetching COMPASS file list from %s", url)
-    try:
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-        response.raise_for_status()
-    except requests.RequestException:
-        logger.exception("Failed to fetch COMPASS file list from %s", url)
-        return None
-
-    files = parse_compass_file_list(response.text)
-    logger.info("Parsed %d files from the COMPASS file list", len(files))
-    return files
+    return CompassFileListFetcher().fetch()
 
 
 if __name__ == "__main__":

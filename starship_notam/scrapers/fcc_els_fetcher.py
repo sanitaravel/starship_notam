@@ -27,7 +27,7 @@ from urllib.parse import urljoin
 
 from starship_notam.core import config
 from starship_notam.core.logging import logger
-from starship_notam.scrapers.driver import create_driver
+from starship_notam.scrapers.driver import browser_session
 from starship_notam.parsers.fcc_els_parser import (
     parse_fcc_els_detail_html,
     parse_fcc_els_results_html,
@@ -115,7 +115,8 @@ def fetch_fcc_els_applications() -> list[dict]:
     """Search FCC ELS for SpaceX applications and return application dicts.
 
     Fail-safe: returns ``[]`` on any search/navigation failure and never raises
-    to the caller. Closes the Selenium session in a ``finally`` block. Performs
+    to the caller. The browser session is always closed (see
+    :func:`~starship_notam.scrapers.driver.browser_session`). Performs
     no database writes.
 
     Each returned dict has the keys ``file_number``, ``application_seq``,
@@ -134,137 +135,132 @@ def fetch_fcc_els_applications() -> list[dict]:
         logger.error(f"Selenium is not available for FCC ELS scrape: {e}")
         return []
 
-    driver = create_driver()
-
     results: list[dict] = []
 
     try:
-        url = config.FCC_ELS_SEARCH_URL
-        logger.info(f"Opening FCC ELS search page: {url}")
-        driver.get(url)
+        with browser_session() as driver:
+            url = config.FCC_ELS_SEARCH_URL
+            logger.info(f"Opening FCC ELS search page: {url}")
+            driver.get(url)
 
-        # --- Wait for the four search-form fields to be present -----------
-        wait = WebDriverWait(driver, 30)
-        try:
-            licensee_field = wait.until(
-                EC.presence_of_element_located((By.NAME, _LICENSEE_FIELD_NAME))
-            )
-            receipt_from_field = wait.until(
-                EC.presence_of_element_located((By.NAME, _RECEIPT_FROM_FIELD_NAME))
-            )
-            receipt_to_field = wait.until(
-                EC.presence_of_element_located((By.NAME, _RECEIPT_TO_FIELD_NAME))
-            )
-            show_records_field = wait.until(
-                EC.presence_of_element_located((By.NAME, _SHOW_RECORDS_FIELD_NAME))
-            )
-        except Exception as e:
-            logger.error(f"Timed out waiting for FCC ELS search form fields: {e}")
-            return []
-
-        # --- Fill the form ------------------------------------------------
-        receipt_from = _receipt_date_from()
-        receipt_to = _receipt_date_to()
-        logger.info(
-            "Filling FCC ELS search: licensee=%r, receipt_from=%s, "
-            "receipt_to=%s, show_records=%s",
-            config.FCC_ELS_SEARCH_TERM,
-            receipt_from,
-            receipt_to,
-            config.FCC_ELS_RECORD_LIMIT,
-        )
-        _fill(licensee_field, config.FCC_ELS_SEARCH_TERM)
-        _fill(receipt_from_field, receipt_from)
-        _fill(receipt_to_field, receipt_to)
-        # show-records is a plain text input pre-filled with a default of "10".
-        try:
-            _fill(show_records_field, str(config.FCC_ELS_RECORD_LIMIT))
-        except Exception as e:
-            logger.info(f"Could not set FCC ELS show-records field: {e}")
-
-        # --- Submit the search --------------------------------------------
-        try:
-            licensee_field.submit()
-            logger.info("Submitted FCC ELS search form")
-        except Exception as e:
-            logger.error(f"Failed to submit FCC ELS search form: {e}")
-            return []
-
-        # --- Wait for the results table -----------------------------------
-        try:
-            WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, _RESULTS_TABLE_CSS)
+            # --- Wait for the four search-form fields to be present -----------
+            wait = WebDriverWait(driver, 30)
+            try:
+                licensee_field = wait.until(
+                    EC.presence_of_element_located((By.NAME, _LICENSEE_FIELD_NAME))
                 )
+                receipt_from_field = wait.until(
+                    EC.presence_of_element_located((By.NAME, _RECEIPT_FROM_FIELD_NAME))
+                )
+                receipt_to_field = wait.until(
+                    EC.presence_of_element_located((By.NAME, _RECEIPT_TO_FIELD_NAME))
+                )
+                show_records_field = wait.until(
+                    EC.presence_of_element_located((By.NAME, _SHOW_RECORDS_FIELD_NAME))
+                )
+            except Exception as e:
+                logger.error(f"Timed out waiting for FCC ELS search form fields: {e}")
+                return []
+
+            # --- Fill the form ------------------------------------------------
+            receipt_from = _receipt_date_from()
+            receipt_to = _receipt_date_to()
+            logger.info(
+                "Filling FCC ELS search: licensee=%r, receipt_from=%s, "
+                "receipt_to=%s, show_records=%s",
+                config.FCC_ELS_SEARCH_TERM,
+                receipt_from,
+                receipt_to,
+                config.FCC_ELS_RECORD_LIMIT,
             )
-        except Exception as e:
-            logger.error(f"Timed out waiting for FCC ELS results table: {e}")
-            return []
+            _fill(licensee_field, config.FCC_ELS_SEARCH_TERM)
+            _fill(receipt_from_field, receipt_from)
+            _fill(receipt_to_field, receipt_to)
+            # show-records is a plain text input pre-filled with a default of "10".
+            try:
+                _fill(show_records_field, str(config.FCC_ELS_RECORD_LIMIT))
+            except Exception as e:
+                logger.info(f"Could not set FCC ELS show-records field: {e}")
 
-        # --- Parse the results page ---------------------------------------
-        rows = parse_fcc_els_results_html(driver.page_source)
-        logger.info(f"Parsed {len(rows)} FCC ELS result row(s)")
+            # --- Submit the search --------------------------------------------
+            try:
+                licensee_field.submit()
+                logger.info("Submitted FCC ELS search form")
+            except Exception as e:
+                logger.error(f"Failed to submit FCC ELS search form: {e}")
+                return []
 
-        # --- Per-row detail retrieval and merge ---------------------------
-        for row in rows:
-            file_number = row.get("file_number")
-            # The parser returns the raw href as scraped, which on this site is
-            # a root-relative URL (e.g. "/oetcf/els/reports/STA_Print.cfm?..").
-            # Selenium's driver.get() requires an absolute URL, so resolve it
-            # against the search page URL (same scheme/host).
-            raw_detail_url = row.get("current_detail_url")
-            detail_url = urljoin(config.FCC_ELS_SEARCH_URL, raw_detail_url)
-            detail: dict | None = None
-
-            for attempt in range(1, _DETAIL_MAX_ATTEMPTS + 1):
-                try:
-                    driver.set_page_load_timeout(_PAGE_LOAD_TIMEOUT)
-                    driver.get(detail_url)
-                    detail = parse_fcc_els_detail_html(driver.page_source)
-                    break
-                except Exception as e:
-                    logger.info(
-                        "FCC ELS detail attempt %d/%d failed for file_number "
-                        "%r: %s",
-                        attempt,
-                        _DETAIL_MAX_ATTEMPTS,
-                        file_number,
-                        e,
+            # --- Wait for the results table -----------------------------------
+            try:
+                WebDriverWait(driver, 30).until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, _RESULTS_TABLE_CSS)
                     )
-
-            if detail is None:
-                # All retries exhausted (or a parse failure). Discard the
-                # partial data for this row and continue with the next.
-                logger.error(
-                    "Discarding FCC ELS application %r: failed to retrieve or "
-                    "parse detail page after %d attempts",
-                    file_number,
-                    _DETAIL_MAX_ATTEMPTS,
                 )
-                continue
+            except Exception as e:
+                logger.error(f"Timed out waiting for FCC ELS results table: {e}")
+                return []
 
-            app = {
-                "file_number": row.get("file_number"),
-                "application_seq": row.get("application_seq"),
-                "applicant_name": row.get("applicant_name"),
-                "call_sign": row.get("call_sign"),
-                "receipt_date": row.get("receipt_date"),
-                "status": row.get("status"),
-                "status_date": row.get("status_date"),
-                "current_detail_url": row.get("current_detail_url"),
-                "detail": detail,
-            }
-            results.append(app)
+            # --- Parse the results page ---------------------------------------
+            rows = parse_fcc_els_results_html(driver.page_source)
+            logger.info(f"Parsed {len(rows)} FCC ELS result row(s)")
+
+            # --- Per-row detail retrieval and merge ---------------------------
+            for row in rows:
+                file_number = row.get("file_number")
+                # The parser returns the raw href as scraped, which on this site is
+                # a root-relative URL (e.g. "/oetcf/els/reports/STA_Print.cfm?..").
+                # Selenium's driver.get() requires an absolute URL, so resolve it
+                # against the search page URL (same scheme/host).
+                raw_detail_url = row.get("current_detail_url")
+                detail_url = urljoin(config.FCC_ELS_SEARCH_URL, raw_detail_url)
+                detail: dict | None = None
+
+                for attempt in range(1, _DETAIL_MAX_ATTEMPTS + 1):
+                    try:
+                        driver.set_page_load_timeout(_PAGE_LOAD_TIMEOUT)
+                        driver.get(detail_url)
+                        detail = parse_fcc_els_detail_html(driver.page_source)
+                        break
+                    except Exception as e:
+                        logger.info(
+                            "FCC ELS detail attempt %d/%d failed for file_number "
+                            "%r: %s",
+                            attempt,
+                            _DETAIL_MAX_ATTEMPTS,
+                            file_number,
+                            e,
+                        )
+
+                if detail is None:
+                    # All retries exhausted (or a parse failure). Discard the
+                    # partial data for this row and continue with the next.
+                    logger.error(
+                        "Discarding FCC ELS application %r: failed to retrieve or "
+                        "parse detail page after %d attempts",
+                        file_number,
+                        _DETAIL_MAX_ATTEMPTS,
+                    )
+                    continue
+
+                app = {
+                    "file_number": row.get("file_number"),
+                    "application_seq": row.get("application_seq"),
+                    "applicant_name": row.get("applicant_name"),
+                    "call_sign": row.get("call_sign"),
+                    "receipt_date": row.get("receipt_date"),
+                    "status": row.get("status"),
+                    "status_date": row.get("status_date"),
+                    "current_detail_url": row.get("current_detail_url"),
+                    "detail": detail,
+                }
+                results.append(app)
 
     except Exception as e:
-        # Any unexpected search/navigation failure is fail-safe: log and
-        # return whatever was accumulated (never raise to the caller).
+        # Any unexpected search/navigation failure (including the browser not
+        # starting) is fail-safe: log and return whatever was accumulated
+        # (never raise to the caller).
         logger.error(f"FCC ELS scrape failed: {e}")
-    finally:
-        try:
-            driver.quit()
-        except Exception:
-            pass
 
     return results
 
