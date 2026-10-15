@@ -42,6 +42,8 @@ _TABLES = (
     "fcc_els_applications",
     "faa_licenses",
     "compass_files",
+    "federal_register_documents",
+    "regulations_gov_documents",
 )
 
 

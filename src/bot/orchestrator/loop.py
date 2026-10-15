@@ -17,6 +17,9 @@ from src.bot.orchestrator.notams import (
     process_notam_images,
     refresh_notams_from_source,
 )
+from src.bot.orchestrator.regulations_gov import (
+    process_regulations_gov_documents,
+)
 from src.bot.orchestrator.starbase import (
     ingest_starbase_alerts,
     process_beach_alerts,
@@ -46,6 +49,9 @@ async def generate_and_send() -> None:
         partial(process_faa_licenses, chat_list),
         partial(process_compass_files, chat_list),
         partial(process_federal_register_documents, chat_list),
+        # After the Federal Register step, so a notice it just stored is not
+        # announced a second time (see regulations_gov).
+        partial(process_regulations_gov_documents, chat_list),
         ingest_starbase_alerts,
         partial(process_beach_alerts, chat_list),
         partial(process_road_alerts, chat_list),

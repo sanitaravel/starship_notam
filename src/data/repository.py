@@ -95,6 +95,20 @@ class PostedItemRepository:
             cur.execute(f"SELECT COUNT(*) AS n FROM {self.table}")
             return cur.fetchone()["n"]
 
+    def known(self, keys: Iterable, db_path: Optional[str] = None) -> set:
+        """Return the subset of *keys* the table holds, posted or not."""
+        keys = list(keys)
+        if not keys:
+            return set()
+        placeholders = ", ".join("?" for _ in keys)
+        with transaction(get_connection(db_path)) as cur:
+            cur.execute(
+                f"SELECT {self.key_col} FROM {self.table} "
+                f"WHERE {self.key_col} IN ({placeholders})",
+                keys,
+            )
+            return {r[self.key_col] for r in cur.fetchall()}
+
     def needing_post(self, db_path: Optional[str] = None) -> List[Dict]:
         """Return the items not yet posted to Telegram, oldest first."""
         logger.info("Fetching %s rows needing Telegram posting", self.table)

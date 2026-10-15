@@ -21,6 +21,7 @@ from src.data import (
     faa_licenses,
     fcc_els_applications,
     federal_register_documents,
+    regulations_gov_documents,
     road_alerts,
 )
 from src.data.connection import get_connection
@@ -73,11 +74,24 @@ FEDERAL_REGISTER_DOCUMENT = {
     "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2026-10-14/pdf/2026-12345.pdf",
 }
 
+REGULATIONS_GOV_DOCUMENT = {
+    "document_id": "FAA-2026-12808-0001",
+    "docket_id": "FAA-2026-12808",
+    "agency_id": "FAA",
+    "document_type": "Notice",
+    "subtype": "Request for Comments",
+    "title": "Notice of Intent To Prepare a Programmatic EIS for SpaceX Starship",
+    "fr_doc_num": "2026-20963",
+    "posted_date": "2026-10-14T04:00:00Z",
+    "comment_end_date": "2026-12-01T04:59:59Z",
+}
+
 EXPECTED_FAA_ACTIVITY = "192ff71ec0fe2b0074c8070078b237d717641730194a5cebd10e51166606816e"
 EXPECTED_FCC = "1432405b56c7b924a288e7bef4d68246763a5dff16a82152c7514a68f1c79e46"
 EXPECTED_LICENSE = "ca0fa1f8eaeef96e54d4a974b040b0b9baf630f4ce7c82b8ae5c369caadb9600"
 EXPECTED_COMPASS = "27f2633f9ac9895d8676f35203e39f274d203710d292de691d0f1a430a0814eb"
 EXPECTED_FR = "0a828313cd958511ccd4d6d265eef996880eb826bc6a46bf248ce89c47ee079d"
+EXPECTED_REGULATIONS_GOV = "19c9521d3e70e2c27fe07cd9136ab0dda475e5489a2f924f1c3c8224961ec54d"
 
 CASES = [
     (faa_activities.save, FAA_ACTIVITY, "faa_activities", "mission",
@@ -90,6 +104,8 @@ CASES = [
      EXPECTED_COMPASS),
     (federal_register_documents.save, FEDERAL_REGISTER_DOCUMENT,
      "federal_register_documents", "document_number", EXPECTED_FR),
+    (regulations_gov_documents.save, REGULATIONS_GOV_DOCUMENT,
+     "regulations_gov_documents", "document_id", EXPECTED_REGULATIONS_GOV),
 ]
 
 

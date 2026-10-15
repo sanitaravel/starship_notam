@@ -27,6 +27,7 @@ Submodules:
     fcc_els           FCC ELS applications
     compass           COMPASS Master Slide Deck files (+ prefill)
     federal_register  Federal Register documents (+ prefill)
+    regulations_gov   Regulations.gov documents (+ prefill)
     starbase          Starbase beach and road alerts
 
 Public entry points:
@@ -34,6 +35,7 @@ Public entry points:
     async generate_and_send() -> None
     prefill_compass_files() -> int
     prefill_federal_register_documents() -> int
+    prefill_regulations_gov_documents() -> int
 """
 
 from src.bot.orchestrator.compass import prefill_compass_files
@@ -46,6 +48,9 @@ from src.bot.orchestrator.loop import (
     main_loop,
     sleep_until_next_run,
 )
+from src.bot.orchestrator.regulations_gov import (
+    prefill_regulations_gov_documents,
+)
 
 __all__ = [
     "ensure_setup",
@@ -53,5 +58,6 @@ __all__ = [
     "main_loop",
     "prefill_compass_files",
     "prefill_federal_register_documents",
+    "prefill_regulations_gov_documents",
     "sleep_until_next_run",
 ]

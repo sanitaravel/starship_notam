@@ -18,6 +18,9 @@ Scope: three sources picked from a wider survey. Launch Library 2 was dropped
 
 ## 1. Regulations.gov
 
+> **Implemented** (`feat/regulations-gov`): `src/scrapers/regulations_gov_fetcher.py`
+> and `prefill_regulations_gov.py`. The comment-period reminder is not done yet.
+
 The docket system behind federal rulemaking and environmental reviews. It
 overlaps with the Federal Register (each FR notice is also posted here), but it
 also carries what the FR does not print: final EAs, FONSIs/RODs, draft
