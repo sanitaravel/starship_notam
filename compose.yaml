@@ -66,6 +66,18 @@ services:
   bot:
     <<: *app
     restart: unless-stopped
+    # On SIGTERM the bot finishes the item it is posting (or the scrape it is
+    # running) and exits; tini as PID 1 passes the signal on.
+    init: true
+    stop_grace_period: 5m
+    # Healthy while the loop keeps finishing cycles (starship_notam/healthcheck.py).
+    healthcheck:
+      test: ["CMD", "python", "-m", "starship_notam.healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 10m
+      start_interval: 15s
     depends_on:
       postgres:
         condition: service_healthy

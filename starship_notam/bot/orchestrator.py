@@ -28,11 +28,15 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import signal
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 
 from starship_notam.core import config
 from starship_notam.core.logging import logger
+from starship_notam.healthcheck import write_heartbeat
 
 from starship_notam.bot.formatting import (
     build_notam_caption,
@@ -47,12 +51,6 @@ from starship_notam.bot.formatting import (
 from starship_notam.bot.transport import (
     send_message,
     send_photo,
-)
-
-from starship_notam.bot.reloader import (
-    restart_process,
-    snapshot_sources,
-    sources_changed,
 )
 
 from starship_notam.data import (
@@ -105,6 +103,16 @@ from starship_notam.visualization.image_composer import plot_single_notam
 #   starship_notam/bot/orchestrator.py -> starship_notam/ -> project root
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _MAPS_DIR = _PROJECT_ROOT / "maps"
+
+# Set by main_loop on SIGTERM or SIGINT. The steps check it between items, so
+# a stop never separates a send from its "posted" mark, yet does not wait for
+# the rest of the cycle either: what is left stays pending for the next start.
+_stop: asyncio.Event | None = None
+
+
+def _stopping() -> bool:
+    """True once a stop was requested."""
+    return _stop is not None and _stop.is_set()
 
 
 # --- Individual processing steps -------------------------------------------
@@ -198,6 +206,9 @@ async def _process_notam_images(chat_list: list[str]) -> None:
     os.makedirs(_MAPS_DIR, exist_ok=True)
 
     for name, parsed in pending:
+        if _stopping():
+            logger.info("Stop requested; leaving the remaining NOTAM images for the next start")
+            return
         try:
             e_text = parsed.get("E") or ""
             coords = parse_coords_from_text(e_text)
@@ -281,6 +292,9 @@ async def _post_pending(
 
     logger.info(f"Found {len(items)} {label} needing post to Telegram")
     for item in items:
+        if _stopping():
+            logger.info(f"Stop requested; leaving the remaining {label} for the next start")
+            return
         key = key_fn(item)
         try:
             text = format_fn(item)
@@ -539,19 +553,27 @@ async def generate_and_send() -> None:
     Each step is independently wrapped in try/except (inside the helper
     functions), so a failure in one step does not prevent the others from
     running. All content is delivered to the single configured Telegram
-    channel (``config.TELEGRAM_CHANNEL_ID``).
+    channel (``config.TELEGRAM_CHANNEL_ID``). After a stop request the cycle
+    ends early, between items (see ``_stop``).
     """
-    await _refresh_notams_from_source()
     chat_list = [config.TELEGRAM_CHANNEL_ID]
-    await _process_notam_images(chat_list)
-    await _process_faa_activities(chat_list)
-    await _process_fcc_els_applications(chat_list)
-    await _process_faa_licenses(chat_list)
-    await _process_compass_files(chat_list)
-    await _process_federal_register_documents(chat_list)
-    await _ingest_starbase_alerts()
-    await _process_beach_alerts(chat_list)
-    await _process_road_alerts(chat_list)
+    steps = (
+        _refresh_notams_from_source,
+        partial(_process_notam_images, chat_list),
+        partial(_process_faa_activities, chat_list),
+        partial(_process_fcc_els_applications, chat_list),
+        partial(_process_faa_licenses, chat_list),
+        partial(_process_compass_files, chat_list),
+        partial(_process_federal_register_documents, chat_list),
+        _ingest_starbase_alerts,
+        partial(_process_beach_alerts, chat_list),
+        partial(_process_road_alerts, chat_list),
+    )
+    for step in steps:
+        if _stopping():
+            logger.info("Stop requested; skipping the rest of this cycle")
+            return
+        await step()
 
 
 def ensure_setup() -> None:
@@ -568,8 +590,11 @@ def ensure_setup() -> None:
     init_db(config.DB_PATH)
 
 
-async def sleep_until_next_run() -> None:
-    """Sleep until the next scheduled run slot based on ``RUNS_PER_HOUR``."""
+async def sleep_until_next_run(stop: asyncio.Event) -> None:
+    """Sleep until the next scheduled run slot based on ``RUNS_PER_HOUR``.
+
+    Returns early as soon as *stop* is set.
+    """
     interval_minutes = 60 / config.RUNS_PER_HOUR
 
     now = datetime.now()
@@ -592,46 +617,90 @@ async def sleep_until_next_run() -> None:
         f"(sleeping {sleep_seconds:.0f}s)"
     )
 
-    await asyncio.sleep(sleep_seconds)
+    try:
+        await asyncio.wait_for(stop.wait(), timeout=sleep_seconds)
+    except TimeoutError:
+        pass
+
+
+def _install_stop_handlers(stop: asyncio.Event) -> Callable[[], None]:
+    """Set *stop* on SIGTERM or SIGINT; return a function that removes the handlers.
+
+    ``docker stop`` and a deploy send SIGTERM. The cycle in progress then
+    ends after the item it is on, so no item is sent without being marked
+    posted. A second signal cancels the loop at once. Event loops on Windows do not support
+    signal handlers; there Ctrl-C still raises ``KeyboardInterrupt``.
+    """
+    loop = asyncio.get_running_loop()
+    task = asyncio.current_task()
+
+    def on_signal(sig: signal.Signals) -> None:
+        if stop.is_set():
+            logger.warning(f"Received {sig.name} again; stopping immediately")
+            task.cancel()
+            return
+        logger.info(f"Received {sig.name}; stopping after the current item")
+        stop.set()
+
+    installed = []
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, on_signal, sig)
+        except (NotImplementedError, RuntimeError):
+            continue
+        installed.append(sig)
+
+    def remove() -> None:
+        for sig in installed:
+            loop.remove_signal_handler(sig)
+
+    return remove
+
+
+def _record_heartbeat() -> None:
+    """Write the heartbeat the container healthcheck reads."""
+    try:
+        write_heartbeat()
+    except OSError:
+        logger.warning("Could not write the heartbeat file", exc_info=True)
 
 
 async def main_loop() -> None:
-    """Start the bot: initialize and loop forever.
+    """Start the bot: initialize and loop until asked to stop.
 
     The loop wraps ``generate_and_send`` in try/except so a transient failure
-    never terminates monitoring. ``asyncio.CancelledError`` is handled to log a
-    clean stop.
+    never terminates monitoring. After each cycle it writes the heartbeat for
+    the healthcheck. SIGTERM or SIGINT stops the loop after the current item
+    (see ``_install_stop_handlers``); ``asyncio.CancelledError`` is handled to
+    log a clean stop.
     """
-    ensure_setup()
-    logger.info("Starting Telegram NOTAM bot loop (python-telegram-bot)")
+    global _stop
 
-    # Snapshot our own source files so we can detect code updates on disk
-    # and restart in place to pick them up (see bot.reloader).
-    source_snapshot = snapshot_sources()
+    ensure_setup()
+    logger.info(f"Starting Starship NOTAM bot {config.VERSION}")
+
+    stop = _stop = asyncio.Event()
+    remove_stop_handlers = _install_stop_handlers(stop)
 
     try:
-        while True:
+        while not stop.is_set():
             try:
                 await generate_and_send()
             except Exception:
                 logger.exception("Error in generate_and_send")
 
-            await sleep_until_next_run()
+            _record_heartbeat()
 
-            # Safe point between cycles: if our source changed on disk,
-            # restart in place so the new code takes effect. restart_process
-            # replaces the process image and does not return on success; if
-            # it fails it logs and we keep running the current code.
-            if sources_changed(source_snapshot):
-                logger.info("Source change detected at safe point; restarting")
-                try:
-                    restart_process()
-                except Exception:
-                    logger.exception("Restart failed; refreshing snapshot and continuing")
-                    source_snapshot = snapshot_sources()
+            if not stop.is_set():
+                await sleep_until_next_run(stop)
 
     except asyncio.CancelledError:
-        logger.info("Telegram NOTAM bot stopped")
+        pass
+    finally:
+        remove_stop_handlers()
+        _stop = None
+
+    logger.info("Telegram NOTAM bot stopped")
 
 
 if __name__ == "__main__":
