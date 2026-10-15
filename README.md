@@ -90,13 +90,19 @@ The services start in this order:
 ### 4. Check that it works
 
 ```sh
-docker compose ps        # postgres and selenium "healthy", prefill "exited (0)", bot "running"
+docker compose ps        # postgres and selenium "healthy", prefill "exited (0)", bot "healthy"
 docker compose logs -f bot
 ```
 
 A cycle takes one to three minutes. It ends with a line like
 `Next run scheduled for 2026-10-13 11:00:00`. By then the first messages
-should be in your channel.
+should be in your channel. The bot shows `health: starting` until that first
+cycle finishes, then `healthy`. It turns `unhealthy` if no cycle has finished
+for the run interval plus 15 minutes.
+
+`docker compose stop` and `docker compose down` let the bot finish the item
+it is posting before it exits, so nothing is posted twice after a restart.
+Items it did not reach are posted after the next start.
 
 ### Everyday commands
 

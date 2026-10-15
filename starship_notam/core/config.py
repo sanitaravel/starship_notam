@@ -68,6 +68,10 @@ KEYWORD: str = os.environ.get("KEYWORD", "STARSHIP")
 
 RUNS_PER_HOUR: int = int(os.environ.get("RUNS_PER_HOUR", "2"))
 
+# Commit the running image was built from (set by the Dockerfile from the
+# GIT_SHA build argument); "dev" outside a CI-built image.
+VERSION: str = os.environ.get("NOTAM_VERSION", "dev")
+
 # --- FCC ELS scraper configuration ---
 
 FCC_ELS_SEARCH_URL: str = "https://apps.fcc.gov/oetcf/els/reports/GenericSearch.cfm"

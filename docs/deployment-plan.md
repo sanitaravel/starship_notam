@@ -14,7 +14,8 @@ Status legend: `[ ]` to do, `[x]` done, `[?]` needs a decision first.
 1. A merge into `main` is running on the server within minutes, with no SSH.
 2. Only code that passed CI is deployed, and the image that runs is the
    exact image CI built.
-3. A deploy never interrupts a cycle: no double posts, no lost posts.
+3. A deploy never separates a send from its "posted" mark: no double
+   posts, no lost posts.
 4. A broken release rolls back automatically; a manual rollback is one
    command.
 5. The server needs no inbound access, and GitHub holds no server
@@ -73,36 +74,43 @@ Server, systemd timer every 5 min                             │
 Useful on its own: any restart, manual or automatic, stops risking a double
 post.
 
-### 1.1 Handle SIGTERM in `main_loop` `[ ]`
+### 1.1 Handle SIGTERM in `main_loop` `[x]`
 
-- **Where:** `bot/orchestrator.py` (`main_loop`, `sleep_until_next_run`)
-- **Change:** an `asyncio.Event` `stop_requested`, set by
-  `loop.add_signal_handler` for SIGTERM and SIGINT (skipped on Windows, where
-  standalone mode keeps the existing `KeyboardInterrupt` handling).
-  `sleep_until_next_run` waits on the event with the next-slot timeout instead
-  of `asyncio.sleep`.
-  - Stop requested while sleeping → exit immediately.
-  - Stop requested during a cycle → the cycle finishes, then the bot exits
-    and logs `Stop requested; finishing current cycle`. Nothing is cancelled
-    mid-cycle.
-- **Test:** stop during the sleep returns at once; stop during
-  `generate_and_send` returns only after it completes.
+- **Where:** `bot/orchestrator.py` (`main_loop`, `sleep_until_next_run`,
+  `generate_and_send`, `_post_pending`, `_process_notam_images`)
+- **Change:** an `asyncio.Event` (`_stop`), set by `loop.add_signal_handler`
+  for SIGTERM and SIGINT (not available on Windows, where standalone mode
+  keeps the existing `KeyboardInterrupt` handling).
+  - Stop requested while sleeping → `sleep_until_next_run` waits on the event
+    and returns at once; the bot exits.
+  - Stop requested during a cycle → the item being sent finishes (send and
+    mark), the remaining items and steps are skipped and stay pending for the
+    next start, then the bot exits.
+  - A second signal cancels the loop immediately.
+- **Why not finish the whole cycle:** each send is followed by a 5 s pause,
+  so a cycle with many new items (always the first one) runs well past any
+  reasonable grace period. Measured in a container with 44 pending items:
+  243 s to finish the cycle, 5 s to finish the current item.
+- **Test:** `tests/unit/test_bot/test_main_loop.py` (real SIGTERM tests run
+  on Linux only).
 
-### 1.2 Give the bot time to stop `[ ]`
+### 1.2 Give the bot time to stop `[x]`
 
 - **Where:** `compose.yaml`, `bot` service
-- **Change:** `stop_grace_period: 5m` (a cycle takes 1–3 min) and
+- **Change:** `stop_grace_period: 5m` (covers one item with Telegram
+  retries, or a NOTAM scrape that cannot be interrupted) and
   `init: true` (tini as PID 1: forwards signals, reaps zombies).
 
-### 1.3 Remove the reloader `[ ]`
+### 1.3 Remove the reloader `[x]`
 
 - **Where:** delete `bot/reloader.py` and
   `tests/unit/test_bot/test_reloader.py`; remove the import and the
   snapshot/restart block in `main_loop`.
 
-### 1.4 Heartbeat and healthcheck `[ ]`
+### 1.4 Heartbeat and healthcheck `[x]`
 
-- **Where:** `bot/orchestrator.py`, `compose.yaml`
+- **Where:** `starship_notam/healthcheck.py`, `bot/orchestrator.py`,
+  `compose.yaml`
 - **Change:** after every cycle (even one where some steps failed — the loop
   itself is alive), write the current Unix time to `/tmp/notam-heartbeat`.
   The `bot` service gets a `healthcheck` that fails when the file is older
@@ -110,11 +118,15 @@ post.
   so the first cycle (which runs at start-up) can finish.
 - **Purpose:** the deploy script uses `healthy` to accept a new version. It
   catches a crash at start-up and a hung loop.
-- **Test:** the heartbeat file is written after a cycle.
+- **Check:** `python -m starship_notam.healthcheck` (standard library only,
+  so it never loads the config or truncates the log).
+- **Test:** `tests/unit/test_healthcheck.py`; heartbeat after a cycle in
+  `test_main_loop.py`.
 
-### 1.5 Show the running version `[ ]`
+### 1.5 Show the running version `[x]`
 
-- **Where:** `Dockerfile`, `__main__.py` or `main_loop`
+- **Where:** `Dockerfile` (at the end, so a new commit keeps the dependency
+  layer cached), `core/config.py` (`VERSION`), `main_loop`
 - **Change:** `ARG GIT_SHA=dev`, `ENV NOTAM_VERSION=$GIT_SHA`, OCI labels
   `org.opencontainers.image.revision` and `org.opencontainers.image.source`
   (the latter links the GHCR package to the repo). Log
