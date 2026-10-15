@@ -170,64 +170,85 @@ post.
 
 ## Part 3 — Server-side deploy (`feat/auto-deploy`)
 
-### 3.1 `compose.yaml` `[ ]`
+### 3.1 `compose.yaml` `[x]`
 
-- `name: starship-notam` at the top. Volume names are prefixed with the
+- `name: starship_notam` at the top. Volume names are prefixed with the
   project name, which otherwise comes from the directory name; pinning it
-  means a clone in another directory still finds the same database.
+  means a clone in another directory still finds the same database. It
+  matches the name a default clone (`starship_notam/`) already had, so
+  existing local volumes keep working.
 - In the `x-app` anchor:
   `image: ghcr.io/sanitaravel/starship-notam:${NOTAM_IMAGE_TAG:-main}`,
   keeping `build: .` so `docker compose up --build` still works locally.
 - A `logging:` block on every service: `driver: json-file`,
   `max-size: 10m`, `max-file: "5"`.
 
-### 3.2 `deploy/deploy.sh` `[ ]`
+### 3.2 `deploy/deploy.sh` `[x]`
 
-POSIX shell, run on the server from the repo root. State lives in
-`deploy/.state/` (git-ignored): `current`, `previous`, `failed`.
+Bash (for `pipefail`), run on the server from the repo root. State lives in
+`deploy/.state/` (git-ignored): `current`, `previous`, `skip` (a commit the
+timer must not deploy) and the lock file.
 
+0. **Preconditions:** `.env` exists and no tracked file has local changes
+   (a checkout would fail half-way or drop the edit).
 1. **Lock:** `flock -n` so two runs never overlap.
-2. **Check:** `git fetch origin main`. If `origin/main` equals `current`, or
-   equals `failed`, exit quietly.
+2. **Check:** `git fetch origin main`. If `origin/main` equals `current` or
+   `skip`, exit quietly.
 3. **Gate:** `docker manifest inspect ghcr.io/sanitaravel/starship-notam:sha-<new>`.
-   Missing (CI still running or failed) → exit; the next run retries.
+   Missing (CI still running or failed, or the package is private) → log the
+   reason and exit; the next run retries.
 4. **Guard:** if the new commit changes the PostgreSQL **major** version in
-   `compose.yaml`, refuse and log that the upgrade needs a manual
-   dump/restore (a new major cannot start on the old data directory).
-5. **Back up:** `docker compose exec -T postgres pg_dump -U <user> <db> | gzip >
-   backups/pre-<sha>.sql.gz`; keep the last 10. Skipped on the very first
-   deploy (no database yet).
+   `compose.yaml`, refuse, skip the commit and point to the manual upgrade
+   in `docs/deployment.md`.
+5. **Back up:** `pg_dump` inside the postgres container, gzipped to
+   `backups/pre-<commit>.sql.gz`; the newest 10 are kept. Skipped when
+   PostgreSQL is not running (first deploy). A failed backup aborts the
+   deploy.
 6. **Switch:** `git checkout --detach <new>` (so `compose.yaml` matches the
-   image), then `NOTAM_IMAGE_TAG=sha-<new> docker compose pull` and
-   `NOTAM_IMAGE_TAG=sha-<new> docker compose up -d --remove-orphans`.
+   image), then `docker compose pull` and
+   `docker compose up -d --no-build --remove-orphans`, both with
+   `NOTAM_IMAGE_TAG=sha-<new>`.
 7. **Verify:** poll `docker inspect` until the `bot` container is `healthy`,
-   for up to 12 minutes.
-   - Healthy → `previous = current`, `current = <new>`, clear `failed`,
-     `docker image prune -f` (images only).
-   - Not healthy → check out `previous`, `up -d` with its tag, write `<new>`
-     to `failed` so it is not retried every 5 minutes. The next commit on
-     `main` replaces it.
+   for up to 15 minutes.
+   - Healthy → `previous = current`, `current = <new>`; remove images of
+     other releases.
+   - Not healthy → write `<new>` to `skip`, switch back to `current` and
+     wait for it to turn healthy again. The next commit on `main` is
+     deployed as usual.
 8. **Log** every step to stdout (journald).
 
-Manual use: `deploy.sh --rollback` (go back to `previous`) and
-`deploy.sh --to <sha>` (deploy a specific commit that has an image).
+Manual use: `--rollback` (go back to `previous`), `--to <commit>` (deploy a
+commit that has an image) and `--status`. `--rollback` and `--to` hold the
+chosen release by writing the current `origin/main` to `skip`.
 
 The script never runs `docker compose down -v`, `docker volume rm` or
 `docker system prune --volumes`.
 
-### 3.3 systemd units `[ ]`
+**Changed from the first draft:** the heartbeat is now also written after
+every step of a cycle (`generate_and_send`), not only after a whole cycle.
+The first cycle on a new database posts everything with a 5 s pause per
+message and could outlast the health wait, which would roll back a working
+release.
+
+**Test:** `tests/deploy/test_deploy_script.py` runs the script against a
+real git origin and a stub `docker` (Linux only; runs in CI).
+
+### 3.3 systemd units `[x]`
 
 - `deploy/starship-notam-deploy.service`: `Type=oneshot`,
   `User=notam` (member of the `docker` group),
-  `WorkingDirectory=/opt/starship-notam`, `ExecStart=.../deploy/deploy.sh`.
+  `WorkingDirectory=/opt/starship_notam`, `TimeoutStartSec=45min`.
 - `deploy/starship-notam-deploy.timer`: `OnBootSec=2min`,
-  `OnUnitActiveSec=5min`, `Persistent=true`.
+  `OnUnitActiveSec=5min`. (`Persistent=` from the first draft only applies
+  to `OnCalendar=` timers, so it is not used.)
+- `.gitattributes` keeps LF line endings for the script and units.
 
-### 3.4 Documentation `[ ]`
+### 3.4 Documentation `[x]`
 
-- `docs/deployment.md`: one-time server setup, watching deploys, rollback,
-  restoring a backup, and the database rules below.
-- README: replace the "Update to the latest code" row with a link to it.
+- `docs/deployment.md`: one-time server setup, everyday commands, what not
+  to do on the server, troubleshooting, restoring a backup, PostgreSQL
+  major upgrades and the release rules.
+- README: links to it from the Docker section and the update command.
 
 ---
 
@@ -235,7 +256,7 @@ The script never runs `docker compose down -v`, `docker volume rm` or
 
 An update never deletes the database:
 
-- PostgreSQL data lives in the named volume `postgres`
+- PostgreSQL data lives in the named volume `starship_notam_postgres`
   (`/var/lib/postgresql/data`). Volumes are independent of containers and
   images; recreating `bot`, `prefill` or even `postgres` reattaches the same
   volume.
@@ -253,23 +274,12 @@ An update never deletes the database:
   an automatic rollback is safe. Dropping or renaming a column needs two
   releases: stop using it, then remove it.
 
-## One-time server setup (summary)
+## One-time server setup
 
-The bot is not deployed yet, so the first deploy starts from an empty
-database.
-
-1. Install Docker Engine with the Compose plugin.
-2. Create a `notam` user in the `docker` group.
-3. `git clone https://github.com/sanitaravel/starship_notam /opt/starship-notam`
-4. `cp .env.example .env` and fill in `TELEGRAM_BOT_TOKEN`,
-   `TELEGRAM_CHANNEL_ID`, `POSTGRES_PASSWORD`.
-5. Copy the two units to `/etc/systemd/system/`, then
-   `systemctl enable --now starship-notam-deploy.timer`.
-6. Watch the first deploy: `journalctl -fu starship-notam-deploy`.
-
-The first start prefills COMPASS and the Federal Register, then posts every
-currently active NOTAM, advisory and closure once (see README, "Start the
-bot").
+Step by step in [deployment.md](deployment.md#one-time-server-setup). The
+bot is not deployed yet, so the first deploy starts from an empty database:
+it prefills COMPASS and the Federal Register, then posts every currently
+active NOTAM, advisory and closure once.
 
 ## Out of scope
 

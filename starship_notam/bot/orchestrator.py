@@ -574,6 +574,10 @@ async def generate_and_send() -> None:
             logger.info("Stop requested; skipping the rest of this cycle")
             return
         await step()
+        # After every step, not just every cycle: the first cycle on a new
+        # database posts everything and can run longer than a deploy waits
+        # for the bot to turn healthy.
+        _record_heartbeat()
 
 
 def ensure_setup() -> None:
