@@ -10,7 +10,7 @@ but does not re-flag it for posting.
 This module imports only from ``starship_notam.data`` and ``starship_notam.core``.
 """
 
-from typing import Dict, Iterable, List, Optional
+from typing import Dict
 
 from starship_notam.data.repository import PostedItemRepository
 
@@ -51,44 +51,4 @@ class FederalRegisterDocumentRepository(PostedItemRepository):
         return document_number, fields, fields
 
 
-_repo = FederalRegisterDocumentRepository()
-
-
-def save_federal_register_document(record: Dict, db_path: Optional[str] = None) -> str:
-    """Insert or update a Federal Register document by ``document_number``.
-
-    Returns ``"inserted"``, ``"updated"``, ``"unchanged"`` or ``"skipped"``
-    (record without ``document_number``).
-    """
-    return _repo.save(record, db_path)
-
-
-def count_federal_register_documents(db_path: Optional[str] = None) -> int:
-    """Return how many Federal Register documents the database has recorded."""
-    return _repo.count(db_path)
-
-
-def get_federal_register_documents_needing_post(db_path: Optional[str] = None) -> List[Dict]:
-    """Return Federal Register documents not yet posted, in insertion order."""
-    return _repo.needing_post(db_path)
-
-
-def mark_federal_register_document_posted(
-    document_number, telegram_message_id, db_path: Optional[str] = None
-) -> None:
-    """Mark a Federal Register document as posted with its message ID."""
-    _repo.mark_posted(document_number, telegram_message_id, db_path)
-
-
-def mark_federal_register_documents_posted(
-    document_numbers: Iterable[str],
-    telegram_message_id=None,
-    db_path: Optional[str] = None,
-) -> int:
-    """Mark several Federal Register documents as posted; return rows changed.
-
-    Rows already marked posted are left alone. Called with
-    ``telegram_message_id=None`` to prefill the database with documents that
-    should never be announced.
-    """
-    return _repo.mark_many_posted(document_numbers, telegram_message_id, db_path)
+federal_register_documents = FederalRegisterDocumentRepository()

@@ -13,27 +13,19 @@ import pytest
 
 from starship_notam.data import (
     get_beach_alerts_needing_post,
-    get_compass_files_needing_post,
+    compass_files,
     get_connection,
-    get_faa_activities_needing_post,
-    get_faa_licenses_needing_post,
-    get_fcc_els_applications_needing_post,
+    faa_activities,
+    faa_licenses,
+    fcc_els_applications,
     get_notams_needing_images,
     get_road_alerts_needing_post,
     init_db,
     load_all_notams,
     mark_beach_posted,
-    mark_compass_file_posted,
-    mark_faa_activity_posted,
-    mark_faa_license_posted,
-    mark_fcc_els_application_posted,
     mark_image_generated,
     mark_road_posted,
     save_beach_alert,
-    save_compass_file,
-    save_faa_activity,
-    save_faa_license,
-    save_fcc_els_application,
     save_notam,
     save_road_alert,
 )
@@ -110,11 +102,11 @@ def test_faa_activity_round_trip(pg):
         "primary_window": "08 JUL 25 1350-2359Z",
         "backup_window": "09 JUL 25 1350-2359Z",
     }
-    save_faa_activity(activity, pg)
+    faa_activities.save(activity, pg)
 
-    assert get_faa_activities_needing_post(pg) == [activity]
-    mark_faa_activity_posted(activity["mission"], 12345, pg)
-    assert get_faa_activities_needing_post(pg) == []
+    assert faa_activities.needing_post(pg) == [activity]
+    faa_activities.mark_posted(activity["mission"], 12345, pg)
+    assert faa_activities.needing_post(pg) == []
 
 
 def test_starbase_round_trip(pg):
@@ -149,7 +141,7 @@ def test_starbase_round_trip(pg):
 
 
 def test_fcc_els_round_trip(pg):
-    save_fcc_els_application(
+    fcc_els_applications.save(
         {
             "file_number": "0123-EX-ST-2025",
             "application_seq": "12345",
@@ -160,29 +152,29 @@ def test_fcc_els_round_trip(pg):
         pg,
     )
 
-    (app,) = get_fcc_els_applications_needing_post(pg)
+    (app,) = fcc_els_applications.needing_post(pg)
     assert app["file_number"] == "0123-EX-ST-2025"
-    mark_fcc_els_application_posted("0123-EX-ST-2025", 12345, pg)
-    assert get_fcc_els_applications_needing_post(pg) == []
+    fcc_els_applications.mark_posted("0123-EX-ST-2025", 12345, pg)
+    assert fcc_els_applications.needing_post(pg) == []
 
 
 def test_faa_license_round_trip(pg):
-    save_faa_license(
+    faa_licenses.save(
         {"doc_unique_id": "DRSDOC1", "status": "Active", "details": {"a": "b"}}, pg
     )
 
-    (lic,) = get_faa_licenses_needing_post(pg)
+    (lic,) = faa_licenses.needing_post(pg)
     assert lic["details"] == {"a": "b"}
     assert lic["is_new"]
-    mark_faa_license_posted("DRSDOC1", 12345, pg)
-    assert get_faa_licenses_needing_post(pg) == []
+    faa_licenses.mark_posted("DRSDOC1", 12345, pg)
+    assert faa_licenses.needing_post(pg) == []
 
 
 def test_compass_round_trip(pg):
     record = {"file_uuid": "u1", "filename": "deck.pptx", "uploaded_at": "05/Oct/2026"}
-    assert save_compass_file(record, pg) == "inserted"
-    assert save_compass_file(record, pg) == "unchanged"
+    assert compass_files.save(record, pg) == "inserted"
+    assert compass_files.save(record, pg) == "unchanged"
 
-    assert [r["file_uuid"] for r in get_compass_files_needing_post(pg)] == ["u1"]
-    mark_compass_file_posted("u1", 12345, pg)
-    assert get_compass_files_needing_post(pg) == []
+    assert [r["file_uuid"] for r in compass_files.needing_post(pg)] == ["u1"]
+    compass_files.mark_posted("u1", 12345, pg)
+    assert compass_files.needing_post(pg) == []

@@ -8,9 +8,7 @@ import prefill_federal_register
 from starship_notam.bot.formatting import format_federal_register_document
 from starship_notam.bot.orchestrator import federal_register, posting
 from starship_notam.core import config
-from starship_notam.data.federal_register_repo import (
-    get_federal_register_documents_needing_post,
-)
+from starship_notam.data.federal_register_repo import federal_register_documents
 
 
 def _doc(number, published, title="Notice", **extra):
@@ -81,8 +79,7 @@ def fr_env(initialized_db, monkeypatch):
     monkeypatch.setattr(posting, "send_message", fake_send)
 
     def set_documents(docs):
-        monkeypatch.setattr(
-            federal_register, "fetch_federal_register_documents", lambda: list(docs)
+        monkeypatch.setattr(federal_register.federal_register_documents_fetcher, "fetch", lambda: list(docs)
         )
 
     return sent, set_documents
@@ -107,7 +104,7 @@ async def test_prefill_suppresses_existing_documents(fr_env):
     set_documents([_doc("new", "2026-10-14"), _doc("old", "2026-09-29")])
 
     assert federal_register.prefill_federal_register_documents() == 2
-    assert get_federal_register_documents_needing_post() == []
+    assert federal_register_documents.needing_post() == []
 
     await federal_register.process_federal_register_documents(["chat"])
     assert sent == []
@@ -120,7 +117,7 @@ async def test_prefill_suppresses_existing_documents(fr_env):
 
 def test_prefill_raises_when_fetch_fails(initialized_db, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", initialized_db)
-    monkeypatch.setattr(federal_register, "fetch_federal_register_documents", lambda: None)
+    monkeypatch.setattr(federal_register.federal_register_documents_fetcher, "fetch", lambda: None)
 
     with pytest.raises(RuntimeError):
         federal_register.prefill_federal_register_documents()
@@ -130,7 +127,7 @@ async def test_prefill_script_if_empty_runs_only_on_empty_table(fr_env):
     sent, set_documents = fr_env
     set_documents([_doc("a", "2026-10-14")])
     assert prefill_federal_register.main(["--if-empty"]) == 0
-    assert get_federal_register_documents_needing_post() == []
+    assert federal_register_documents.needing_post() == []
 
     # The table now has rows, so a second run must not suppress "b".
     set_documents([_doc("b", "2026-10-20", title="Later"), _doc("a", "2026-10-14")])
@@ -154,6 +151,6 @@ async def test_unsent_document_is_retried_even_when_fetch_fails(fr_env, monkeypa
     assert sent == []
 
     monkeypatch.setattr(posting, "send_message", working_send)
-    monkeypatch.setattr(federal_register, "fetch_federal_register_documents", lambda: None)
+    monkeypatch.setattr(federal_register.federal_register_documents_fetcher, "fetch", lambda: None)
     await federal_register.process_federal_register_documents(["chat"])
     assert len(sent) == 1

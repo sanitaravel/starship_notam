@@ -33,16 +33,9 @@ class FaaAdvisoryFetcher(HttpFetcher):
         return f"{len(result)} launch(es)"
 
 
-def fetch_faa_advisory() -> list[dict]:
-    """Fetch the FAA advisory page and return parsed launch dictionaries.
-
-    Each returned dict contains the keys ``mission`` (str), ``primary_window``
-    (str | None), and ``backup_window`` (str | None). Returns an empty list
-    when the request fails. Does NOT persist any data to the database.
-    """
-    return FaaAdvisoryFetcher().fetch()
+faa_advisory_fetcher = FaaAdvisoryFetcher()
 
 
 if __name__ == "__main__":
-    activities = fetch_faa_advisory()
+    activities = faa_advisory_fetcher.fetch()
     logger.info(f"Total FAA activities fetched: {len(activities)}")

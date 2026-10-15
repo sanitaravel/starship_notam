@@ -7,12 +7,10 @@ import requests
 
 from starship_notam.core import config
 from starship_notam.scrapers import http_fetcher
-from starship_notam.scrapers.compass_fetcher import fetch_compass_files
-from starship_notam.scrapers.faa_fetcher import FAA_ADVISORY_URL, fetch_faa_advisory
-from starship_notam.scrapers.federal_register_fetcher import (
-    fetch_federal_register_documents,
-)
-from starship_notam.scrapers.starbase_fetcher import fetch_starbase_status
+from starship_notam.scrapers.compass_fetcher import compass_files_fetcher
+from starship_notam.scrapers.faa_fetcher import FAA_ADVISORY_URL, faa_advisory_fetcher
+from starship_notam.scrapers.federal_register_fetcher import federal_register_documents_fetcher
+from starship_notam.scrapers.starbase_fetcher import starbase_status_fetcher
 
 
 class FakeResponse:
@@ -80,10 +78,10 @@ def test_http_error_status_is_a_failure_not_parsed(get):
 @pytest.mark.parametrize(
     "fetch, expected",
     [
-        (fetch_faa_advisory, []),
-        (fetch_starbase_status, {"beach": None, "road_delays": []}),
-        (fetch_compass_files, None),
-        (fetch_federal_register_documents, None),
+        (faa_advisory_fetcher.fetch, []),
+        (starbase_status_fetcher.fetch, {"beach": None, "road_delays": []}),
+        (compass_files_fetcher.fetch, None),
+        (federal_register_documents_fetcher.fetch, None),
     ],
     ids=["faa", "starbase", "compass", "federal_register"],
 )
@@ -96,17 +94,17 @@ def test_each_source_keeps_its_failure_value(get, fetch, expected):
 def test_failure_values_are_fresh_objects(get):
     get.response = FakeResponse(status=500)
 
-    first = fetch_starbase_status()
+    first = starbase_status_fetcher.fetch()
     first["road_delays"].append("mutated")
 
-    assert fetch_starbase_status() == {"beach": None, "road_delays": []}
+    assert starbase_status_fetcher.fetch() == {"beach": None, "road_delays": []}
 
 
 def test_sources_send_their_own_request_options(get):
     get.response = requests.ConnectionError("down")
 
-    fetch_faa_advisory()
-    fetch_federal_register_documents()
+    faa_advisory_fetcher.fetch()
+    federal_register_documents_fetcher.fetch()
 
     (faa_url, faa_kwargs), (fr_url, fr_kwargs) = get.calls
     assert faa_url == FAA_ADVISORY_URL
@@ -120,6 +118,6 @@ def test_config_url_is_read_at_fetch_time(get, monkeypatch):
     monkeypatch.setattr(config, "COMPASS_SLIDE_LIST_URL", "https://example.test/compass")
     get.response = requests.ConnectionError("down")
 
-    fetch_compass_files()
+    compass_files_fetcher.fetch()
 
     assert get.calls[0][0] == "https://example.test/compass"

@@ -1,43 +1,24 @@
 """Data layer package — database schema, connections, and one repository per source.
 
-Re-exports public functions from submodules for convenient access.
+Re-exports the public entry points. Items posted to Telegram are stored
+through :class:`~starship_notam.data.repository.PostedItemRepository`
+instances (``faa_activities.save(...)``, ``.needing_post()``,
+``.mark_posted()``); NOTAMs and Starbase alerts have their own functions.
 """
 
-from starship_notam.data.compass_repo import (
-    get_compass_files_needing_post,
-    mark_compass_file_posted,
-    mark_compass_files_posted,
-    save_compass_file,
-)
+from starship_notam.data.compass_repo import compass_files
 from starship_notam.data.connection import get_connection
-from starship_notam.data.faa_repo import (
-    get_faa_activities_needing_post,
-    mark_faa_activity_posted,
-    save_faa_activity,
-)
-from starship_notam.data.faa_license_repo import (
-    get_faa_licenses_needing_post,
-    mark_faa_license_posted,
-    save_faa_license,
-)
-from starship_notam.data.federal_register_repo import (
-    get_federal_register_documents_needing_post,
-    mark_federal_register_document_posted,
-    mark_federal_register_documents_posted,
-    save_federal_register_document,
-)
-from starship_notam.data.fcc_els_repo import (
-    get_fcc_els_applications_needing_post,
-    mark_fcc_els_application_posted,
-    save_fcc_els_application,
-)
-from starship_notam.data.schema import init_db
+from starship_notam.data.faa_license_repo import faa_licenses
+from starship_notam.data.faa_repo import faa_activities
+from starship_notam.data.fcc_els_repo import fcc_els_applications
+from starship_notam.data.federal_register_repo import federal_register_documents
 from starship_notam.data.notam_repo import (
     get_notams_needing_images,
     load_all_notams,
     mark_image_generated,
     save_notam,
 )
+from starship_notam.data.schema import init_db
 from starship_notam.data.starbase_repo import (
     get_beach_alerts_needing_post,
     get_road_alerts_needing_post,
@@ -54,23 +35,11 @@ __all__ = [
     "get_notams_needing_images",
     "mark_image_generated",
     "load_all_notams",
-    "save_faa_activity",
-    "get_faa_activities_needing_post",
-    "mark_faa_activity_posted",
-    "save_fcc_els_application",
-    "get_fcc_els_applications_needing_post",
-    "mark_fcc_els_application_posted",
-    "save_faa_license",
-    "get_faa_licenses_needing_post",
-    "mark_faa_license_posted",
-    "save_compass_file",
-    "get_compass_files_needing_post",
-    "mark_compass_file_posted",
-    "mark_compass_files_posted",
-    "save_federal_register_document",
-    "get_federal_register_documents_needing_post",
-    "mark_federal_register_document_posted",
-    "mark_federal_register_documents_posted",
+    "faa_activities",
+    "fcc_els_applications",
+    "faa_licenses",
+    "compass_files",
+    "federal_register_documents",
     "save_beach_alert",
     "save_road_alert",
     "get_beach_alerts_needing_post",

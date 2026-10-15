@@ -30,11 +30,7 @@ _DB_SETTINGS = settings(
 
 from starship_notam.data.schema import init_db
 from starship_notam.data import repository
-from starship_notam.data.fcc_els_repo import (
-    get_fcc_els_applications_needing_post,
-    mark_fcc_els_application_posted,
-    save_fcc_els_application,
-)
+from starship_notam.data.fcc_els_repo import fcc_els_applications
 
 # The schema is created once at startup in production (ensure_setup), not by
 # the repository functions, so every test here starts from an initialized DB.
@@ -162,8 +158,8 @@ def test_payload_hash_is_key_order_independent(tmp_path_factory, data):
     db2 = str(tmp_path_factory.mktemp("h2") / "notams.db")
     init_db(db2)
 
-    save_fcc_els_application(data, db1)
-    save_fcc_els_application(reordered, db2)
+    fcc_els_applications.save(data, db1)
+    fcc_els_applications.save(reordered, db2)
 
     hash1 = _read_row(db1, data["file_number"])["payload_hash"]
     hash2 = _read_row(db2, data["file_number"])["payload_hash"]
@@ -180,14 +176,14 @@ def test_resaving_unchanged_application_never_reflags(tmp_path_factory, data):
     db = str(tmp_path_factory.mktemp("unchanged") / "notams.db")
     init_db(db)
 
-    save_fcc_els_application(data, db)
-    mark_fcc_els_application_posted(data["file_number"], "msg-1", db)
+    fcc_els_applications.save(data, db)
+    fcc_els_applications.mark_posted(data["file_number"], "msg-1", db)
 
     before = _read_row(db, data["file_number"])
     assert before["telegram_posted"] == 1
 
     # Save an identical (freshly built) dict again.
-    save_fcc_els_application(dict(data), db)
+    fcc_els_applications.save(dict(data), db)
 
     after = _read_row(db, data["file_number"])
     assert after["telegram_posted"] == 1
@@ -203,8 +199,8 @@ def test_changed_application_is_reflagged(tmp_path_factory, data):
     db = str(tmp_path_factory.mktemp("changed") / "notams.db")
     init_db(db)
 
-    save_fcc_els_application(data, db)
-    mark_fcc_els_application_posted(data["file_number"], "msg-1", db)
+    fcc_els_applications.save(data, db)
+    fcc_els_applications.mark_posted(data["file_number"], "msg-1", db)
 
     before = _read_row(db, data["file_number"])
     assert before["telegram_posted"] == 1
@@ -216,7 +212,7 @@ def test_changed_application_is_reflagged(tmp_path_factory, data):
     new_detail["__extra__"] = "new-value"
     changed["detail"] = new_detail
 
-    save_fcc_els_application(changed, db)
+    fcc_els_applications.save(changed, db)
 
     after = _read_row(db, data["file_number"])
     assert after["telegram_posted"] == 0
@@ -241,7 +237,7 @@ def test_file_number_uniqueness(tmp_path_factory, apps):
     for app in apps:
         app = dict(app)
         app["file_number"] = file_number
-        save_fcc_els_application(app, db)
+        fcc_els_applications.save(app, db)
 
     assert _count_rows(db, file_number) == 1
 
@@ -262,13 +258,13 @@ def test_needing_post_query_returns_exactly_unposted_set(
     expected_unposted = set()
     for i, is_posted in enumerate(posted_mask):
         file_number = f"FILE-{i:03d}"
-        save_fcc_els_application(_app(file_number=file_number), db)
+        fcc_els_applications.save(_app(file_number=file_number), db)
         if is_posted:
-            mark_fcc_els_application_posted(file_number, f"msg-{i}", db)
+            fcc_els_applications.mark_posted(file_number, f"msg-{i}", db)
         else:
             expected_unposted.add(file_number)
 
-    needing = get_fcc_els_applications_needing_post(db)
+    needing = fcc_els_applications.needing_post(db)
     returned = {row["file_number"] for row in needing}
 
     assert returned == expected_unposted
@@ -283,7 +279,7 @@ def test_insert_sets_posted_zero_timestamps_and_hash(db_path):
     """A fresh insert sets telegram_posted=0, populates created_at/updated_at,
     and stores a non-empty payload_hash (Req 5.3)."""
     app = _app()
-    save_fcc_els_application(app, db_path)
+    fcc_els_applications.save(app, db_path)
 
     row = _read_row(db_path, app["file_number"])
 
@@ -300,12 +296,12 @@ def test_insert_sets_posted_zero_timestamps_and_hash(db_path):
 
 
 def test_mark_posted_populates_three_telegram_columns(db_path):
-    """mark_fcc_els_application_posted sets telegram_posted=1, a non-null
+    """fcc_els_applications.mark_posted sets telegram_posted=1, a non-null
     telegram_posted_at, and the telegram_message_id (Req 5.6)."""
     app = _app()
-    save_fcc_els_application(app, db_path)
+    fcc_els_applications.save(app, db_path)
 
-    mark_fcc_els_application_posted(app["file_number"], "12345,67890", db_path)
+    fcc_els_applications.mark_posted(app["file_number"], "12345,67890", db_path)
 
     row = _read_row(db_path, app["file_number"])
 
@@ -347,7 +343,7 @@ def test_save_rolls_back_and_reraises_on_db_error_leaving_no_partial_row(
 
     app = _app()
     with pytest.raises(sqlite3.OperationalError):
-        save_fcc_els_application(app, db_path)
+        fcc_els_applications.save(app, db_path)
 
     # Restore so we can read cleanly.
     monkeypatch.setattr(repository, "get_connection", real_get_connection)

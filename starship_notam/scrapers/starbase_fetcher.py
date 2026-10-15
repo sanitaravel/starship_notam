@@ -34,19 +34,11 @@ class StarbaseStatusFetcher(HttpFetcher):
         return f"beach={beach}, road_delays={len(result.get('road_delays', []))}"
 
 
-def fetch_starbase_status() -> dict:
-    """Fetch the Starbase status page and return parsed closure data.
-
-    The returned dict contains the keys ``beach`` (dict | None) and
-    ``road_delays`` (list[dict]). On request failure the same shape is
-    returned empty (``{"beach": None, "road_delays": []}``). Does NOT persist
-    any data to the database.
-    """
-    return StarbaseStatusFetcher().fetch()
+starbase_status_fetcher = StarbaseStatusFetcher()
 
 
 if __name__ == "__main__":
-    data = fetch_starbase_status()
+    data = starbase_status_fetcher.fetch()
     logger.info(
         f"Starbase status fetched: beach={'present' if data.get('beach') else 'none'}, "
         f"road_delays={len(data.get('road_delays', []))}"

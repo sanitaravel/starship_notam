@@ -9,13 +9,10 @@ from starship_notam.bot.orchestrator.posting import post_pending
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.data import (
-    get_compass_files_needing_post,
+    compass_files,
     init_db,
-    mark_compass_file_posted,
-    mark_compass_files_posted,
-    save_compass_file,
 )
-from starship_notam.scrapers import fetch_compass_files
+from starship_notam.scrapers import compass_files_fetcher
 
 
 def _save_compass_files(files: list[dict]) -> None:
@@ -27,7 +24,7 @@ def _save_compass_files(files: list[dict]) -> None:
     """
     for record in reversed(files):
         try:
-            save_compass_file(record, config.DB_PATH)
+            compass_files.save(record, config.DB_PATH)
         except Exception:
             logger.exception(f"Failed to save COMPASS file {record}")
 
@@ -36,18 +33,18 @@ async def process_compass_files(chat_list: list[str]) -> None:
     """Fetch the COMPASS Master Slide Deck list and post any new files."""
     logger.info("Refreshing COMPASS files needing Telegram post")
     try:
-        files = await asyncio.to_thread(fetch_compass_files)
+        files = await asyncio.to_thread(compass_files_fetcher.fetch)
         _save_compass_files(files or [])
     except Exception:
         logger.exception("Failed to fetch and parse COMPASS file list")
 
     await post_pending(
-        get_compass_files_needing_post(config.DB_PATH),
+        compass_files.needing_post(config.DB_PATH),
         chat_list,
         label="COMPASS file",
         format_fn=format_compass_file,
         key_fn=lambda f: f["file_uuid"],
-        mark_fn=lambda key, ids: mark_compass_file_posted(key, ids, config.DB_PATH),
+        mark_fn=lambda key, ids: compass_files.mark_posted(key, ids, config.DB_PATH),
     )
 
 
@@ -59,10 +56,10 @@ def prefill_compass_files() -> int:
     when the list could not be fetched.
     """
     init_db(config.DB_PATH)
-    files = fetch_compass_files()
+    files = compass_files_fetcher.fetch()
     if files is None:
         raise RuntimeError("Could not fetch the COMPASS file list")
     _save_compass_files(files)
-    return mark_compass_files_posted(
+    return compass_files.mark_many_posted(
         [f["file_uuid"] for f in files], None, config.DB_PATH
     )
