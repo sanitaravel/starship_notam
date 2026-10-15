@@ -13,11 +13,11 @@ from __future__ import annotations
 import pytest
 
 from starship_notam.data import (
-    save_compass_file,
-    save_faa_activity,
-    save_faa_license,
-    save_fcc_els_application,
-    save_federal_register_document,
+    compass_files,
+    faa_activities,
+    faa_licenses,
+    fcc_els_applications,
+    federal_register_documents,
 )
 from starship_notam.data.connection import get_connection
 
@@ -76,15 +76,15 @@ EXPECTED_COMPASS = "27f2633f9ac9895d8676f35203e39f274d203710d292de691d0f1a430a08
 EXPECTED_FR = "0a828313cd958511ccd4d6d265eef996880eb826bc6a46bf248ce89c47ee079d"
 
 CASES = [
-    (save_faa_activity, FAA_ACTIVITY, "faa_activities", "mission",
+    (faa_activities.save, FAA_ACTIVITY, "faa_activities", "mission",
      EXPECTED_FAA_ACTIVITY),
-    (save_fcc_els_application, FCC_APPLICATION, "fcc_els_applications", "file_number",
+    (fcc_els_applications.save, FCC_APPLICATION, "fcc_els_applications", "file_number",
      EXPECTED_FCC),
-    (save_faa_license, FAA_LICENSE, "faa_licenses", "doc_unique_id",
+    (faa_licenses.save, FAA_LICENSE, "faa_licenses", "doc_unique_id",
      EXPECTED_LICENSE),
-    (save_compass_file, COMPASS_FILE, "compass_files", "file_uuid",
+    (compass_files.save, COMPASS_FILE, "compass_files", "file_uuid",
      EXPECTED_COMPASS),
-    (save_federal_register_document, FEDERAL_REGISTER_DOCUMENT,
+    (federal_register_documents.save, FEDERAL_REGISTER_DOCUMENT,
      "federal_register_documents", "document_number", EXPECTED_FR),
 ]
 

@@ -16,7 +16,7 @@ from starship_notam.data import (
     save_beach_alert,
     save_road_alert,
 )
-from starship_notam.scrapers import fetch_starbase_status
+from starship_notam.scrapers import starbase_status_fetcher
 
 
 async def ingest_starbase_alerts() -> None:
@@ -24,7 +24,7 @@ async def ingest_starbase_alerts() -> None:
     logger.info("Refreshing Starbase alerts needing Telegram post")
     try:
         logger.info("Fetching Starbase status")
-        data = await asyncio.to_thread(fetch_starbase_status)
+        data = await asyncio.to_thread(starbase_status_fetcher.fetch)
         # ingest into DB
         if data.get("beach"):
             save_beach_alert(data["beach"], config.DB_PATH)

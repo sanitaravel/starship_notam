@@ -9,13 +9,10 @@ from starship_notam.bot.orchestrator.posting import post_pending
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.data import (
-    get_federal_register_documents_needing_post,
+    federal_register_documents,
     init_db,
-    mark_federal_register_document_posted,
-    mark_federal_register_documents_posted,
-    save_federal_register_document,
 )
-from starship_notam.scrapers import fetch_federal_register_documents
+from starship_notam.scrapers import federal_register_documents_fetcher
 
 
 def _save_federal_register_documents(documents: list[dict]) -> None:
@@ -27,7 +24,7 @@ def _save_federal_register_documents(documents: list[dict]) -> None:
     """
     for record in reversed(documents):
         try:
-            save_federal_register_document(record, config.DB_PATH)
+            federal_register_documents.save(record, config.DB_PATH)
         except Exception:
             logger.exception(f"Failed to save Federal Register document {record}")
 
@@ -36,18 +33,18 @@ async def process_federal_register_documents(chat_list: list[str]) -> None:
     """Fetch FAA Federal Register documents about SpaceX and post new ones."""
     logger.info("Refreshing Federal Register documents needing Telegram post")
     try:
-        documents = await asyncio.to_thread(fetch_federal_register_documents)
+        documents = await asyncio.to_thread(federal_register_documents_fetcher.fetch)
         _save_federal_register_documents(documents or [])
     except Exception:
         logger.exception("Failed to fetch and parse Federal Register documents")
 
     await post_pending(
-        get_federal_register_documents_needing_post(config.DB_PATH),
+        federal_register_documents.needing_post(config.DB_PATH),
         chat_list,
         label="Federal Register document",
         format_fn=format_federal_register_document,
         key_fn=lambda d: d["document_number"],
-        mark_fn=lambda key, ids: mark_federal_register_document_posted(
+        mark_fn=lambda key, ids: federal_register_documents.mark_posted(
             key, ids, config.DB_PATH
         ),
     )
@@ -61,10 +58,10 @@ def prefill_federal_register_documents() -> int:
     ``RuntimeError`` when the search could not be fetched.
     """
     init_db(config.DB_PATH)
-    documents = fetch_federal_register_documents()
+    documents = federal_register_documents_fetcher.fetch()
     if documents is None:
         raise RuntimeError("Could not fetch the Federal Register documents")
     _save_federal_register_documents(documents)
-    return mark_federal_register_documents_posted(
+    return federal_register_documents.mark_many_posted(
         [d["document_number"] for d in documents], None, config.DB_PATH
     )

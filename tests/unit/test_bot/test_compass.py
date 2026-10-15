@@ -7,7 +7,7 @@ import pytest
 from starship_notam.bot.formatting import format_compass_file
 from starship_notam.bot.orchestrator import compass, posting
 from starship_notam.core import config
-from starship_notam.data.compass_repo import get_compass_files_needing_post
+from starship_notam.data.compass_repo import compass_files
 
 _FILES = [  # newest first, as the site returns them
     {"file_uuid": "new", "filename": "deck <10 05>.pptx", "uploaded_at": "05/Oct/2026 14:26"},
@@ -29,7 +29,7 @@ def test_format_compass_file_escapes_and_links():
 @pytest.fixture
 def compass_env(initialized_db, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", initialized_db)
-    monkeypatch.setattr(compass, "fetch_compass_files", lambda: list(_FILES))
+    monkeypatch.setattr(compass.compass_files_fetcher, "fetch", lambda: list(_FILES))
     monkeypatch.setattr(posting, "_SEND_PAUSE_SECONDS", 0)
     sent = []
 
@@ -56,7 +56,7 @@ async def test_prefill_suppresses_existing_files(compass_env):
     sent = compass_env
 
     assert compass.prefill_compass_files() == 2
-    assert get_compass_files_needing_post() == []
+    assert compass_files.needing_post() == []
 
     await compass.process_compass_files(["chat"])
     assert sent == []
@@ -64,7 +64,7 @@ async def test_prefill_suppresses_existing_files(compass_env):
 
 def test_prefill_raises_when_fetch_fails(initialized_db, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", initialized_db)
-    monkeypatch.setattr(compass, "fetch_compass_files", lambda: None)
+    monkeypatch.setattr(compass.compass_files_fetcher, "fetch", lambda: None)
 
     with pytest.raises(RuntimeError):
         compass.prefill_compass_files()

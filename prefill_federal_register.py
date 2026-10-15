@@ -26,7 +26,7 @@ from starship_notam.bot.orchestrator import prefill_federal_register_documents
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.data import init_db
-from starship_notam.data.federal_register_repo import count_federal_register_documents
+from starship_notam.data.federal_register_repo import federal_register_documents
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.if_empty:
             init_db(config.DB_PATH)
-            known = count_federal_register_documents(config.DB_PATH)
+            known = federal_register_documents.count(config.DB_PATH)
             if known:
                 logger.info(
                     f"Federal Register prefill skipped: {known} document(s) already known"

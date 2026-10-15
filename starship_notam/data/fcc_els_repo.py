@@ -18,7 +18,7 @@ def _is_empty_detail_json(value: Optional[str]) -> bool:
     """Return True when a ``detail_json`` value represents an empty detail.
 
     Single source of truth for the "empty detail" test used to gate
-    post-eligibility in :func:`get_fcc_els_applications_needing_post`. A value
+    post-eligibility in :meth:`FccElsApplicationRepository.after_load`. A value
     is empty when it is ``NULL``/``None``, empty/whitespace-only (all Python
     whitespace, including tabs and newlines), or the empty JSON object
     (``'{}'``, ignoring surrounding whitespace).
@@ -79,27 +79,4 @@ class FccElsApplicationRepository(PostedItemRepository):
         return [r for r in rows if not _is_empty_detail_json(r["detail_json"])]
 
 
-_repo = FccElsApplicationRepository()
-
-
-def save_fcc_els_application(app: Dict, db_path: Optional[str] = None) -> str:
-    """Insert or update an FCC ELS application by *file_number*.
-
-    The detail fields are stored as JSON. Unchanged applications keep their
-    posting state; changed ones are refreshed and re-flagged for posting.
-    """
-    return _repo.save(app, db_path)
-
-
-def get_fcc_els_applications_needing_post(
-    db_path: Optional[str] = None,
-) -> List[Dict]:
-    """Return FCC ELS applications not yet posted whose detail is filled in."""
-    return _repo.needing_post(db_path)
-
-
-def mark_fcc_els_application_posted(
-    file_number, telegram_message_id, db_path: Optional[str] = None
-) -> None:
-    """Mark an FCC ELS application as posted to Telegram with its message ID."""
-    _repo.mark_posted(file_number, telegram_message_id, db_path)
+fcc_els_applications = FccElsApplicationRepository()

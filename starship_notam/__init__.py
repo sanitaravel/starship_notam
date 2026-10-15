@@ -33,12 +33,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "get_notams_needing_images": ("starship_notam.data", "get_notams_needing_images"),
     "mark_image_generated": ("starship_notam.data", "mark_image_generated"),
     "load_all_notams": ("starship_notam.data", "load_all_notams"),
-    "save_faa_activity": ("starship_notam.data", "save_faa_activity"),
-    "get_faa_activities_needing_post": (
-        "starship_notam.data",
-        "get_faa_activities_needing_post",
-    ),
-    "mark_faa_activity_posted": ("starship_notam.data", "mark_faa_activity_posted"),
+    "faa_activities": ("starship_notam.data", "faa_activities"),
     "save_beach_alert": ("starship_notam.data", "save_beach_alert"),
     "save_road_alert": ("starship_notam.data", "save_road_alert"),
     "get_beach_alerts_needing_post": (
@@ -59,8 +54,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "parse_starbase_html": ("starship_notam.parsers", "parse_starbase_html"),
     # notam_request / fetch_faa_advisory / fetch_starbase_closures -> scrapers
     "search_notams": ("starship_notam.scrapers", "search_notams"),
-    "fetch_faa_advisory": ("starship_notam.scrapers", "fetch_faa_advisory"),
-    "fetch_starbase_status": ("starship_notam.scrapers", "fetch_starbase_status"),
+    "faa_advisory_fetcher": ("starship_notam.scrapers", "faa_advisory_fetcher"),
+    "starbase_status_fetcher": ("starship_notam.scrapers", "starbase_status_fetcher"),
     # notam_logging -> core
     "TELEGRAM_BOT_TOKEN": ("starship_notam.core", "TELEGRAM_BOT_TOKEN"),
     "TELEGRAM_CHANNEL_ID": ("starship_notam.core", "TELEGRAM_CHANNEL_ID"),

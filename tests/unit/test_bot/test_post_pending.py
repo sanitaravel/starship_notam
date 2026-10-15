@@ -13,45 +13,46 @@ import pytest
 
 from starship_notam.bot.orchestrator import faa, fcc_els, posting, starbase
 
-# module, processor, "needing post" getter, mark function, item, expected mark args
+# module, processor, "needing post" (object, attribute), mark (object, attribute),
+# item, expected mark args
 CASES = [
     (
         faa,
         "process_faa_activities",
-        "get_faa_activities_needing_post",
-        "mark_faa_activity_posted",
+        (faa.faa_activities, "needing_post"),
+        (faa.faa_activities, "mark_posted"),
         {"mission": "Starship Flight 15"},
         ("Starship Flight 15", "42"),
     ),
     (
         fcc_els,
         "process_fcc_els_applications",
-        "get_fcc_els_applications_needing_post",
-        "mark_fcc_els_application_posted",
+        (fcc_els.fcc_els_applications, "needing_post"),
+        (fcc_els.fcc_els_applications, "mark_posted"),
         {"file_number": "0123-EX-ST-2026"},
         ("0123-EX-ST-2026", "42"),
     ),
     (
         faa,
         "process_faa_licenses",
-        "get_faa_licenses_needing_post",
-        "mark_faa_license_posted",
+        (faa.faa_licenses, "needing_post"),
+        (faa.faa_licenses, "mark_posted"),
         {"doc_unique_id": "DRSDOCID1"},
         ("DRSDOCID1", "42"),
     ),
     (
         starbase,
         "process_beach_alerts",
-        "get_beach_alerts_needing_post",
-        "mark_beach_posted",
+        (starbase, "get_beach_alerts_needing_post"),
+        (starbase, "mark_beach_posted"),
         {"alert_key": "beach-key"},
         ("beach-key",),
     ),
     (
         starbase,
         "process_road_alerts",
-        "get_road_alerts_needing_post",
-        "mark_road_posted",
+        (starbase, "get_road_alerts_needing_post"),
+        (starbase, "mark_road_posted"),
         {"alert_key": "road-key"},
         ("road-key",),
     ),
@@ -68,7 +69,7 @@ def harness(monkeypatch):
         pass
 
     monkeypatch.setattr(asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(faa, "fetch_faa_advisory", lambda: [])
+    monkeypatch.setattr(faa.faa_advisory_fetcher, "fetch", lambda: [])
     monkeypatch.setattr(fcc_els, "fetch_fcc_els_applications", lambda: [])
     monkeypatch.setattr(faa, "fetch_faa_license", lambda: None)
     for module, fmt in (
@@ -80,11 +81,9 @@ def harness(monkeypatch):
     ):
         monkeypatch.setattr(module, fmt, lambda item: "text")
 
-    def setup(module, getter, mark_fn, item, message_id):
-        monkeypatch.setattr(module, getter, lambda db_path: [item])
-        monkeypatch.setattr(
-            module, mark_fn, lambda *args: marks.append(args[:-1])
-        )
+    def setup(getter, mark_fn, item, message_id):
+        monkeypatch.setattr(*getter, lambda db_path: [item])
+        monkeypatch.setattr(*mark_fn, lambda *args: marks.append(args[:-1]))
 
         async def fake_send(chat_id, text):
             return message_id
@@ -99,7 +98,7 @@ async def test_failed_send_leaves_item_unposted(
     harness, module, processor, getter, mark_fn, item, expected
 ):
     setup, marks = harness
-    setup(module, getter, mark_fn, item, message_id=None)
+    setup(getter, mark_fn, item, message_id=None)
 
     await getattr(module, processor)(["chat"])
 
@@ -111,7 +110,7 @@ async def test_successful_send_marks_item_posted(
     harness, module, processor, getter, mark_fn, item, expected
 ):
     setup, marks = harness
-    setup(module, getter, mark_fn, item, message_id=42)
+    setup(getter, mark_fn, item, message_id=42)
 
     await getattr(module, processor)(["chat"])
 
@@ -121,9 +120,8 @@ async def test_successful_send_marks_item_posted(
 async def test_message_ids_from_several_chats_are_joined(harness):
     setup, marks = harness
     setup(
-        fcc_els,
-        "get_fcc_els_applications_needing_post",
-        "mark_fcc_els_application_posted",
+        (fcc_els.fcc_els_applications, "needing_post"),
+        (fcc_els.fcc_els_applications, "mark_posted"),
         {"file_number": "F1"},
         message_id=7,
     )

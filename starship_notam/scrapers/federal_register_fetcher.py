@@ -41,19 +41,9 @@ class FederalRegisterFetcher(HttpFetcher):
         return f"{len(result)} document(s)"
 
 
-def fetch_federal_register_documents() -> list[dict] | None:
-    """Fetch the newest FAA Federal Register documents mentioning SpaceX.
-
-    Returns
-    -------
-    list[dict] or None
-        The parsed document records (newest first, see
-        :func:`parse_federal_register_documents`), or ``None`` when the
-        request failed.
-    """
-    return FederalRegisterFetcher().fetch()
+federal_register_documents_fetcher = FederalRegisterFetcher()
 
 
 if __name__ == "__main__":
-    for d in fetch_federal_register_documents() or []:
+    for d in federal_register_documents_fetcher.fetch() or []:
         logger.info(f"Federal Register document: {d}")

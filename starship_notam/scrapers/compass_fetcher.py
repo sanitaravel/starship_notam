@@ -35,18 +35,9 @@ class CompassFileListFetcher(HttpFetcher):
         return f"{len(result)} file(s)"
 
 
-def fetch_compass_files() -> list[dict] | None:
-    """Fetch the Master Slide Deck file list.
-
-    Returns
-    -------
-    list[dict] or None
-        The parsed file records (newest first, see
-        :func:`parse_compass_file_list`), or ``None`` when the request failed.
-    """
-    return CompassFileListFetcher().fetch()
+compass_files_fetcher = CompassFileListFetcher()
 
 
 if __name__ == "__main__":
-    for f in fetch_compass_files() or []:
+    for f in compass_files_fetcher.fetch() or []:
         logger.info(f"COMPASS file: {f}")

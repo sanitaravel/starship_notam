@@ -50,9 +50,7 @@ OLD_MODULE_EXPORTS: dict[str, dict[str, str]] = {
         "get_notams_needing_images": "starship_notam.data",
         "mark_image_generated": "starship_notam.data",
         "load_all_notams": "starship_notam.data",
-        "save_faa_activity": "starship_notam.data",
-        "get_faa_activities_needing_post": "starship_notam.data",
-        "mark_faa_activity_posted": "starship_notam.data",
+        "faa_activities": "starship_notam.data",
         "save_beach_alert": "starship_notam.data",
         "save_road_alert": "starship_notam.data",
         "get_beach_alerts_needing_post": "starship_notam.data",
@@ -71,12 +69,12 @@ OLD_MODULE_EXPORTS: dict[str, dict[str, str]] = {
     },
     # fetch_faa_advisory -> scrapers (fetch) + parsers (html parse)
     "fetch_faa_advisory": {
-        "fetch_faa_advisory": "starship_notam.scrapers",
+        "faa_advisory_fetcher": "starship_notam.scrapers",
         "parse_faa_advisory_html": "starship_notam.parsers",
     },
     # fetch_starbase_closures -> scrapers (fetch) + parsers (html parse)
     "fetch_starbase_closures": {
-        "fetch_starbase_status": "starship_notam.scrapers",
+        "starbase_status_fetcher": "starship_notam.scrapers",
         "parse_starbase_html": "starship_notam.parsers",
     },
     # notam_logging -> starship_notam.core
@@ -193,7 +191,7 @@ def test_representative_old_style_imports_resolve():
     from starship_notam.core import logger  # noqa: F401
     from starship_notam.parsers import parse_notam, parse_coords_from_text  # noqa: F401
     from starship_notam.data import save_notam, init_db  # noqa: F401
-    from starship_notam.scrapers import search_notams, fetch_faa_advisory  # noqa: F401
+    from starship_notam.scrapers import search_notams, faa_advisory_fetcher  # noqa: F401
     from starship_notam.bot import build_notam_caption  # noqa: F401
     from starship_notam.bot.transport import send_message  # noqa: F401
     from starship_notam.visualization import render_map  # noqa: F401

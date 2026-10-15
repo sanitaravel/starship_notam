@@ -11,7 +11,7 @@ This module imports only from ``starship_notam.data`` and ``starship_notam.core`
 """
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from starship_notam.data.repository import PostedItemRepository
 
@@ -79,32 +79,4 @@ class FaaLicenseRepository(PostedItemRepository):
         return rows
 
 
-_repo = FaaLicenseRepository()
-
-
-def save_faa_license(record: Dict, db_path: Optional[str] = None) -> str:
-    """Insert or update a FAA DRS launch license by ``doc_unique_id``.
-
-    ``record`` is the normalized dict produced by
-    :func:`starship_notam.parsers.faa_license_parser.parse_faa_license_summary`.
-    A falsy/empty ``record`` (or one missing ``doc_unique_id``) is skipped.
-    """
-    return _repo.save(record, db_path)
-
-
-def get_faa_licenses_needing_post(
-    db_path: Optional[str] = None,
-) -> List[Dict]:
-    """Return FAA DRS licenses that have not yet been posted to Telegram.
-
-    Each returned dict includes ``details`` (``details_json`` decoded) and
-    ``is_new`` (False when the license changed since it was first stored).
-    """
-    return _repo.needing_post(db_path)
-
-
-def mark_faa_license_posted(
-    doc_unique_id, telegram_message_id, db_path: Optional[str] = None
-) -> None:
-    """Mark a FAA DRS license as posted to Telegram with its message ID."""
-    _repo.mark_posted(doc_unique_id, telegram_message_id, db_path)
+faa_licenses = FaaLicenseRepository()

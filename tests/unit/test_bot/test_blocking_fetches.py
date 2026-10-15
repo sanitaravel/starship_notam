@@ -1,7 +1,7 @@
 """Blocking HTTP fetches run in worker threads, not on the event loop.
 
-Regression test for fix-plan step 13: ``fetch_faa_advisory`` and
-``fetch_starbase_status`` (``requests.get`` with a 30s timeout) were called
+Regression test for fix-plan step 13: ``faa_advisory_fetcher.fetch`` and
+``starbase_status_fetcher.fetch`` (``requests.get`` with a 30s timeout) were called
 directly from async code, freezing the event loop while they ran.
 """
 
@@ -20,8 +20,8 @@ async def test_faa_advisory_fetch_runs_off_the_event_loop(monkeypatch):
         seen.append(threading.get_ident())
         return []
 
-    monkeypatch.setattr(faa, "fetch_faa_advisory", fetch)
-    monkeypatch.setattr(faa, "get_faa_activities_needing_post", lambda db: [])
+    monkeypatch.setattr(faa.faa_advisory_fetcher, "fetch", fetch)
+    monkeypatch.setattr(faa.faa_activities, "needing_post", lambda db: [])
 
     await faa.process_faa_activities(["chat"])
 
@@ -36,7 +36,7 @@ async def test_starbase_fetch_runs_off_the_event_loop(monkeypatch):
         seen.append(threading.get_ident())
         return {"beach": None, "road_delays": []}
 
-    monkeypatch.setattr(starbase, "fetch_starbase_status", fetch)
+    monkeypatch.setattr(starbase.starbase_status_fetcher, "fetch", fetch)
 
     await starbase.ingest_starbase_alerts()
 

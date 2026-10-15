@@ -9,14 +9,10 @@ from starship_notam.bot.orchestrator.posting import post_pending
 from starship_notam.core import config
 from starship_notam.core.logging import logger
 from starship_notam.data import (
-    get_faa_activities_needing_post,
-    get_faa_licenses_needing_post,
-    mark_faa_activity_posted,
-    mark_faa_license_posted,
-    save_faa_activity,
-    save_faa_license,
+    faa_activities,
+    faa_licenses,
 )
-from starship_notam.scrapers import fetch_faa_advisory, fetch_faa_license
+from starship_notam.scrapers import faa_advisory_fetcher, fetch_faa_license
 
 
 async def process_faa_activities(chat_list: list[str]) -> None:
@@ -24,22 +20,22 @@ async def process_faa_activities(chat_list: list[str]) -> None:
     logger.info("Refreshing FAA activities needing Telegram post")
     try:
         logger.info("Getting FAA activities")
-        activities = await asyncio.to_thread(fetch_faa_advisory)
+        activities = await asyncio.to_thread(faa_advisory_fetcher.fetch)
         for activity in activities or []:
             try:
-                save_faa_activity(activity, config.DB_PATH)
+                faa_activities.save(activity, config.DB_PATH)
             except Exception:
                 logger.exception(f"Failed to save FAA activity {activity}")
     except Exception:
         logger.exception("Failed to fetch and parse FAA advisory")
 
     await post_pending(
-        get_faa_activities_needing_post(config.DB_PATH),
+        faa_activities.needing_post(config.DB_PATH),
         chat_list,
         label="FAA activity",
         format_fn=format_faa_activity,
         key_fn=lambda a: a["mission"],
-        mark_fn=lambda key, ids: mark_faa_activity_posted(key, ids, config.DB_PATH),
+        mark_fn=lambda key, ids: faa_activities.mark_posted(key, ids, config.DB_PATH),
     )
 
 
@@ -56,17 +52,17 @@ async def process_faa_licenses(chat_list: list[str]) -> None:
         record = await asyncio.to_thread(fetch_faa_license)
         if record:
             try:
-                save_faa_license(record, config.DB_PATH)
+                faa_licenses.save(record, config.DB_PATH)
             except Exception:
                 logger.exception(f"Failed to save FAA DRS license {record}")
     except Exception:
         logger.exception("Failed to fetch and parse FAA DRS launch license")
 
     await post_pending(
-        get_faa_licenses_needing_post(config.DB_PATH),
+        faa_licenses.needing_post(config.DB_PATH),
         chat_list,
         label="FAA DRS license",
         format_fn=format_faa_license,
         key_fn=lambda lic: lic["doc_unique_id"],
-        mark_fn=lambda key, ids: mark_faa_license_posted(key, ids, config.DB_PATH),
+        mark_fn=lambda key, ids: faa_licenses.mark_posted(key, ids, config.DB_PATH),
     )
