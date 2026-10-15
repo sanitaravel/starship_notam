@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from starship_notam.parsers.notam_parser import _try_parse_dt
-from starship_notam.parsers.notam_time import parse_notam_time
+from src.parsers.notam_parser import _try_parse_dt
+from src.parsers.notam_time import parse_notam_time
 
 JUL_8 = datetime(2026, 7, 8, 13, 50)
 

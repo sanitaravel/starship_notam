@@ -1,0 +1,30 @@
+"""Visualization package: map rendering and NOTAM image composition.
+
+Re-exports the public visualization entry points:
+    from src.visualization import render_map, render_notam_image
+
+``render_map`` is available immediately. ``render_notam_image`` is provided via
+a lazy PEP 562 ``__getattr__`` so the ``image_composer`` package is only
+loaded on first access.
+
+Subpackages and modules:
+    map_renderer    the Cartopy map tile (one submodule per drawing concern)
+    image_composer  the NOTAM card around it (text column, fallback map)
+    fonts           font loading shared by both
+"""
+
+from src.visualization.map_renderer import render_map
+
+__all__ = [
+    "render_map",
+    "render_notam_image",
+]
+
+
+def __getattr__(name):
+    """Lazily resolve ``render_notam_image`` from the image_composer module."""
+    if name == "render_notam_image":
+        from src.visualization.image_composer import render_notam_image
+
+        return render_notam_image
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

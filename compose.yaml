@@ -90,9 +90,9 @@ services:
     # running) and exits; tini as PID 1 passes the signal on.
     init: true
     stop_grace_period: 5m
-    # Healthy while the loop keeps making progress (starship_notam/healthcheck.py).
+    # Healthy while the loop keeps making progress (src/healthcheck.py).
     healthcheck:
-      test: ["CMD", "python", "-m", "starship_notam.healthcheck"]
+      test: ["CMD", "python", "-m", "src.healthcheck"]
       interval: 1m
       timeout: 10s
       retries: 3

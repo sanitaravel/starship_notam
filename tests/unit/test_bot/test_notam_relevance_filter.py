@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.bot.orchestrator import notams
+from src.bot.orchestrator import notams
 
 LA_ROCHELLE = (
     "A6286/26 NOTAMN Q) LFBB/QPFCA/V/NBO/E/000/050/4617N00107W023 A) LFBH "

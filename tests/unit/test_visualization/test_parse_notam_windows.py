@@ -7,7 +7,7 @@ richer parser cannot silently change them.
 """
 from datetime import datetime, timezone
 
-from starship_notam.parsers.schedule import parse_notam_windows
+from src.parsers.schedule import parse_notam_windows
 
 # NOTAM start (field B) 2609282107 -> 2026-09-28 21:07 UTC.
 BASE = datetime(2026, 9, 28, 21, 7, tzinfo=timezone.utc)

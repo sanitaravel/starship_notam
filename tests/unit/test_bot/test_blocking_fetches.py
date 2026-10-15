@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import threading
 
-from starship_notam.bot.orchestrator import faa, starbase
+from src.bot.orchestrator import faa, starbase
 
 
 async def test_faa_advisory_fetch_runs_off_the_event_loop(monkeypatch):

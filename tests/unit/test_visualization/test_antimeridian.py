@@ -8,8 +8,8 @@ area was drawn the long way round, and the vertices were wrongly reordered.
 
 from __future__ import annotations
 
-from starship_notam.parsers.coord_parser import parse_coords_from_text
-from starship_notam.visualization.map_renderer.geometry import (
+from src.parsers.coord_parser import parse_coords_from_text
+from src.visualization.map_renderer.geometry import (
     bounds_visible,
     lon_shift_into,
     normalize_polygon_order,

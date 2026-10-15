@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.visualization import fonts
-from starship_notam.visualization.map_renderer import natural_earth
+from src.visualization import fonts
+from src.visualization.map_renderer import natural_earth
 
 
 @pytest.fixture(autouse=True)

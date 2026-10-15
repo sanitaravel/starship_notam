@@ -1,6 +1,6 @@
 """Schema tests for the ``fcc_els_applications`` table (``data.schema``).
 
-Exercises :func:`starship_notam.data.schema.init_db` against an isolated
+Exercises :func:`src.data.schema.init_db` against an isolated
 temporary SQLite database (via the ``db_path`` fixture) to verify table
 creation, the ``file_number`` UNIQUE constraint, idempotent re-initialisation,
 and the additive column migration.
@@ -14,8 +14,8 @@ import sqlite3
 
 import pytest
 
-from starship_notam.data.connection import get_connection, utc_now_iso
-from starship_notam.data.schema import init_db
+from src.data.connection import get_connection, utc_now_iso
+from src.data.schema import init_db
 
 
 # The full set of columns the table must expose after init_db (Req 6.3).

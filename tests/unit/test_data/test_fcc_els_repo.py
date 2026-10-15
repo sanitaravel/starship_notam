@@ -28,9 +28,9 @@ _DB_SETTINGS = settings(
     suppress_health_check=[HealthCheck.too_slow],
 )
 
-from starship_notam.data.schema import init_db
-from starship_notam.data import repository
-from starship_notam.data.fcc_els_repo import fcc_els_applications
+from src.data.schema import init_db
+from src.data import repository
+from src.data.fcc_els_repo import fcc_els_applications
 
 # The schema is created once at startup in production (ensure_setup), not by
 # the repository functions, so every test here starts from an initialized DB.

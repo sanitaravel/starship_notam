@@ -13,7 +13,7 @@ so only the first start prefills, and documents published while the bot is
 down are still announced.
 
 The work is done by
-:func:`starship_notam.bot.orchestrator.prefill_federal_register_documents`;
+:func:`src.bot.orchestrator.prefill_federal_register_documents`;
 this script only reports the result.
 """
 
@@ -22,11 +22,11 @@ from __future__ import annotations
 import argparse
 import sys
 
-from starship_notam.bot.orchestrator import prefill_federal_register_documents
-from starship_notam.core import config
-from starship_notam.core.logging import logger
-from starship_notam.data import init_db
-from starship_notam.data.federal_register_repo import federal_register_documents
+from src.bot.orchestrator import prefill_federal_register_documents
+from src.core import config
+from src.core.logging import logger
+from src.data import init_db
+from src.data.federal_register_repo import federal_register_documents
 
 
 def main(argv: list[str] | None = None) -> int:

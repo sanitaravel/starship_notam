@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.connection import get_connection
-from starship_notam.data.faa_repo import faa_activities
+from src.data.connection import get_connection
+from src.data.faa_repo import faa_activities
 
 # The schema is created once at startup in production (ensure_setup), not by
 # the repository functions, so every test here starts from an initialized DB.

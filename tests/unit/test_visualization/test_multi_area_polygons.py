@@ -8,7 +8,7 @@ one self-intersecting ring.
 
 from __future__ import annotations
 
-from starship_notam.visualization.image_composer import render
+from src.visualization.image_composer import render
 
 TWO_AREA_E = (
     "DRA BOUNDED BY: 1700N07140W-1626N07140W-1626N07300W-1700N07300W "

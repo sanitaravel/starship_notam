@@ -172,7 +172,7 @@ Set `RUN_MODE=standalone` in `.env` so Selenium launches your local Chrome
 ```sh
 python prefill_compass.py          # once, so the existing COMPASS files are not announced
 python prefill_federal_register.py # once, so the existing Federal Register documents are not announced
-python -m starship_notam           # or: python main.py, or: starship-notam
+python -m src                      # or: python main.py, or: starship-notam
 ```
 
 ### Database
@@ -214,7 +214,7 @@ drop and recreate the bot's tables. CI runs them against a PostgreSQL service.
 ## Project layout
 
 ```text
-starship_notam/
+src/
   core/           configuration (.env) and logging
   scrapers/       fetch raw data from each source
   parsers/        turn raw HTML/JSON/NOTAM text into dicts

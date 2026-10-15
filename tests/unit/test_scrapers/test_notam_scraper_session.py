@@ -6,8 +6,8 @@ browser, wait 5s per missed selector, and sleep 5s before quitting.
 
 from __future__ import annotations
 
-from starship_notam.scrapers import driver as driver_module
-from starship_notam.scrapers import notam_scraper
+from src.scrapers import driver as driver_module
+from src.scrapers import notam_scraper
 
 
 class FakeDriver:

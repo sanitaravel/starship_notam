@@ -12,7 +12,7 @@ first start prefills, and files that appear while the bot is down are still
 announced.
 
 The work is done by
-:func:`starship_notam.bot.orchestrator.prefill_compass_files`; this script
+:func:`src.bot.orchestrator.prefill_compass_files`; this script
 only reports the result.
 """
 
@@ -21,11 +21,11 @@ from __future__ import annotations
 import argparse
 import sys
 
-from starship_notam.bot.orchestrator import prefill_compass_files
-from starship_notam.core import config
-from starship_notam.core.logging import logger
-from starship_notam.data import init_db
-from starship_notam.data.compass_repo import compass_files
+from src.bot.orchestrator import prefill_compass_files
+from src.core import config
+from src.core.logging import logger
+from src.data import init_db
+from src.data.compass_repo import compass_files
 
 
 def main(argv: list[str] | None = None) -> int:

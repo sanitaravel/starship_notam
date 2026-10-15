@@ -15,7 +15,7 @@ import set and are not boundary violations.
 
 Each imported top-level package name is then classified:
 
-    * Internal project imports (``starship_notam...``) are always allowed.
+    * Internal project imports (``src...``) are always allowed.
     * Python standard-library modules (per :data:`sys.stdlib_module_names`) are
       always allowed.
     * Any remaining name is a third-party dependency and must appear in that
@@ -35,8 +35,8 @@ from pathlib import Path
 
 import pytest
 
-# Root of the installable package: .../starship_notam/starship_notam
-PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "starship_notam"
+# Root of the installable package: <repository>/src
+PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 # Set of standard-library top-level module names for this interpreter.
 _STDLIB = set(sys.stdlib_module_names)
@@ -92,7 +92,7 @@ def _module_level_imports(path: Path) -> list[tuple[str, int]]:
 
 def _classify(top_name: str) -> str:
     """Classify a top-level import name as internal / stdlib / third_party."""
-    if top_name == "starship_notam":
+    if top_name == "src":
         return "internal"
     if top_name in _STDLIB:
         return "stdlib"
@@ -146,7 +146,7 @@ def test_parsers_have_no_module_level_data_or_visualization_imports():
     """Requirement 9.4: parser modules must not reference data/visualization.
 
     Asserts that no parser source file contains a module-level import of the
-    ``starship_notam.data`` or ``starship_notam.visualization`` sub-packages.
+    ``src.data`` or ``src.visualization`` sub-packages.
     """
     forbidden_subpackages = {"data", "visualization"}
     violations: list[str] = []
@@ -164,7 +164,7 @@ def test_parsers_have_no_module_level_data_or_visualization_imports():
                 parts = mod.split(".")
                 if (
                     len(parts) >= 2
-                    and parts[0] == "starship_notam"
+                    and parts[0] == "src"
                     and parts[1] in forbidden_subpackages
                 ):
                     rel = path.relative_to(PACKAGE_ROOT.parent)
@@ -198,7 +198,7 @@ def test_visualization_does_not_import_bot_scraper_or_data():
                 parts = mod.split(".")
                 if (
                     len(parts) >= 2
-                    and parts[0] == "starship_notam"
+                    and parts[0] == "src"
                     and parts[1] in forbidden_subpackages
                 ):
                     rel = path.relative_to(PACKAGE_ROOT.parent)

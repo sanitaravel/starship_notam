@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from starship_notam.parsers.federal_register_parser import (
+from src.parsers.federal_register_parser import (
     parse_federal_register_documents,
 )
 
