@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.federal_register_repo import federal_register_documents
+from src.data.federal_register_repo import federal_register_documents
 
 pytestmark = pytest.mark.usefixtures("initialized_db")
 

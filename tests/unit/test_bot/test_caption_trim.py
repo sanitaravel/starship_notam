@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
-from starship_notam.bot import formatting
+from src.bot import formatting
 
 LIMIT = formatting._CAPTION_LIMIT
 # An "&" that does not start a complete entity means one was cut in half.

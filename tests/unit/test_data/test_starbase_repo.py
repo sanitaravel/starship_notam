@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.starbase_repo import (
+from src.data.starbase_repo import (
     beach_alerts,
     road_alerts,
     make_beach_key,

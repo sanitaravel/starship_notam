@@ -24,12 +24,12 @@ import math
 
 import pytest
 
-from starship_notam.visualization.map_renderer import MAP_H, MAP_W
-from starship_notam.visualization.map_renderer.extent import (
+from src.visualization.map_renderer import MAP_H, MAP_W
+from src.visualization.map_renderer.extent import (
     MAP_EXTENT_SCALE,
     expand_extent_until_land,
 )
-from starship_notam.visualization.image_composer import extract_starship_template
+from src.visualization.image_composer import extract_starship_template
 
 
 # ---------------------------------------------------------------------------

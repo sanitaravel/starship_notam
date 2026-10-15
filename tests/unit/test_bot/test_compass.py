@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.bot.formatting import format_compass_file
-from starship_notam.bot.orchestrator import compass, posting
-from starship_notam.core import config
-from starship_notam.data.compass_repo import compass_files
+from src.bot.formatting import format_compass_file
+from src.bot.orchestrator import compass, posting
+from src.core import config
+from src.data.compass_repo import compass_files
 
 _FILES = [  # newest first, as the site returns them
     {"file_uuid": "new", "filename": "deck <10 05>.pptx", "uploaded_at": "05/Oct/2026 14:26"},

@@ -30,10 +30,10 @@ import pytest
 
 from hypothesis import HealthCheck, given, settings, strategies as st
 
-from starship_notam.data.schema import init_db
-from starship_notam.bot import formatting
-from starship_notam.bot.formatting import format_fcc_els_application
-from starship_notam.data.fcc_els_repo import fcc_els_applications
+from src.data.schema import init_db
+from src.bot import formatting
+from src.bot.formatting import format_fcc_els_application
+from src.data.fcc_els_repo import fcc_els_applications
 
 # These property examples exercise real SQLite file I/O, so individual
 # examples can exceed Hypothesis's default

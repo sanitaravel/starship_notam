@@ -116,10 +116,10 @@ def test_parsers_import_without_heavy_dependencies():
     network request, and without dragging in the heavy I/O dependencies that
     belong to other layers.
     """
-    result = _run_import_probe("starship_notam.parsers", HEAVY_MODULES)
+    result = _run_import_probe("src.parsers", HEAVY_MODULES)
 
     assert result["loaded"] == [], (
-        "Importing starship_notam.parsers pulled in heavy dependencies that "
+        "Importing src.parsers pulled in heavy dependencies that "
         f"should be lazy: {result['loaded']}"
     )
 
@@ -130,10 +130,10 @@ def test_parsers_import_creates_no_database_file():
     Requirement 9.1: no database file exists / is created and no connection is
     established as a side effect of importing the parser layer.
     """
-    result = _run_import_probe("starship_notam.parsers", HEAVY_MODULES)
+    result = _run_import_probe("src.parsers", HEAVY_MODULES)
 
     assert result["created_files"] == [], (
-        "Importing starship_notam.parsers created database file(s) as a side "
+        "Importing src.parsers created database file(s) as a side "
         f"effect: {result['created_files']}"
     )
 
@@ -147,10 +147,10 @@ def test_parsers_do_not_import_requests_or_sqlite():
     legitimately be present via unrelated imports; here we only assert that
     ``requests`` (the network client) is not loaded by importing parsers.
     """
-    result = _run_import_probe("starship_notam.parsers", ["requests"] + HEAVY_MODULES)
+    result = _run_import_probe("src.parsers", ["requests"] + HEAVY_MODULES)
 
     assert "requests" not in result["loaded"], (
-        "Importing starship_notam.parsers loaded the 'requests' HTTP client, "
+        "Importing src.parsers loaded the 'requests' HTTP client, "
         "implying a network dependency leaked into the parser layer."
     )
 
@@ -160,20 +160,20 @@ def test_parsers_do_not_import_requests_or_sqlite():
 # ---------------------------------------------------------------------------
 def test_data_layer_imports_without_heavy_dependencies():
     """Requirement 9.2: the data layer imports without Selenium/Telegram/Cartopy."""
-    result = _run_import_probe("starship_notam.data", HEAVY_MODULES)
+    result = _run_import_probe("src.data", HEAVY_MODULES)
 
     assert result["loaded"] == [], (
-        "Importing starship_notam.data pulled in heavy dependencies that "
+        "Importing src.data pulled in heavy dependencies that "
         f"belong to other layers: {result['loaded']}"
     )
 
 
 def test_data_layer_imports_within_time_limit():
     """Requirement 9.2: the data layer imports within the 2-second ceiling."""
-    result = _run_import_probe("starship_notam.data", HEAVY_MODULES)
+    result = _run_import_probe("src.data", HEAVY_MODULES)
 
     assert result["import_seconds"] < IMPORT_TIME_LIMIT_S, (
-        f"Importing starship_notam.data took {result['import_seconds']:.3f}s, "
+        f"Importing src.data took {result['import_seconds']:.3f}s, "
         f"exceeding the {IMPORT_TIME_LIMIT_S}s limit."
     )
 
@@ -189,21 +189,21 @@ def test_visualization_layer_imports_without_bot_or_network_deps():
     Cartopy/Matplotlib plotting stack must stay lazy.
     """
     result = _run_import_probe(
-        "starship_notam.visualization", ["telegram", "requests"] + HEAVY_MODULES
+        "src.visualization", ["telegram", "requests"] + HEAVY_MODULES
     )
 
     assert result["loaded"] == [], (
-        "Importing starship_notam.visualization pulled in dependencies that "
+        "Importing src.visualization pulled in dependencies that "
         f"should be lazy or belong to other layers: {result['loaded']}"
     )
 
 
 def test_visualization_layer_imports_within_time_limit():
     """Requirement 9.3: the visualization layer imports within 2 seconds."""
-    result = _run_import_probe("starship_notam.visualization", HEAVY_MODULES)
+    result = _run_import_probe("src.visualization", HEAVY_MODULES)
 
     assert result["import_seconds"] < IMPORT_TIME_LIMIT_S, (
-        f"Importing starship_notam.visualization took "
+        f"Importing src.visualization took "
         f"{result['import_seconds']:.3f}s, exceeding the {IMPORT_TIME_LIMIT_S}s limit."
     )
 
@@ -214,12 +214,12 @@ def test_visualization_layer_imports_within_time_limit():
 @pytest.mark.parametrize(
     "layer",
     [
-        "starship_notam.core",
-        "starship_notam.parsers",
-        "starship_notam.data",
-        "starship_notam.scrapers",
-        "starship_notam.bot",
-        "starship_notam.visualization",
+        "src.core",
+        "src.parsers",
+        "src.data",
+        "src.scrapers",
+        "src.bot",
+        "src.visualization",
     ],
 )
 def test_each_layer_imports_within_time_limit(layer):
@@ -247,7 +247,7 @@ def test_scraper_selenium_import_is_lazy():
     ``search_notams`` imports Selenium inside its body. Importing the scraper
     module (or the whole scrapers package) must therefore not load Selenium.
     """
-    result = _run_import_probe("starship_notam.scrapers.notam_scraper", ["selenium"])
+    result = _run_import_probe("src.scrapers.notam_scraper", ["selenium"])
 
     assert "selenium" not in result["loaded"], (
         "Importing the notam_scraper module eagerly loaded 'selenium'; the "
@@ -261,7 +261,7 @@ def test_bot_transport_telegram_import_is_lazy():
     The Telegram transport imports ``telegram`` lazily inside its send
     functions, so importing the transport module must not load it.
     """
-    result = _run_import_probe("starship_notam.bot.transport", ["telegram"])
+    result = _run_import_probe("src.bot.transport", ["telegram"])
 
     assert "telegram" not in result["loaded"], (
         "Importing the bot.transport module eagerly loaded 'telegram'; the "
@@ -276,7 +276,7 @@ def test_visualization_matplotlib_and_cartopy_imports_are_lazy():
     stack.
     """
     result = _run_import_probe(
-        "starship_notam.visualization.map_renderer", ["matplotlib", "cartopy"]
+        "src.visualization.map_renderer", ["matplotlib", "cartopy"]
     )
 
     assert result["loaded"] == [], (

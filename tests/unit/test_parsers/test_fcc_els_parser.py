@@ -1,4 +1,4 @@
-"""Property-based tests for :mod:`starship_notam.parsers.fcc_els_parser`.
+"""Property-based tests for :mod:`src.parsers.fcc_els_parser`.
 
 Covers ``parse_fcc_els_results_html`` with Hypothesis-generated results-table
 HTML. The strategies build a results table from field/value records with:
@@ -35,7 +35,7 @@ import random
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from starship_notam.parsers.fcc_els_parser import (
+from src.parsers.fcc_els_parser import (
     parse_fcc_els_detail_html,
     parse_fcc_els_results_html,
 )

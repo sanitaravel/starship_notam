@@ -42,8 +42,8 @@ import pytest
 from hypothesis import example, given, settings, HealthCheck
 from hypothesis import strategies as st
 
-from starship_notam.visualization.map_renderer import MAP_H, MAP_W
-from starship_notam.visualization.image_composer import extract_starship_template
+from src.visualization.map_renderer import MAP_H, MAP_W
+from src.visualization.image_composer import extract_starship_template
 
 
 MAP_SIZE = (MAP_W, MAP_H)
@@ -90,7 +90,7 @@ def _capture_extent(coords, radius_nm=None):
     logging.disable(logging.CRITICAL)
     ga.GeoAxes.set_extent = spy
     try:
-        from starship_notam.visualization.map_renderer import render_map
+        from src.visualization.map_renderer import render_map
 
         try:
             render_map(coords, MAP_SIZE, radius_nm=radius_nm)
@@ -453,7 +453,7 @@ def test_map_renders_cartographic_features_for_land_geometry():
     """3.6: rendering a real map (no spy) for a land-adjacent NOTAM still
     produces an image tile of the expected size, exercising the full feature /
     graticule / label / marker drawing path unchanged by the fix."""
-    from starship_notam.visualization.map_renderer import render_map
+    from src.visualization.map_renderer import render_map
 
     coords = [
         (25.90, -97.20),

@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from starship_notam.bot.orchestrator import loop, posting, shutdown
+from src.bot.orchestrator import loop, posting, shutdown
 
 POSIX_ONLY = pytest.mark.skipif(
     sys.platform == "win32", reason="event loop signal handlers are POSIX-only"

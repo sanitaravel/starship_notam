@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 import requests
 
-from starship_notam.core import config
-from starship_notam.scrapers import http_fetcher
-from starship_notam.scrapers.compass_fetcher import compass_files_fetcher
-from starship_notam.scrapers.faa_fetcher import FAA_ADVISORY_URL, faa_advisory_fetcher
-from starship_notam.scrapers.federal_register_fetcher import federal_register_documents_fetcher
-from starship_notam.scrapers.starbase_fetcher import starbase_status_fetcher
+from src.core import config
+from src.scrapers import http_fetcher
+from src.scrapers.compass_fetcher import compass_files_fetcher
+from src.scrapers.faa_fetcher import FAA_ADVISORY_URL, faa_advisory_fetcher
+from src.scrapers.federal_register_fetcher import federal_register_documents_fetcher
+from src.scrapers.starbase_fetcher import starbase_status_fetcher
 
 
 class FakeResponse:

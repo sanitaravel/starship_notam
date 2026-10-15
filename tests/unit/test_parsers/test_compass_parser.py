@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from starship_notam.parsers.compass_parser import parse_compass_file_list
+from src.parsers.compass_parser import parse_compass_file_list
 
 _PAYLOAD = {
     "rows": [

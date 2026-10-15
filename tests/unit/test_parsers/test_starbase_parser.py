@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`starship_notam.parsers.starbase_parser`.
+"""Unit tests for :mod:`src.parsers.starbase_parser`.
 
 Covers ``parse_starbase_html`` with sample HTML plus a determinism check
 (Requirement 3.6).
@@ -13,7 +13,7 @@ the structure, route, and time-of-day / offset are checked.
 
 from __future__ import annotations
 
-from starship_notam.parsers import parse_starbase_html
+from src.parsers import parse_starbase_html
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from starship_notam.data.notam_repo import (
+from src.data.notam_repo import (
     get_notams_needing_images,
     load_all_notams,
     mark_image_generated,

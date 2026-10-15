@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from starship_notam.data import (
+from src.data import (
     beach_alerts,
     compass_files,
     get_connection,
@@ -25,8 +25,8 @@ from starship_notam.data import (
     mark_image_generated,
     save_notam,
 )
-from starship_notam.data.connection import is_postgres
-from starship_notam.data.schema import _ADDED_COLUMNS
+from src.data.connection import is_postgres
+from src.data.schema import _ADDED_COLUMNS
 
 PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 

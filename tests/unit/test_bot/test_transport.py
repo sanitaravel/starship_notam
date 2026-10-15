@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from telegram.error import BadRequest, Forbidden, RetryAfter, TimedOut
 
-from starship_notam.bot import transport
+from src.bot import transport
 
 
 class FakeBot:

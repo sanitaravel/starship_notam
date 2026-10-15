@@ -7,7 +7,7 @@ date dropped every beach and road alert on the page.
 
 from __future__ import annotations
 
-from starship_notam.parsers.starbase_parser import parse_starbase_html
+from src.parsers.starbase_parser import parse_starbase_html
 
 PAGE = """
 <html><body>

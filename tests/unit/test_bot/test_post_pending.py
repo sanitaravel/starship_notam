@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from starship_notam.bot.orchestrator import faa, fcc_els, posting, starbase
+from src.bot.orchestrator import faa, fcc_els, posting, starbase
 
 # module, processor, "needing post" (object, attribute), mark (object, attribute),
 # item, expected mark args

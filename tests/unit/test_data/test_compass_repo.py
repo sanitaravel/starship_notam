@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.compass_repo import compass_files
+from src.data.compass_repo import compass_files
 
 pytestmark = pytest.mark.usefixtures("initialized_db")
 

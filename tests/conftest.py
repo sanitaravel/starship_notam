@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the starship_notam test suite.
+"""Shared pytest fixtures for the Starship NOTAM test suite.
 
 Provides:
     - ``db_path``      : a temporary, isolated SQLite database wired to the data
@@ -11,7 +11,7 @@ Provides:
 
 Notes
 -----
-The data layer (``starship_notam.data.connection``) opens a *new* SQLite
+The data layer (``src.data.connection``) opens a *new* SQLite
 connection for every call and resolves the database path from the
 ``NOTAM_DB_PATH`` environment variable when no explicit ``db_path`` is passed.
 A single ``:memory:`` database cannot be shared across those independent
@@ -35,7 +35,7 @@ if os.environ.get("CI"):
     settings.load_profile("ci")
 
 # Keep test runs out of the bot's real ``logs/notam.log``. The logger is set up
-# when ``starship_notam.core.logging`` is first imported, so this must run
+# when ``src.core.logging`` is first imported, so this must run
 # before any test module imports the package.
 os.environ["NOTAM_LOG_DIR"] = tempfile.mkdtemp(prefix="notam-test-logs-")
 
@@ -76,10 +76,10 @@ def db_path(tmp_path, monkeypatch) -> str:
 def initialized_db(db_path) -> str:
     """Return the path to a temporary database with the schema created.
 
-    Uses the real :func:`starship_notam.data.schema.init_db` so that tests
+    Uses the real :func:`src.data.schema.init_db` so that tests
     exercise the production schema-creation and migration logic.
     """
-    from starship_notam.data.schema import init_db
+    from src.data.schema import init_db
 
     init_db(db_path)
     return db_path

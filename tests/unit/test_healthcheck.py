@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from starship_notam import healthcheck
+from src import healthcheck
 
 RUNS_PER_HOUR = 2  # every 30 minutes -> healthy up to 45 minutes
 
@@ -53,7 +53,7 @@ def test_garbled_heartbeat_is_unhealthy(tmp_path):
 def run_check(path, env_extra=None):
     env = {"NOTAM_HEARTBEAT_FILE": str(path), **(env_extra or {})}
     return subprocess.run(
-        [sys.executable, "-m", "starship_notam.healthcheck"],
+        [sys.executable, "-m", "src.healthcheck"],
         env={**_base_env(), **env},
         capture_output=True,
         text=True,

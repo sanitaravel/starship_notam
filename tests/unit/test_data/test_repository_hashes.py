@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data import (
+from src.data import (
     beach_alerts,
     compass_files,
     faa_activities,
@@ -23,7 +23,7 @@ from starship_notam.data import (
     federal_register_documents,
     road_alerts,
 )
-from starship_notam.data.connection import get_connection
+from src.data.connection import get_connection
 
 FAA_ACTIVITY = {
     "mission": "SpaceX Starship Flight 12, Boca Chica",

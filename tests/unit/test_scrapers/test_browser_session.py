@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.scrapers import driver as driver_module
-from starship_notam.scrapers.faa_license_fetcher import fetch_faa_license
-from starship_notam.scrapers.fcc_els_fetcher import fetch_fcc_els_applications
-from starship_notam.scrapers.notam_scraper import search_notams
+from src.scrapers import driver as driver_module
+from src.scrapers.faa_license_fetcher import fetch_faa_license
+from src.scrapers.fcc_els_fetcher import fetch_fcc_els_applications
+from src.scrapers.notam_scraper import search_notams
 
 
 class FakeDriver:

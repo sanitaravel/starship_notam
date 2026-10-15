@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 
 import prefill_federal_register
-from starship_notam.bot.formatting import format_federal_register_document
-from starship_notam.bot.orchestrator import federal_register, posting
-from starship_notam.core import config
-from starship_notam.data.federal_register_repo import federal_register_documents
+from src.bot.formatting import format_federal_register_document
+from src.bot.orchestrator import federal_register, posting
+from src.core import config
+from src.data.federal_register_repo import federal_register_documents
 
 
 def _doc(number, published, title="Notice", **extra):

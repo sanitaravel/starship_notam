@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.parsers.notam_parser import parse_carf_message
+from src.parsers.notam_parser import parse_carf_message
 
 
 def _polygon(chain: str):
