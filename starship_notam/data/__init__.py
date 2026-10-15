@@ -3,7 +3,7 @@
 Re-exports the public entry points. Items posted to Telegram are stored
 through :class:`~starship_notam.data.repository.PostedItemRepository`
 instances (``faa_activities.save(...)``, ``.needing_post()``,
-``.mark_posted()``); NOTAMs and Starbase alerts have their own functions.
+``.mark_posted()``); NOTAMs have their own functions.
 """
 
 from starship_notam.data.compass_repo import compass_files
@@ -19,14 +19,7 @@ from starship_notam.data.notam_repo import (
     save_notam,
 )
 from starship_notam.data.schema import init_db
-from starship_notam.data.starbase_repo import (
-    get_beach_alerts_needing_post,
-    get_road_alerts_needing_post,
-    mark_beach_posted,
-    mark_road_posted,
-    save_beach_alert,
-    save_road_alert,
-)
+from starship_notam.data.starbase_repo import beach_alerts, road_alerts
 
 __all__ = [
     "get_connection",
@@ -40,10 +33,6 @@ __all__ = [
     "faa_licenses",
     "compass_files",
     "federal_register_documents",
-    "save_beach_alert",
-    "save_road_alert",
-    "get_beach_alerts_needing_post",
-    "get_road_alerts_needing_post",
-    "mark_beach_posted",
-    "mark_road_posted",
+    "beach_alerts",
+    "road_alerts",
 ]

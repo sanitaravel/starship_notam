@@ -12,22 +12,18 @@ import os
 import pytest
 
 from starship_notam.data import (
-    get_beach_alerts_needing_post,
+    beach_alerts,
     compass_files,
     get_connection,
     faa_activities,
     faa_licenses,
     fcc_els_applications,
     get_notams_needing_images,
-    get_road_alerts_needing_post,
+    road_alerts,
     init_db,
     load_all_notams,
-    mark_beach_posted,
     mark_image_generated,
-    mark_road_posted,
-    save_beach_alert,
     save_notam,
-    save_road_alert,
 )
 from starship_notam.data.connection import is_postgres
 from starship_notam.data.schema import _ADDED_COLUMNS
@@ -110,7 +106,7 @@ def test_faa_activity_round_trip(pg):
 
 
 def test_starbase_round_trip(pg):
-    save_beach_alert(
+    beach_alerts.save(
         {
             "description": "Primary launch window closure.",
             "start_utc": "2026-07-08T18:00:00Z",
@@ -120,7 +116,7 @@ def test_starbase_round_trip(pg):
         },
         pg,
     )
-    save_road_alert(
+    road_alerts.save(
         {
             "origin": "TX-4",
             "destination": "Boca Chica Beach",
@@ -132,12 +128,12 @@ def test_starbase_round_trip(pg):
         pg,
     )
 
-    (beach,) = get_beach_alerts_needing_post(pg)
-    (road,) = get_road_alerts_needing_post(pg)
-    mark_beach_posted(beach["alert_key"], pg)
-    mark_road_posted(road["alert_key"], pg)
-    assert get_beach_alerts_needing_post(pg) == []
-    assert get_road_alerts_needing_post(pg) == []
+    (beach,) = beach_alerts.needing_post(pg)
+    (road,) = road_alerts.needing_post(pg)
+    beach_alerts.mark_posted(beach["alert_key"], None, pg)
+    road_alerts.mark_posted(road["alert_key"], None, pg)
+    assert beach_alerts.needing_post(pg) == []
+    assert road_alerts.needing_post(pg) == []
 
 
 def test_fcc_els_round_trip(pg):
