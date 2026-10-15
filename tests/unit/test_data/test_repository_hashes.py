@@ -3,9 +3,11 @@
 Change detection compares a freshly computed hash with the stored one. If the
 hash formula of a repository changed, every stored row would look "changed"
 once after a deploy, and the sources that re-post on change (FAA activities,
-FCC ELS applications, FAA licenses) would post everything again. These
-values were captured from the repositories before they were moved onto the
-shared base class; they must stay byte-for-byte identical.
+FCC ELS applications, FAA licenses) would post everything again. Starbase
+alerts are keyed by a hash too: a different key would store the same closure
+as a new row and post it again. These values were captured from the
+repositories before they were moved onto the shared base class; they must
+stay byte-for-byte identical.
 """
 
 from __future__ import annotations
@@ -13,11 +15,13 @@ from __future__ import annotations
 import pytest
 
 from starship_notam.data import (
+    beach_alerts,
     compass_files,
     faa_activities,
     faa_licenses,
     fcc_els_applications,
     federal_register_documents,
+    road_alerts,
 )
 from starship_notam.data.connection import get_connection
 
@@ -107,3 +111,58 @@ def test_stored_hash_is_unchanged(initialized_db, save, record, table, key_col, 
     save(dict(record), initialized_db)
 
     assert _stored_hash(initialized_db, table, key_col, record[key_col]) == expected
+
+
+BEACH_ALERT = {
+    "description": "Beach closed for Starship testing",
+    "start_utc": "2026-10-15T13:00:00Z",
+    "end_utc": "2026-10-16T01:00:00Z",
+    "raw_date": "Oct 15, 8:00 AM - 8:00 PM",
+    "periods": [
+        {
+            "start_utc": "2026-10-15T13:00:00Z",
+            "end_utc": "2026-10-16T01:00:00Z",
+            "raw_date": "Oct 15 — primary",
+        }
+    ],
+}
+
+ROAD_ALERT = {
+    "origin": "Production",
+    "destination": "Pad",
+    "description": "Transport of Starship",
+    "start_utc": "2026-10-15T05:00:00Z",
+    "end_utc": "2026-10-15T11:00:00Z",
+    "raw_date": "Oct 15, 12:00 AM - 6:00 AM",
+}
+
+STARBASE_CASES = [
+    (
+        beach_alerts,
+        BEACH_ALERT,
+        "a1ce2e6b3bc0a099ecbd368ac190c6a3bbbc03b4cafba6478234bbfc80a4f8e5",
+        "56dbd9cc95f233598e81e3b5c630f942e6d68404fa31470850918c5a9ad266a6",
+    ),
+    (
+        road_alerts,
+        ROAD_ALERT,
+        "730629501ff304d013a5e5349078534d1df994d18cfed417ff1ebaaeb1c6903a",
+        "7fcaa54b5055f11ddfb031f14a95b1ee75684b677accde84caaf0ecc22fa7479",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "repo, alert, expected_key, expected_hash", STARBASE_CASES, ids=["beach", "road"]
+)
+def test_starbase_key_and_hash_are_unchanged(
+    initialized_db, repo, alert, expected_key, expected_hash
+):
+    repo.save(dict(alert), initialized_db)
+
+    conn = get_connection(initialized_db)
+    try:
+        row = conn.execute(f"SELECT alert_key, payload_hash FROM {repo.table}").fetchone()
+    finally:
+        conn.close()
+    assert (row["alert_key"], row["payload_hash"]) == (expected_key, expected_hash)

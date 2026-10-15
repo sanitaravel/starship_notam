@@ -51,12 +51,8 @@ OLD_MODULE_EXPORTS: dict[str, dict[str, str]] = {
         "mark_image_generated": "starship_notam.data",
         "load_all_notams": "starship_notam.data",
         "faa_activities": "starship_notam.data",
-        "save_beach_alert": "starship_notam.data",
-        "save_road_alert": "starship_notam.data",
-        "get_beach_alerts_needing_post": "starship_notam.data",
-        "get_road_alerts_needing_post": "starship_notam.data",
-        "mark_beach_posted": "starship_notam.data",
-        "mark_road_posted": "starship_notam.data",
+        "beach_alerts": "starship_notam.data",
+        "road_alerts": "starship_notam.data",
     },
     # notam_parser -> starship_notam.parsers
     "notam_parser": {

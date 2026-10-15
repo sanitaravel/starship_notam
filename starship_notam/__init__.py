@@ -34,18 +34,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "mark_image_generated": ("starship_notam.data", "mark_image_generated"),
     "load_all_notams": ("starship_notam.data", "load_all_notams"),
     "faa_activities": ("starship_notam.data", "faa_activities"),
-    "save_beach_alert": ("starship_notam.data", "save_beach_alert"),
-    "save_road_alert": ("starship_notam.data", "save_road_alert"),
-    "get_beach_alerts_needing_post": (
-        "starship_notam.data",
-        "get_beach_alerts_needing_post",
-    ),
-    "get_road_alerts_needing_post": (
-        "starship_notam.data",
-        "get_road_alerts_needing_post",
-    ),
-    "mark_beach_posted": ("starship_notam.data", "mark_beach_posted"),
-    "mark_road_posted": ("starship_notam.data", "mark_road_posted"),
+    "beach_alerts": ("starship_notam.data", "beach_alerts"),
+    "road_alerts": ("starship_notam.data", "road_alerts"),
     # notam_parser -> parsers
     "parse_notam": ("starship_notam.parsers", "parse_notam"),
     "parse_carf_message": ("starship_notam.parsers", "parse_carf_message"),

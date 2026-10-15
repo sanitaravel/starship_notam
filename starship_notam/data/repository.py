@@ -1,11 +1,13 @@
 """Base class for tables of items that are posted to Telegram.
 
-FAA activities, FCC ELS applications, FAA licenses, COMPASS files and Federal
-Register documents are stored the same way: one row per item keyed by a
-source identifier, a SHA-256 ``payload_hash`` for change detection, and the
-``telegram_posted`` / ``telegram_posted_at`` / ``telegram_message_id``
-columns. Subclasses describe their table and implement :meth:`prepare`; the
-base class does the upsert, the "needing post" query and the marking.
+FAA activities, FCC ELS applications, FAA licenses, COMPASS files, Federal
+Register documents and Starbase alerts are stored the same way: one row per
+item keyed by a source identifier, a SHA-256 ``payload_hash`` for change
+detection, and a "posted" flag with its timestamp (``telegram_posted`` /
+``telegram_posted_at``, plus ``telegram_message_id``; the Starbase tables
+call them ``processed`` / ``processed_at`` and keep no message ID).
+Subclasses describe their table and implement :meth:`prepare`; the base class
+does the upsert, the "needing post" query and the marking.
 
 Each subclass decides exactly what is hashed. Changing that for an existing
 source would make every stored row look changed once, and sources with
@@ -48,6 +50,11 @@ class PostedItemRepository:
     order_by: str = "created_at"
     #: Post a stored item again when its content changes.
     repost_on_change: bool = False
+    #: Flag set once the item is posted, and when that happened.
+    posted_col: str = "telegram_posted"
+    posted_at_col: str = "telegram_posted_at"
+    #: Column for the Telegram message ID(s), or None if the table has none.
+    message_id_col: Optional[str] = "telegram_message_id"
 
     def prepare(self, record: Dict) -> Optional[Tuple[Any, Dict[str, Any], Any]]:
         """Return ``(key, fields, hashed)`` for *record*, or None to skip it.
@@ -74,7 +81,7 @@ class PostedItemRepository:
             return "skipped"
         key, fields, hashed = prepared
 
-        reset = {"telegram_posted": 0} if self.repost_on_change else None
+        reset = {self.posted_col: 0} if self.repost_on_change else None
         with transaction(get_connection(db_path)) as cur:
             result = upsert(
                 cur, self.table, self.key_col, key, fields, payload_hash(hashed), reset=reset
@@ -94,7 +101,7 @@ class PostedItemRepository:
         with transaction(get_connection(db_path)) as cur:
             cur.execute(
                 f"SELECT {', '.join(self.columns)} FROM {self.table} "
-                f"WHERE telegram_posted = 0 ORDER BY {self.order_by}"
+                f"WHERE {self.posted_col} = 0 ORDER BY {self.order_by}"
             )
             rows = [dict(r) for r in cur.fetchall()]
         result = self.after_load(rows)
@@ -121,17 +128,20 @@ class PostedItemRepository:
 
         Rows already marked posted are left alone, so their recorded message
         IDs are kept. Called with ``telegram_message_id=None`` to prefill the
-        database with items that should never be announced.
+        database with items that should never be announced. The message ID is
+        dropped for tables without :attr:`message_id_col`.
         """
-        now = utc_now_iso()
+        values = {self.posted_col: 1, self.posted_at_col: utc_now_iso()}
+        if self.message_id_col:
+            values[self.message_id_col] = telegram_message_id
+        set_clause = ", ".join(f"{col} = ?" for col in values)
         changed = 0
         with transaction(get_connection(db_path)) as cur:
             for key in keys:
                 cur.execute(
-                    f"UPDATE {self.table} "
-                    "SET telegram_posted = 1, telegram_posted_at = ?, telegram_message_id = ? "
-                    f"WHERE {self.key_col} = ? AND telegram_posted = 0",
-                    (now, telegram_message_id, key),
+                    f"UPDATE {self.table} SET {set_clause} "
+                    f"WHERE {self.key_col} = ? AND {self.posted_col} = 0",
+                    (*values.values(), key),
                 )
                 changed += cur.rowcount
         return changed

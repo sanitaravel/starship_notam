@@ -43,18 +43,18 @@ CASES = [
     (
         starbase,
         "process_beach_alerts",
-        (starbase, "get_beach_alerts_needing_post"),
-        (starbase, "mark_beach_posted"),
+        (starbase.beach_alerts, "needing_post"),
+        (starbase.beach_alerts, "mark_posted"),
         {"alert_key": "beach-key"},
-        ("beach-key",),
+        ("beach-key", "42"),
     ),
     (
         starbase,
         "process_road_alerts",
-        (starbase, "get_road_alerts_needing_post"),
-        (starbase, "mark_road_posted"),
+        (starbase.road_alerts, "needing_post"),
+        (starbase.road_alerts, "mark_posted"),
         {"alert_key": "road-key"},
-        ("road-key",),
+        ("road-key", "42"),
     ),
 ]
 IDS = [case[1] for case in CASES]
