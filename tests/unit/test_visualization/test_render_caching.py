@@ -9,14 +9,15 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.visualization import image_composer, map_renderer
+from starship_notam.visualization import fonts
+from starship_notam.visualization.map_renderer import natural_earth
 
 
 @pytest.fixture(autouse=True)
 def clear_caches():
-    map_renderer._natural_earth_records.cache_clear()
+    natural_earth.natural_earth_records.cache_clear()
     yield
-    map_renderer._natural_earth_records.cache_clear()
+    natural_earth.natural_earth_records.cache_clear()
 
 
 def test_missing_layer_is_attempted_only_once(monkeypatch):
@@ -30,8 +31,8 @@ def test_missing_layer_is_attempted_only_once(monkeypatch):
 
     monkeypatch.setattr(shapereader, "natural_earth", missing)
 
-    assert map_renderer._natural_earth_records("10m", "cultural", "nope") == ()
-    assert map_renderer._natural_earth_records("10m", "cultural", "nope") == ()
+    assert natural_earth.natural_earth_records("10m", "cultural", "nope") == ()
+    assert natural_earth.natural_earth_records("10m", "cultural", "nope") == ()
     assert len(calls) == 1
 
 
@@ -56,8 +57,8 @@ def test_layer_records_are_reused(monkeypatch):
 
     monkeypatch.setattr(shapereader, "Reader", FakeReader)
 
-    first = map_renderer._natural_earth_records("50m", "cultural", "admin_0_countries")
-    second = map_renderer._natural_earth_records("50m", "cultural", "admin_0_countries")
+    first = natural_earth.natural_earth_records("50m", "cultural", "admin_0_countries")
+    second = natural_earth.natural_earth_records("50m", "cultural", "admin_0_countries")
 
     assert first is second
     assert first[0][0] == {"NAME": "Somewhere"}
@@ -65,7 +66,7 @@ def test_layer_records_are_reused(monkeypatch):
 
 
 def test_fonts_are_cached():
-    assert image_composer.load_font("JetBrainsMono-Bold.ttf", 48) is image_composer.load_font(
+    assert fonts.load_font("JetBrainsMono-Bold.ttf", 48) is fonts.load_font(
         "JetBrainsMono-Bold.ttf", 48
     )
-    assert map_renderer._label_font(9) is map_renderer._label_font(9)
+    assert fonts.label_font(9) is fonts.label_font(9)
