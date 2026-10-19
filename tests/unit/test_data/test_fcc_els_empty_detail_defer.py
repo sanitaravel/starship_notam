@@ -10,10 +10,10 @@ once — never producing a duplicate incomplete-then-complete pair.
 
 Because this is a *bug condition exploration* test run against the UNFIXED code,
 it is EXPECTED TO FAIL. The failure confirms the bug exists:
-    - ``get_fcc_els_applications_needing_post`` currently returns empty-detail
+    - ``fcc_els_applications.needing_post`` currently returns empty-detail
       rows (``WHERE telegram_posted = 0`` ignores detail completeness), so an
       incomplete message would be posted.
-    - The empty->populated ``save_fcc_els_application`` transition changes
+    - The empty->populated ``fcc_els_applications.save`` transition changes
       ``payload_hash`` and resets ``telegram_posted`` to 0, so the same
       ``file_number`` is returned a second time -> a duplicate post.
 
@@ -34,13 +34,9 @@ import pytest
 
 from hypothesis import HealthCheck, given, settings, strategies as st
 
-from starship_notam.data.connection import init_db
-from starship_notam.bot.formatting import format_fcc_els_application
-from starship_notam.data.fcc_els_repo import (
-    get_fcc_els_applications_needing_post,
-    mark_fcc_els_application_posted,
-    save_fcc_els_application,
-)
+from src.data.schema import init_db
+from src.bot.formatting import format_fcc_els_application
+from src.data.fcc_els_repo import fcc_els_applications
 
 # These property examples exercise real SQLite file I/O, so individual
 # examples can exceed Hypothesis's default
@@ -80,7 +76,7 @@ def _read_row(db_path, file_number):
 def _force_detail_json(db_path, file_number, raw_value):
     """Overwrite ``detail_json`` for a row directly.
 
-    ``save_fcc_els_application`` always serialises ``detail`` to a canonical
+    ``fcc_els_applications.save`` always serialises ``detail`` to a canonical
     JSON string (an empty/missing detail becomes ``'{}'``), so it cannot produce
     the NULL / '' / whitespace-only empty-detail representations that also occur
     in the wild (legacy rows, partial writes). We first save through the real
@@ -127,7 +123,7 @@ def _empty_app(file_number):
 
 
 # The concrete empty-detail representations that trigger the bug. ``'{}'`` is
-# what ``save_fcc_els_application`` persists for ``detail == {}``; NULL / '' /
+# what ``fcc_els_applications.save`` persists for ``detail == {}``; NULL / '' /
 # whitespace-only cover the other in-the-wild empty forms named in the design's
 # ``isEmptyDetail`` / the fix's SQL predicate.
 _EMPTY_DETAIL_JSON = st.sampled_from([None, "", "   ", "\t", "\n  ", "{}"])
@@ -154,7 +150,7 @@ def test_empty_detail_deferred_then_single_post_when_populated(
     Validates: Requirements 2.1, 2.3.
 
     EXPECTED TO FAIL on unfixed code:
-      - the empty-detail row IS returned by get_fcc_els_applications_needing_post
+      - the empty-detail row IS returned by fcc_els_applications.needing_post
         (Requirement 2.1 violated), and
       - after posting it and then saving a populated detail, telegram_posted is
         reset to 0 so the row is returned AGAIN — a duplicate (Requirement 2.3
@@ -165,11 +161,11 @@ def test_empty_detail_deferred_then_single_post_when_populated(
 
     # 1) Save the application while its detail is empty, then force the concrete
     #    empty representation under test (NULL / '' / whitespace / '{}').
-    save_fcc_els_application(_empty_app(file_number), db)
+    fcc_els_applications.save(_empty_app(file_number), db)
     _force_detail_json(db, file_number, empty_json)
 
     # Requirement 2.1: an empty-detail application must NOT be post-eligible.
-    needing_while_empty = get_fcc_els_applications_needing_post(db)
+    needing_while_empty = fcc_els_applications.needing_post(db)
     empty_eligible = [r for r in needing_while_empty if r["file_number"] == file_number]
     assert empty_eligible == [], (
         f"empty-detail app {file_number!r} (detail_json={empty_json!r}) is "
@@ -180,14 +176,14 @@ def test_empty_detail_deferred_then_single_post_when_populated(
     # fixed system nothing was eligible, so nothing is marked. On the buggy
     # system the incomplete row was eligible and would be posted here.
     for row in empty_eligible:
-        mark_fcc_els_application_posted(row["file_number"], "incomplete-msg", db)
+        fcc_els_applications.mark_posted(row["file_number"], "incomplete-msg", db)
 
     # 2) A later scrape populates the detail for the SAME file_number.
-    save_fcc_els_application(_populated_app(file_number), db)
+    fcc_els_applications.save(_populated_app(file_number), db)
 
     # Requirement 2.3: exactly one post for this file_number — it must appear
     # exactly once across the empty phase (0 times) and the populated phase.
-    needing_after_populate = get_fcc_els_applications_needing_post(db)
+    needing_after_populate = fcc_els_applications.needing_post(db)
     populated_eligible = [
         r for r in needing_after_populate if r["file_number"] == file_number
     ]
@@ -226,7 +222,7 @@ def test_empty_detail_message_omits_purpose_and_explanation(
     db = str(tmp_path_factory.mktemp("empty_msg") / "notams.db")
     init_db(db)
 
-    save_fcc_els_application(_empty_app(file_number), db)
+    fcc_els_applications.save(_empty_app(file_number), db)
     _force_detail_json(db, file_number, empty_json)
 
     row = _read_row(db, file_number)

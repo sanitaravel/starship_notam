@@ -9,12 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.connection import get_connection
-from starship_notam.data.faa_repo import (
-    get_faa_activities_needing_post,
-    mark_faa_activity_posted,
-    save_faa_activity,
-)
+from src.data.connection import get_connection
+from src.data.faa_repo import faa_activities
 
 # The schema is created once at startup in production (ensure_setup), not by
 # the repository functions, so every test here starts from an initialized DB.
@@ -31,11 +27,11 @@ def _activity(mission="Starship Flight Test", primary="08 JUL 25 1350-2359Z",
 
 
 def test_save_faa_activity_then_needing_post_round_trip(db_path):
-    """A newly saved activity is returned by get_faa_activities_needing_post."""
+    """A newly saved activity is returned by faa_activities.needing_post."""
     activity = _activity()
-    save_faa_activity(activity, db_path)
+    faa_activities.save(activity, db_path)
 
-    needing = get_faa_activities_needing_post(db_path)
+    needing = faa_activities.needing_post(db_path)
 
     assert len(needing) == 1
     row = needing[0]
@@ -47,18 +43,18 @@ def test_save_faa_activity_then_needing_post_round_trip(db_path):
 def test_save_faa_activity_is_idempotent(db_path):
     """Saving the same activity twice does not create a duplicate row."""
     activity = _activity()
-    save_faa_activity(activity, db_path)
-    save_faa_activity(activity, db_path)
+    faa_activities.save(activity, db_path)
+    faa_activities.save(activity, db_path)
 
-    assert len(get_faa_activities_needing_post(db_path)) == 1
+    assert len(faa_activities.needing_post(db_path)) == 1
 
 
 def test_save_faa_activity_updates_windows_on_change(db_path):
     """Changing the windows updates the stored record in place (no duplicate)."""
-    save_faa_activity(_activity(), db_path)
-    save_faa_activity(_activity(primary="10 JUL 25 1350-2359Z"), db_path)
+    faa_activities.save(_activity(), db_path)
+    faa_activities.save(_activity(primary="10 JUL 25 1350-2359Z"), db_path)
 
-    needing = get_faa_activities_needing_post(db_path)
+    needing = faa_activities.needing_post(db_path)
     assert len(needing) == 1
     assert needing[0]["primary_window"] == "10 JUL 25 1350-2359Z"
 
@@ -66,20 +62,20 @@ def test_save_faa_activity_updates_windows_on_change(db_path):
 def test_mark_faa_activity_posted_removes_from_needing_list(db_path):
     """After marking an activity posted, it drops out of the needing-post list."""
     activity = _activity()
-    save_faa_activity(activity, db_path)
-    assert get_faa_activities_needing_post(db_path)  # sanity: present
+    faa_activities.save(activity, db_path)
+    assert faa_activities.needing_post(db_path)  # sanity: present
 
-    mark_faa_activity_posted(activity["mission"], "msg-123", db_path)
+    faa_activities.mark_posted(activity["mission"], "msg-123", db_path)
 
-    assert get_faa_activities_needing_post(db_path) == []
+    assert faa_activities.needing_post(db_path) == []
 
 
 def test_mark_faa_activity_posted_persists_message_id(db_path):
     """Marking posted records the telegram_message_id and posted flag."""
     activity = _activity()
-    save_faa_activity(activity, db_path)
+    faa_activities.save(activity, db_path)
 
-    mark_faa_activity_posted(activity["mission"], "msg-999", db_path)
+    faa_activities.mark_posted(activity["mission"], "msg-999", db_path)
 
     conn = get_connection(db_path)
     try:
@@ -99,7 +95,7 @@ def test_mark_faa_activity_posted_persists_message_id(db_path):
 
 def test_get_faa_activities_needing_post_empty_db(initialized_db):
     """An initialized-but-empty database yields no activities needing posting."""
-    assert get_faa_activities_needing_post(initialized_db) == []
+    assert faa_activities.needing_post(initialized_db) == []
 
 
 def test_save_faa_activity_raises_on_db_failure(tmp_path, monkeypatch):
@@ -115,4 +111,4 @@ def test_save_faa_activity_raises_on_db_failure(tmp_path, monkeypatch):
     monkeypatch.setenv("NOTAM_DB_PATH", bad_db)
 
     with pytest.raises(Exception):
-        save_faa_activity(_activity(), bad_db)
+        faa_activities.save(_activity(), bad_db)

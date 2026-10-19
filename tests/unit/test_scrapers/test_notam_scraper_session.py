@@ -6,7 +6,8 @@ browser, wait 5s per missed selector, and sleep 5s before quitting.
 
 from __future__ import annotations
 
-from starship_notam.scrapers import notam_scraper
+from src.scrapers import driver as driver_module
+from src.scrapers import notam_scraper
 
 
 class FakeDriver:
@@ -32,7 +33,7 @@ def test_many_keywords_share_one_driver_and_survive_a_failure(monkeypatch):
             raise RuntimeError("page broke")
         return [{"number": keyword}]
 
-    monkeypatch.setattr(notam_scraper, "create_driver", make_driver)
+    monkeypatch.setattr(driver_module, "create_driver", make_driver)
     monkeypatch.setattr(notam_scraper, "_search_with_driver", fake_search)
 
     results = notam_scraper.search_notams_many(["a", "bad", "c"])

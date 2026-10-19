@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`starship_notam.bot.formatting`.
+"""Unit tests for :mod:`src.bot.formatting`.
 
 These tests exercise the four public formatting functions with known input
 dictionaries and assert on the produced HTML strings. They also verify
@@ -16,7 +16,7 @@ import sys
 
 import pytest
 
-from starship_notam.bot import formatting
+from src.bot import formatting
 
 
 # ---------------------------------------------------------------------------
@@ -25,13 +25,13 @@ from starship_notam.bot import formatting
 def test_formatting_imports_without_telegram_api():
     """Importing the formatting module must succeed on its own.
 
-    A fresh import of ``starship_notam.bot.formatting`` must not fail and must
+    A fresh import of ``src.bot.formatting`` must not fail and must
     expose the public formatting functions. This guards Requirement 5.1: the
     formatting module does not import the Telegram API.
     """
     import importlib
 
-    module = importlib.import_module("starship_notam.bot.formatting")
+    module = importlib.import_module("src.bot.formatting")
 
     for name in (
         "build_notam_caption",
@@ -58,8 +58,8 @@ def test_formatting_does_not_pull_in_telegram_package():
         for name, mod in list(sys.modules.items())
         if name == "telegram" or name.startswith("telegram.")
     }
-    saved["starship_notam.bot.formatting"] = sys.modules.get(
-        "starship_notam.bot.formatting"
+    saved["src.bot.formatting"] = sys.modules.get(
+        "src.bot.formatting"
     )
 
     try:
@@ -67,11 +67,11 @@ def test_formatting_does_not_pull_in_telegram_package():
             if (
                 name == "telegram"
                 or name.startswith("telegram.")
-                or name == "starship_notam.bot.formatting"
+                or name == "src.bot.formatting"
             ):
                 del sys.modules[name]
 
-        importlib.import_module("starship_notam.bot.formatting")
+        importlib.import_module("src.bot.formatting")
 
         telegram_modules = [
             name
@@ -87,7 +87,7 @@ def test_formatting_does_not_pull_in_telegram_package():
         for name, mod in saved.items():
             if mod is not None:
                 sys.modules[name] = mod
-        importlib.import_module("starship_notam.bot.formatting")
+        importlib.import_module("src.bot.formatting")
 
 
 # ---------------------------------------------------------------------------

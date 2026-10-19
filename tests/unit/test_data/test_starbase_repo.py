@@ -10,15 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.starbase_repo import (
-    get_beach_alerts_needing_post,
-    get_road_alerts_needing_post,
+from src.data.starbase_repo import (
+    beach_alerts,
+    road_alerts,
     make_beach_key,
     make_road_key,
-    mark_beach_posted,
-    mark_road_posted,
-    save_beach_alert,
-    save_road_alert,
 )
 
 # The schema is created once at startup in production (ensure_setup), not by
@@ -53,9 +49,9 @@ def _road_alert(origin="TX-4", destination="Boca Chica Beach",
 # --------------------------------------------------------------------------- #
 def test_save_beach_alert_then_needing_post_round_trip(db_path):
     alert = _beach_alert()
-    save_beach_alert(alert, db_path)
+    beach_alerts.save(alert, db_path)
 
-    needing = get_beach_alerts_needing_post(db_path)
+    needing = beach_alerts.needing_post(db_path)
 
     assert len(needing) == 1
     row = needing[0]
@@ -68,24 +64,24 @@ def test_save_beach_alert_then_needing_post_round_trip(db_path):
 
 def test_save_beach_alert_idempotent_same_window(db_path):
     alert = _beach_alert()
-    save_beach_alert(alert, db_path)
-    save_beach_alert(alert, db_path)
+    beach_alerts.save(alert, db_path)
+    beach_alerts.save(alert, db_path)
 
-    assert len(get_beach_alerts_needing_post(db_path)) == 1
+    assert len(beach_alerts.needing_post(db_path)) == 1
 
 
 def test_mark_beach_posted_removes_from_needing_list(db_path):
     alert = _beach_alert()
-    save_beach_alert(alert, db_path)
+    beach_alerts.save(alert, db_path)
     key = make_beach_key(alert["start_utc"], alert["end_utc"])
 
-    mark_beach_posted(key, db_path)
+    beach_alerts.mark_posted(key, None, db_path)
 
-    assert get_beach_alerts_needing_post(db_path) == []
+    assert beach_alerts.needing_post(db_path) == []
 
 
 def test_get_beach_alerts_needing_post_empty_db(initialized_db):
-    assert get_beach_alerts_needing_post(initialized_db) == []
+    assert beach_alerts.needing_post(initialized_db) == []
 
 
 # --------------------------------------------------------------------------- #
@@ -93,9 +89,9 @@ def test_get_beach_alerts_needing_post_empty_db(initialized_db):
 # --------------------------------------------------------------------------- #
 def test_save_road_alert_then_needing_post_round_trip(db_path):
     alert = _road_alert()
-    save_road_alert(alert, db_path)
+    road_alerts.save(alert, db_path)
 
-    needing = get_road_alerts_needing_post(db_path)
+    needing = road_alerts.needing_post(db_path)
 
     assert len(needing) == 1
     row = needing[0]
@@ -109,35 +105,35 @@ def test_save_road_alert_then_needing_post_round_trip(db_path):
 
 def test_save_road_alert_idempotent_same_route_window(db_path):
     alert = _road_alert()
-    save_road_alert(alert, db_path)
-    save_road_alert(alert, db_path)
+    road_alerts.save(alert, db_path)
+    road_alerts.save(alert, db_path)
 
-    assert len(get_road_alerts_needing_post(db_path)) == 1
+    assert len(road_alerts.needing_post(db_path)) == 1
 
 
 def test_mark_road_posted_removes_from_needing_list(db_path):
     alert = _road_alert()
-    save_road_alert(alert, db_path)
+    road_alerts.save(alert, db_path)
     key = make_road_key(
         alert["origin"], alert["destination"], alert["start_utc"], alert["end_utc"]
     )
 
-    mark_road_posted(key, db_path)
+    road_alerts.mark_posted(key, None, db_path)
 
-    assert get_road_alerts_needing_post(db_path) == []
+    assert road_alerts.needing_post(db_path) == []
 
 
 def test_get_road_alerts_needing_post_empty_db(initialized_db):
-    assert get_road_alerts_needing_post(initialized_db) == []
+    assert road_alerts.needing_post(initialized_db) == []
 
 
 def test_beach_and_road_alerts_are_independent(db_path):
     """Beach and road alerts live in separate tables and do not interfere."""
-    save_beach_alert(_beach_alert(), db_path)
-    save_road_alert(_road_alert(), db_path)
+    beach_alerts.save(_beach_alert(), db_path)
+    road_alerts.save(_road_alert(), db_path)
 
-    assert len(get_beach_alerts_needing_post(db_path)) == 1
-    assert len(get_road_alerts_needing_post(db_path)) == 1
+    assert len(beach_alerts.needing_post(db_path)) == 1
+    assert len(road_alerts.needing_post(db_path)) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -150,7 +146,7 @@ def test_save_beach_alert_raises_on_db_failure(tmp_path, monkeypatch):
     monkeypatch.setenv("NOTAM_DB_PATH", bad_db)
 
     with pytest.raises(Exception):
-        save_beach_alert(_beach_alert(), bad_db)
+        beach_alerts.save(_beach_alert(), bad_db)
 
 
 def test_save_road_alert_raises_on_db_failure(tmp_path, monkeypatch):
@@ -160,4 +156,4 @@ def test_save_road_alert_raises_on_db_failure(tmp_path, monkeypatch):
     monkeypatch.setenv("NOTAM_DB_PATH", bad_db)
 
     with pytest.raises(Exception):
-        save_road_alert(_road_alert(), bad_db)
+        road_alerts.save(_road_alert(), bad_db)

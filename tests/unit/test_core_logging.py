@@ -10,7 +10,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from starship_notam.core.logging import LOG_DIR, logger
+from src.core.logging import LOG_DIR, logger
 
 PROJECT_LOGS = Path(__file__).resolve().parents[2] / "logs"
 

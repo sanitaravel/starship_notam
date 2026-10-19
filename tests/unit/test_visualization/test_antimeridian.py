@@ -8,14 +8,14 @@ area was drawn the long way round, and the vertices were wrongly reordered.
 
 from __future__ import annotations
 
-from starship_notam.parsers.coord_parser import parse_coords_from_text
-from starship_notam.visualization.map_renderer import (
-    _bounds_visible,
-    _lon_shift_into,
-    _normalize_polygon_order,
-    _polygon_self_intersects,
-    _unwrap_groups,
-    _unwrap_longitudes,
+from src.parsers.coord_parser import parse_coords_from_text
+from src.visualization.map_renderer.geometry import (
+    bounds_visible,
+    lon_shift_into,
+    normalize_polygon_order,
+    polygon_self_intersects,
+    unwrap_groups,
+    unwrap_longitudes,
 )
 
 FLT14_AREA = (
@@ -37,30 +37,30 @@ def test_flt14_area_is_compact_after_unwrapping():
     raw = parse_coords_from_text(FLT14_AREA)
     assert _lon_span(raw) > 300  # the bug: looks like it spans the globe
 
-    unwrapped = _unwrap_longitudes(raw)
+    unwrapped = unwrap_longitudes(raw)
     assert _lon_span(unwrapped) < 60
     assert min(lon for _, lon in unwrapped) >= 160
     assert max(lon for _, lon in unwrapped) <= 220
 
 
 def test_flt14_area_is_not_reordered():
-    unwrapped = _unwrap_longitudes(parse_coords_from_text(FLT14_AREA))
+    unwrapped = unwrap_longitudes(parse_coords_from_text(FLT14_AREA))
 
-    assert not _polygon_self_intersects(unwrapped)
-    assert _normalize_polygon_order(unwrapped) == unwrapped
+    assert not polygon_self_intersects(unwrapped)
+    assert normalize_polygon_order(unwrapped) == unwrapped
 
 
 def test_unwrap_leaves_ordinary_polygons_unchanged():
     pts = [(26.0, -97.2), (26.1, -97.0), (25.9, -96.9)]
 
-    assert _unwrap_longitudes(pts) == pts
+    assert unwrap_longitudes(pts) == pts
 
 
 def test_groups_on_both_sides_of_antimeridian_share_a_frame():
     east = [(30.0, 178.0), (31.0, 179.0), (30.0, 179.5)]
     west = [(30.0, -179.5), (31.0, -179.0), (30.0, -178.0)]
 
-    groups = _unwrap_groups([east, west])
+    groups = unwrap_groups([east, west])
 
     all_lons = [lon for g in groups for _, lon in g]
     assert max(all_lons) - min(all_lons) < 10
@@ -70,6 +70,6 @@ def test_labels_and_bounds_shift_into_unwrapped_extent():
     extent = [160.0, 220.0, 10.0, 45.0]
 
     # Hawaii (about 155°W) lies inside the unwrapped extent as 205°.
-    assert _lon_shift_into(-155.0, extent[0], extent[1]) == 205.0
-    assert _bounds_visible((-161.0, 18.0, -154.0, 23.0), extent)
-    assert not _bounds_visible((0.0, 18.0, 10.0, 23.0), extent)
+    assert lon_shift_into(-155.0, extent[0], extent[1]) == 205.0
+    assert bounds_visible((-161.0, 18.0, -154.0, 23.0), extent)
+    assert not bounds_visible((0.0, 18.0, 10.0, 23.0), extent)

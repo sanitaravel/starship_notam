@@ -102,10 +102,10 @@ lock = [
 ]
 
 [project.scripts]
-starship-notam = "starship_notam.__main__:main"
+starship-notam = "src.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["starship_notam*"]
+include = ["src*"]
 
 # Migrated from pytest.ini
 [tool.pytest.ini_options]

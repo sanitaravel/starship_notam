@@ -2,13 +2,13 @@
 
 Regression test for fix-plan step 1: the orchestrator used to pass a flat
 point list into ``plot_single_notam``, which overwrote the per-area groups
-computed by ``_notam_from_db_row`` and fused two debris-response areas into
+computed by ``notam_from_db_row`` and fused two debris-response areas into
 one self-intersecting ring.
 """
 
 from __future__ import annotations
 
-from starship_notam.visualization import image_composer
+from src.visualization.image_composer import render
 
 TWO_AREA_E = (
     "DRA BOUNDED BY: 1700N07140W-1626N07140W-1626N07300W-1700N07300W "
@@ -23,8 +23,8 @@ def _capture_rendered_notam(monkeypatch, name, parsed):
         captured["notam"] = notam
         return output_path
 
-    monkeypatch.setattr(image_composer, "render_notam_image", fake_render)
-    image_composer.plot_single_notam(name, parsed, "out.png")
+    monkeypatch.setattr(render, "render_notam_image", fake_render)
+    render.plot_single_notam(name, parsed, "out.png")
     return captured["notam"]
 
 

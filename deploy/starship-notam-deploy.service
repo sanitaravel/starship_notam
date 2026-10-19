@@ -1,0 +1,16 @@
+# Runs deploy/deploy.sh once; started every 5 minutes by
+# starship-notam-deploy.timer. See docs/deployment.md.
+[Unit]
+Description=Deploy the latest Starship NOTAM bot release
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=notam
+Group=notam
+WorkingDirectory=/opt/starship_notam
+ExecStart=/opt/starship_notam/deploy/deploy.sh
+# Pulling, waiting up to 15 minutes for the bot to turn healthy and possibly
+# rolling back.
+TimeoutStartSec=45min

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`starship_notam.parsers.coord_parser`.
+"""Unit tests for :mod:`src.parsers.coord_parser`.
 
 Covers DMS, decimal, and polygon coordinate parsing via
 ``parse_coords_from_text`` plus a determinism check (Requirement 3.6).
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.parsers import parse_coords_from_text
+from src.parsers import parse_coords_from_text
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ def test_unpaired_dms_token_is_not_a_coordinate():
 
 
 def test_unpaired_dms_token_does_not_break_other_areas():
-    from starship_notam.parsers.coord_parser import parse_coord_groups_from_text
+    from src.parsers.coord_parser import parse_coord_groups_from_text
 
     # Used to raise RecursionError.
     groups = parse_coord_groups_from_text("1500N06500W-1600N06600W AND 2358S")

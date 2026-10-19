@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.bot import orchestrator
-from starship_notam.bot.formatting import format_compass_file
-from starship_notam.data.compass_repo import get_compass_files_needing_post
+from src.bot.formatting import format_compass_file
+from src.bot.orchestrator import compass, posting
+from src.core import config
+from src.data.compass_repo import compass_files
 
 _FILES = [  # newest first, as the site returns them
     {"file_uuid": "new", "filename": "deck <10 05>.pptx", "uploaded_at": "05/Oct/2026 14:26"},
@@ -27,24 +28,24 @@ def test_format_compass_file_escapes_and_links():
 
 @pytest.fixture
 def compass_env(initialized_db, monkeypatch):
-    monkeypatch.setattr(orchestrator.config, "DB_PATH", initialized_db)
-    monkeypatch.setattr(orchestrator, "fetch_compass_files", lambda: list(_FILES))
-    monkeypatch.setattr(orchestrator, "_SEND_PAUSE_SECONDS", 0)
+    monkeypatch.setattr(config, "DB_PATH", initialized_db)
+    monkeypatch.setattr(compass.compass_files_fetcher, "fetch", lambda: list(_FILES))
+    monkeypatch.setattr(posting, "_SEND_PAUSE_SECONDS", 0)
     sent = []
 
     async def fake_send(chat_id, text):
         sent.append(text)
         return len(sent)
 
-    monkeypatch.setattr(orchestrator, "send_message", fake_send)
+    monkeypatch.setattr(posting, "send_message", fake_send)
     return sent
 
 
 async def test_new_files_are_posted_oldest_first_once(compass_env):
     sent = compass_env
 
-    await orchestrator._process_compass_files(["chat"])
-    await orchestrator._process_compass_files(["chat"])
+    await compass.process_compass_files(["chat"])
+    await compass.process_compass_files(["chat"])
 
     assert len(sent) == 2
     assert "deck 10 01.pptx" in sent[0]
@@ -54,16 +55,16 @@ async def test_new_files_are_posted_oldest_first_once(compass_env):
 async def test_prefill_suppresses_existing_files(compass_env):
     sent = compass_env
 
-    assert orchestrator.prefill_compass_files() == 2
-    assert get_compass_files_needing_post() == []
+    assert compass.prefill_compass_files() == 2
+    assert compass_files.needing_post() == []
 
-    await orchestrator._process_compass_files(["chat"])
+    await compass.process_compass_files(["chat"])
     assert sent == []
 
 
 def test_prefill_raises_when_fetch_fails(initialized_db, monkeypatch):
-    monkeypatch.setattr(orchestrator.config, "DB_PATH", initialized_db)
-    monkeypatch.setattr(orchestrator, "fetch_compass_files", lambda: None)
+    monkeypatch.setattr(config, "DB_PATH", initialized_db)
+    monkeypatch.setattr(compass.compass_files_fetcher, "fetch", lambda: None)
 
     with pytest.raises(RuntimeError):
-        orchestrator.prefill_compass_files()
+        compass.prefill_compass_files()

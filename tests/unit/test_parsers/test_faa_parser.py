@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`starship_notam.parsers.faa_parser`.
+"""Unit tests for :mod:`src.parsers.faa_parser`.
 
 Covers ``parse_faa_advisory_html`` with sample HTML plus a determinism
 check (Requirement 3.6).
@@ -8,7 +8,7 @@ Imports only the parsers layer (Requirements 9.1, 9.4).
 
 from __future__ import annotations
 
-from starship_notam.parsers import parse_faa_advisory_html
+from src.parsers import parse_faa_advisory_html
 
 
 def test_parses_planned_launch_block(sample_faa_advisory_html):

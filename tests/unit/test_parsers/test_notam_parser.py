@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`starship_notam.parsers.notam_parser`.
+"""Unit tests for :mod:`src.parsers.notam_parser`.
 
 Covers ``parse_notam`` (labelled ICAO fields + CARF autodetect) and
 ``parse_carf_message`` with known inputs, plus a determinism check
@@ -10,7 +10,7 @@ Telegram side effects (Requirements 9.1, 9.4).
 
 from __future__ import annotations
 
-from starship_notam.parsers import parse_carf_message, parse_notam
+from src.parsers import parse_carf_message, parse_notam
 
 
 # ---------------------------------------------------------------------------

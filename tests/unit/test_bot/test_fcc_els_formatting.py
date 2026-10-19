@@ -1,4 +1,4 @@
-"""Property test for :func:`starship_notam.bot.formatting.format_fcc_els_application`.
+"""Property test for :func:`src.bot.formatting.format_fcc_els_application`.
 
 Exercises **Property 13** from the fcc-els-scraper design: the formatter output
 is well-formed and escaped. The formatter is a pure standard-library function
@@ -19,7 +19,7 @@ import re
 
 from hypothesis import HealthCheck, given, settings, strategies as st
 
-from starship_notam.bot import formatting
+from src.bot import formatting
 
 
 # ---------------------------------------------------------------------------

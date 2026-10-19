@@ -18,12 +18,18 @@ RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['p
 # The bot runs from /app (not site-packages): it finds fonts/, maps/ and logs/
 # relative to the project root.
 COPY fonts ./fonts
-COPY starship_notam ./starship_notam
-COPY main.py prefill_compass.py prefill_federal_register.py ./
+COPY src ./src
+COPY main.py prefill_compass.py prefill_federal_register.py prefill_regulations_gov.py prefill_sec_edgar.py prefill_uscg_bnm.py ./
 
 RUN useradd --create-home --uid 1000 app \
     && mkdir -p maps logs /home/app/.local/share/cartopy \
     && chown -R app:app maps logs /home/app/.local
 USER app
 
-CMD ["python", "-m", "starship_notam"]
+# Last, so a new commit does not invalidate the cached layers above. CI passes
+# the commit SHA; local builds report "dev".
+ARG GIT_SHA=dev
+ENV NOTAM_VERSION=$GIT_SHA
+LABEL org.opencontainers.image.source="https://github.com/sanitaravel/starship_notam"       org.opencontainers.image.revision=$GIT_SHA
+
+CMD ["python", "-m", "src"]

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from telegram.error import BadRequest, Forbidden, RetryAfter, TimedOut
 
-from starship_notam.bot import transport
+from src.bot import transport
 
 
 class FakeBot:
@@ -100,7 +100,7 @@ async def test_photo_retries_timeouts_and_reopens_the_file(
     photo.write_bytes(b"\x89PNG fake")
     bot = _use(monkeypatch, FakeBot(TimedOut(), TimedOut()))
 
-    assert await transport.send_photo("chat", str(photo), caption="c") is True
+    assert await transport.send_photo("chat", str(photo), caption="c") == 42
     assert bot.calls == 3
 
 
@@ -109,5 +109,5 @@ async def test_photo_gives_up_after_max_attempts(monkeypatch, sleeps, tmp_path):
     photo.write_bytes(b"\x89PNG fake")
     bot = _use(monkeypatch, FakeBot(*[TimedOut()] * 10))
 
-    assert await transport.send_photo("chat", str(photo)) is False
+    assert await transport.send_photo("chat", str(photo)) is None
     assert bot.calls == transport._MAX_ATTEMPTS

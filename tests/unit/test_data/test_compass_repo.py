@@ -4,13 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from starship_notam.data.compass_repo import (
-    count_compass_files,
-    get_compass_files_needing_post,
-    mark_compass_file_posted,
-    mark_compass_files_posted,
-    save_compass_file,
-)
+from src.data.compass_repo import compass_files
 
 pytestmark = pytest.mark.usefixtures("initialized_db")
 
@@ -20,9 +14,9 @@ def _file(uuid="u1", filename="deck 10 05 2026.pptx", uploaded="05/Oct/2026 14:2
 
 
 def test_new_file_needs_post(db_path):
-    assert save_compass_file(_file(), db_path) == "inserted"
+    assert compass_files.save(_file(), db_path) == "inserted"
 
-    rows = get_compass_files_needing_post(db_path)
+    rows = compass_files.needing_post(db_path)
 
     assert [r["file_uuid"] for r in rows] == ["u1"]
     assert rows[0]["filename"] == "deck 10 05 2026.pptx"
@@ -30,46 +24,46 @@ def test_new_file_needs_post(db_path):
 
 
 def test_saving_same_file_twice_is_unchanged(db_path):
-    save_compass_file(_file(), db_path)
+    compass_files.save(_file(), db_path)
 
-    assert save_compass_file(_file(), db_path) == "unchanged"
-    assert len(get_compass_files_needing_post(db_path)) == 1
+    assert compass_files.save(_file(), db_path) == "unchanged"
+    assert len(compass_files.needing_post(db_path)) == 1
 
 
 def test_posted_file_is_not_reposted_when_renamed(db_path):
-    save_compass_file(_file(), db_path)
-    mark_compass_file_posted("u1", "42", db_path)
+    compass_files.save(_file(), db_path)
+    compass_files.mark_posted("u1", "42", db_path)
 
-    assert save_compass_file(_file(filename="renamed.pptx"), db_path) == "updated"
-    assert get_compass_files_needing_post(db_path) == []
+    assert compass_files.save(_file(filename="renamed.pptx"), db_path) == "updated"
+    assert compass_files.needing_post(db_path) == []
 
 
 def test_needing_post_is_in_insertion_order(db_path):
     for uuid in ("a", "b", "c"):
-        save_compass_file(_file(uuid=uuid), db_path)
+        compass_files.save(_file(uuid=uuid), db_path)
 
-    assert [r["file_uuid"] for r in get_compass_files_needing_post(db_path)] == ["a", "b", "c"]
+    assert [r["file_uuid"] for r in compass_files.needing_post(db_path)] == ["a", "b", "c"]
 
 
 def test_bulk_mark_skips_already_posted(db_path):
-    save_compass_file(_file(uuid="a"), db_path)
-    save_compass_file(_file(uuid="b"), db_path)
-    mark_compass_file_posted("a", "42", db_path)
+    compass_files.save(_file(uuid="a"), db_path)
+    compass_files.save(_file(uuid="b"), db_path)
+    compass_files.mark_posted("a", "42", db_path)
 
-    assert mark_compass_files_posted(["a", "b", "missing"], None, db_path) == 1
-    assert get_compass_files_needing_post(db_path) == []
+    assert compass_files.mark_many_posted(["a", "b", "missing"], None, db_path) == 1
+    assert compass_files.needing_post(db_path) == []
 
 
 def test_record_without_uuid_is_skipped(db_path):
-    assert save_compass_file({"filename": "x"}, db_path) == "skipped"
-    assert get_compass_files_needing_post(db_path) == []
+    assert compass_files.save({"filename": "x"}, db_path) == "skipped"
+    assert compass_files.needing_post(db_path) == []
 
 
 def test_count_compass_files(db_path):
-    assert count_compass_files(db_path) == 0
+    assert compass_files.count(db_path) == 0
 
-    save_compass_file(_file("u1"), db_path)
-    save_compass_file(_file("u2"), db_path)
-    mark_compass_files_posted(["u1"], None, db_path)
+    compass_files.save(_file("u1"), db_path)
+    compass_files.save(_file("u2"), db_path)
+    compass_files.mark_many_posted(["u1"], None, db_path)
 
-    assert count_compass_files(db_path) == 2
+    assert compass_files.count(db_path) == 2

@@ -18,6 +18,9 @@ Scope: three sources picked from a wider survey. Launch Library 2 was dropped
 
 ## 1. Regulations.gov
 
+> **Implemented** (`feat/regulations-gov`): `src/scrapers/regulations_gov_fetcher.py`
+> and `prefill_regulations_gov.py`. The comment-period reminder is not done yet.
+
 The docket system behind federal rulemaking and environmental reviews. It
 overlaps with the Federal Register (each FR notice is also posted here), but it
 also carries what the FR does not print: final EAs, FONSIs/RODs, draft
@@ -122,6 +125,10 @@ For example, `FAA-2025-3124-0030` has 4 PDFs at
 ---
 
 ## 2. USCG Broadcast Notices to Mariners
+
+> **Implemented** (`feat/uscg-bnm`): `src/scrapers/uscg_bnm_fetcher.py`
+> and `prefill_uscg_bnm.py`. Topics `414` and `422` are read; cancellations
+> are posted as their own message, not yet as a reply to the original post.
 
 The maritime counterpart of the FAA NOTAMs. For every Starship flight the
 Coast Guard issues BNMs with **hazard-area polygons and launch-day hazard
@@ -234,6 +241,10 @@ Fields to extract:
 ---
 
 ## 3. SEC EDGAR (SpaceX, SPCX)
+
+> **Implemented** (`feat/sec-edgar`): `src/scrapers/sec_edgar_fetcher.py`
+> and `prefill_sec_edgar.py`. The optional "mentions Starship" tag is not
+> done yet.
 
 SpaceX is a public company now: **Space Exploration Technologies Corp**,
 Nasdaq **SPCX**, **CIK 0001181412**, incorporated in Texas, HQ Starbase TX,

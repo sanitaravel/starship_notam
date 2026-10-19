@@ -30,14 +30,10 @@ import pytest
 
 from hypothesis import HealthCheck, given, settings, strategies as st
 
-from starship_notam.data.connection import init_db
-from starship_notam.bot import formatting
-from starship_notam.bot.formatting import format_fcc_els_application
-from starship_notam.data.fcc_els_repo import (
-    get_fcc_els_applications_needing_post,
-    mark_fcc_els_application_posted,
-    save_fcc_els_application,
-)
+from src.data.schema import init_db
+from src.bot import formatting
+from src.bot.formatting import format_fcc_els_application
+from src.data.fcc_els_repo import fcc_els_applications
 
 # These property examples exercise real SQLite file I/O, so individual
 # examples can exceed Hypothesis's default
@@ -143,9 +139,9 @@ def test_populated_first_appearance_is_post_eligible_and_complete(
     db = str(tmp_path_factory.mktemp("populated_first") / "notams.db")
     init_db(db)
 
-    save_fcc_els_application(app, db)
+    fcc_els_applications.save(app, db)
 
-    needing = get_fcc_els_applications_needing_post(db)
+    needing = fcc_els_applications.needing_post(db)
     eligible = [r for r in needing if r["file_number"] == app["file_number"]]
     assert len(eligible) == 1, (
         f"populated-first app {app['file_number']!r} should be post-eligible "
@@ -171,14 +167,14 @@ def test_no_change_rescrape_is_not_reposted(tmp_path_factory, app):
     db = str(tmp_path_factory.mktemp("no_change") / "notams.db")
     init_db(db)
 
-    save_fcc_els_application(app, db)
-    mark_fcc_els_application_posted(app["file_number"], "msg-1", db)
+    fcc_els_applications.save(app, db)
+    fcc_els_applications.mark_posted(app["file_number"], "msg-1", db)
 
     before = _read_row(db, app["file_number"])
     assert before["telegram_posted"] == 1
 
     # Re-scrape with an identical (freshly built) payload — no meaningful change.
-    save_fcc_els_application(dict(app), db)
+    fcc_els_applications.save(dict(app), db)
 
     after = _read_row(db, app["file_number"])
     # No DB update: every stored field (incl. payload_hash / updated_at) is
@@ -187,7 +183,7 @@ def test_no_change_rescrape_is_not_reposted(tmp_path_factory, app):
     assert after["telegram_posted"] == 1
 
     # And it is NOT returned as needing a post.
-    needing = get_fcc_els_applications_needing_post(db)
+    needing = fcc_els_applications.needing_post(db)
     assert app["file_number"] not in {r["file_number"] for r in needing}
 
 
@@ -212,9 +208,9 @@ def test_new_populated_file_numbers_are_all_post_eligible(
 
     for fn in file_numbers:
         app = data.draw(_populated_app_strategy(file_number=fn))
-        save_fcc_els_application(app, db)
+        fcc_els_applications.save(app, db)
 
-    needing = get_fcc_els_applications_needing_post(db)
+    needing = fcc_els_applications.needing_post(db)
     returned = {r["file_number"] for r in needing}
     assert returned == set(file_numbers), (
         "every new populated application should be post-eligible (Req 3.3)"

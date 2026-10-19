@@ -12,6 +12,9 @@ posts updates to a Telegram channel. On a fixed schedule it checks:
 | [FAA DRS](https://drs.faa.gov) | Changes to the Starship launch licence |
 | [COMPASS (CADENA ATFM)](https://compass.atfm.aero) | New files on the Master Slide Deck page |
 | [Federal Register](https://www.federalregister.gov/documents/search?conditions%5Bagencies%5D%5B%5D=federal-aviation-administration&conditions%5Bterm%5D=spacex&order=newest) | New FAA documents mentioning SpaceX (environmental reviews, comment periods, rules) |
+| [Regulations.gov](https://www.regulations.gov/search?filter=Starship) | New FAA and USCG docket documents about Starship, with their PDFs: final EAs and FONSIs, safety zones, and other material the Federal Register does not print. Needs a free `REGULATIONS_GOV_API_KEY`; skipped without one |
+| [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001181412) | New SpaceX (SPCX) filings: 8-K material events with their item names, 10-Q/10-K reports (with the Starship launch count) and securities offerings. Needs `SEC_USER_AGENT` with a contact address; skipped without one |
+| [USCG Broadcast Notices to Mariners](https://www.navcen.uscg.gov/subscribe-email-rss-feeds) | Maritime hazard areas for Starship launches from the Heartland and Southeast District feeds, each posted as a map card with its UTC windows, then the cancellation with the outcome (e.g. a successful launch). Falcon 9 and other Cape launches are left out |
 
 New or changed items are stored in a database (SQLite or PostgreSQL), so each
 one is posted only once.
@@ -20,6 +23,10 @@ one is posted only once.
 
 [`compose.yaml`](compose.yaml) runs everything the bot needs: the bot, a
 PostgreSQL database and a Selenium Chrome browser. You only need Docker.
+
+The steps below run the bot by hand on any machine. To run it on a Linux
+server that deploys every release from `main` automatically, follow
+[docs/deployment.md](docs/deployment.md) instead.
 
 ### 1. Prerequisites
 
@@ -72,10 +79,15 @@ The services start in this order:
 1. **`postgres`** (PostgreSQL 17) and **`selenium`**
    (`selenium/standalone-chrome`) start first. Everything else waits until
    both report healthy.
-2. **`prefill`** runs `prefill_compass.py --if-empty` and then
-   `prefill_federal_register.py --if-empty` once, and exits. On the very first
-   start they record the files already on the COMPASS slide list and the FAA
-   documents already in the Federal Register as posted, so the bot does not
+2. **`prefill`** runs `prefill_compass.py --if-empty`,
+   `prefill_federal_register.py --if-empty`,
+   `prefill_regulations_gov.py --if-empty`,
+   `prefill_sec_edgar.py --if-empty` and
+   `prefill_uscg_bnm.py --if-empty` once, and exits. On the very first
+   start they record the files already on the COMPASS slide list, the
+   documents already in the Federal Register and on Regulations.gov,
+   SpaceX's existing SEC filings and the Starship notices to mariners in the
+   Coast Guard feeds as posted, so the bot does not
    announce the whole existing back catalogue. On later starts they do
    nothing, so items published while the bot was down are still announced.
 3. **`bot`** starts after `prefill` succeeds. It runs a check cycle
@@ -90,13 +102,19 @@ The services start in this order:
 ### 4. Check that it works
 
 ```sh
-docker compose ps        # postgres and selenium "healthy", prefill "exited (0)", bot "running"
+docker compose ps        # postgres and selenium "healthy", prefill "exited (0)", bot "healthy"
 docker compose logs -f bot
 ```
 
 A cycle takes one to three minutes. It ends with a line like
 `Next run scheduled for 2026-10-13 11:00:00`. By then the first messages
-should be in your channel.
+should be in your channel. The bot shows `health: starting` until the first
+step of that cycle finishes, then `healthy`. It turns `unhealthy` if it makes
+no progress for the run interval plus 15 minutes.
+
+`docker compose stop` and `docker compose down` let the bot finish the item
+it is posting before it exits, so nothing is posted twice after a restart.
+Items it did not reach are posted after the next start.
 
 ### Everyday commands
 
@@ -106,7 +124,7 @@ should be in your channel.
 | Stop everything (data is kept) | `docker compose down` |
 | Start again | `docker compose up -d` |
 | Restart only the bot | `docker compose restart bot` |
-| Update to the latest code | `git pull && docker compose up -d --build` |
+| Update to the latest code | `git pull && docker compose up -d --build` (a server [updates itself](docs/deployment.md)) |
 | Open a database shell | `docker compose exec postgres psql -U notam` |
 | Back up the database | `docker compose exec postgres pg_dump -U notam notam > backup.sql` |
 | Restore a backup into an empty database | `docker compose exec -T postgres psql -U notam notam < backup.sql` |
@@ -124,8 +142,8 @@ Data lives in named Docker volumes:
 | `cartopy` | Natural Earth map data, downloaded on the first render |
 
 To start over with an empty database, run `docker compose down -v`. **This
-deletes all volumes.** The next start prefills COMPASS and the Federal
-Register again and re-posts everything that is currently active.
+deletes all volumes.** The next start prefills COMPASS, the Federal
+Register, Regulations.gov, SEC EDGAR and the USCG BNM feeds again and re-posts everything that is currently active.
 
 ### Troubleshooting
 
@@ -133,7 +151,9 @@ Register again and re-posts everything that is currently active.
   `POSTGRES_PASSWORD` in `.env`.
 - **`bot` never starts and `prefill` exited with code 1**: check
   `docker compose logs prefill`. The usual cause is that the COMPASS site
-  or the Federal Register API could not be reached. Run
+  or the Federal Register, Regulations.gov or SEC EDGAR API or a USCG BNM
+  feed could not be reached (or `REGULATIONS_GOV_API_KEY` is wrong, or SEC rejected
+  `SEC_USER_AGENT`). Run
   `docker compose up -d` again once they are reachable.
 - **`Unauthorized` in the bot log**: the token in `TELEGRAM_BOT_TOKEN` is
   wrong.
@@ -162,7 +182,10 @@ Set `RUN_MODE=standalone` in `.env` so Selenium launches your local Chrome
 ```sh
 python prefill_compass.py          # once, so the existing COMPASS files are not announced
 python prefill_federal_register.py # once, so the existing Federal Register documents are not announced
-python -m starship_notam           # or: python main.py, or: starship-notam
+python prefill_regulations_gov.py  # once (with REGULATIONS_GOV_API_KEY set), likewise for Regulations.gov
+python prefill_sec_edgar.py        # once (with SEC_USER_AGENT set), likewise for SpaceX's SEC filings
+python prefill_uscg_bnm.py         # once, likewise for the Coast Guard notices to mariners
+python -m src                      # or: python main.py, or: starship-notam
 ```
 
 ### Database
@@ -204,7 +227,7 @@ drop and recreate the bot's tables. CI runs them against a PostgreSQL service.
 ## Project layout
 
 ```text
-starship_notam/
+src/
   core/           configuration (.env) and logging
   scrapers/       fetch raw data from each source
   parsers/        turn raw HTML/JSON/NOTAM text into dicts
@@ -214,7 +237,7 @@ starship_notam/
 tests/            unit and integration tests (pytest + Hypothesis)
 ```
 
-`bot/orchestrator.py` is the only module that ties the layers together. The
+`bot/orchestrator/` is the only package that ties the layers together. The
 layer boundaries are checked by `tests/integration/test_dependency_boundaries.py`.
 
 ## Contributing
