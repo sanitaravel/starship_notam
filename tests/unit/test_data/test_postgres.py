@@ -45,6 +45,7 @@ _TABLES = (
     "federal_register_documents",
     "regulations_gov_documents",
     "sec_edgar_filings",
+    "uscg_bnm_notices",
 )
 
 

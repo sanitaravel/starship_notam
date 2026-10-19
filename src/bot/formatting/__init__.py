@@ -17,6 +17,7 @@ shared helpers live in ``_common``:
     federal_register  format_federal_register_document(item) -> str
     regulations_gov   format_regulations_gov_document(item) -> str
     sec_edgar         format_sec_edgar_filing(item) -> str
+    uscg_bnm          format_uscg_bnm_notice(item) -> str
 """
 
 from src.bot.formatting.compass import format_compass_file
@@ -34,6 +35,7 @@ from src.bot.formatting.starbase import (
     format_road_alert,
     translate_place,
 )
+from src.bot.formatting.uscg_bnm import format_uscg_bnm_notice
 
 __all__ = [
     "DEST_TRANSLATION",
@@ -47,5 +49,6 @@ __all__ = [
     "format_regulations_gov_document",
     "format_road_alert",
     "format_sec_edgar_filing",
+    "format_uscg_bnm_notice",
     "translate_place",
 ]

@@ -29,6 +29,7 @@ Submodules:
     federal_register  Federal Register documents (+ prefill)
     regulations_gov   Regulations.gov documents (+ prefill)
     sec_edgar         SpaceX SEC EDGAR filings (+ prefill)
+    uscg_bnm          USCG Broadcast Notices to Mariners (+ prefill)
     starbase          Starbase beach and road alerts
 
 Public entry points:
@@ -38,6 +39,7 @@ Public entry points:
     prefill_federal_register_documents() -> int
     prefill_regulations_gov_documents() -> int
     prefill_sec_edgar_filings() -> int
+    prefill_uscg_bnm_notices() -> int
 """
 
 from src.bot.orchestrator.compass import prefill_compass_files
@@ -54,6 +56,7 @@ from src.bot.orchestrator.regulations_gov import (
     prefill_regulations_gov_documents,
 )
 from src.bot.orchestrator.sec_edgar import prefill_sec_edgar_filings
+from src.bot.orchestrator.uscg_bnm import prefill_uscg_bnm_notices
 
 __all__ = [
     "ensure_setup",
@@ -63,5 +66,6 @@ __all__ = [
     "prefill_federal_register_documents",
     "prefill_regulations_gov_documents",
     "prefill_sec_edgar_filings",
+    "prefill_uscg_bnm_notices",
     "sleep_until_next_run",
 ]

@@ -22,6 +22,7 @@ from src.data.regulations_gov_repo import regulations_gov_documents
 from src.data.schema import init_db
 from src.data.sec_edgar_repo import sec_edgar_filings
 from src.data.starbase_repo import beach_alerts, road_alerts
+from src.data.uscg_bnm_repo import uscg_bnm_notices
 
 __all__ = [
     "get_connection",
@@ -37,6 +38,7 @@ __all__ = [
     "federal_register_documents",
     "regulations_gov_documents",
     "sec_edgar_filings",
+    "uscg_bnm_notices",
     "beach_alerts",
     "road_alerts",
 ]

@@ -23,6 +23,7 @@ from src.scrapers.regulations_gov_fetcher import (
 )
 from src.scrapers.sec_edgar_fetcher import sec_edgar_filings_fetcher
 from src.scrapers.starbase_fetcher import starbase_status_fetcher
+from src.scrapers.uscg_bnm_fetcher import uscg_bnm_fetchers
 
 __all__ = [
     "search_notams",
@@ -36,4 +37,5 @@ __all__ = [
     "fetch_regulations_gov_documents",
     "RegulationsGovFiles",
     "sec_edgar_filings_fetcher",
+    "uscg_bnm_fetchers",
 ]

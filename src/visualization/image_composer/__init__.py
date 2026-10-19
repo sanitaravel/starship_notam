@@ -14,8 +14,8 @@ bodies so that importing this package does not require Pillow to be installed
 and keeps the visualization layer independently importable.
 
 Submodules:
-    render        render_notam_image, plot_single_notam
-    card_data     stored NOTAM row -> the dict the card is drawn from
+    render        render_notam_image, plot_single_notam, plot_bnm_notice
+    card_data     stored NOTAM or BNM row -> the dict the card is drawn from
     titles        short Russian title lines for Starship NOTAMs
     fallback_map  plain PIL map drawn when Cartopy rendering fails
     layout        canvas size, padding and colours
@@ -23,9 +23,11 @@ Submodules:
 Public entry points:
     render_notam_image(notam_dict, output_path) -> str
     plot_single_notam(name, parsed, out_path) -> str
+    plot_bnm_notice(notice, out_path) -> str
 """
 
 from src.visualization.image_composer.render import (
+    plot_bnm_notice,
     plot_single_notam,
     render_notam_image,
 )
@@ -33,6 +35,7 @@ from src.visualization.image_composer.titles import extract_starship_template
 
 __all__ = [
     "extract_starship_template",
+    "plot_bnm_notice",
     "plot_single_notam",
     "render_notam_image",
 ]

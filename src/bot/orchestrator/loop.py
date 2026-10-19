@@ -26,6 +26,7 @@ from src.bot.orchestrator.starbase import (
     process_beach_alerts,
     process_road_alerts,
 )
+from src.bot.orchestrator.uscg_bnm import process_uscg_bnm_notices
 from src.core import config
 from src.core.logging import logger
 from src.data import init_db
@@ -54,6 +55,7 @@ async def generate_and_send() -> None:
         # announced a second time (see regulations_gov).
         partial(process_regulations_gov_documents, chat_list),
         partial(process_sec_edgar_filings, chat_list),
+        partial(process_uscg_bnm_notices, chat_list),
         ingest_starbase_alerts,
         partial(process_beach_alerts, chat_list),
         partial(process_road_alerts, chat_list),

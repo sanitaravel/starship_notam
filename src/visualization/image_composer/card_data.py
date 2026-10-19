@@ -1,6 +1,8 @@
-"""Turn a stored NOTAM row into the dict the card is drawn from."""
+"""Turn a stored NOTAM or BNM row into the dict the card is drawn from."""
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from src.core.logging import logger
 from src.parsers.coord_parser import (
@@ -8,7 +10,7 @@ from src.parsers.coord_parser import (
     parse_coords_from_text,
 )
 from src.parsers.notam_time import parse_notam_time
-from src.parsers.schedule import parse_notam_windows_with_dates
+from src.parsers.schedule import _RU_MONTHS, parse_notam_windows_with_dates
 from src.visualization.image_composer.titles import extract_starship_template
 
 
@@ -112,4 +114,58 @@ def notam_from_db_row(name: str, parsed: dict) -> dict:
         # Q) derived fields
         'zone': zone_code,
         'top': top_limit,
+    }
+
+
+def _bnm_window_line(start: str, end: str) -> str | None:
+    """ISO UTC window -> ``"Сентябрь 28, 12:15 - 14:14"``, the NOTAM card style."""
+    try:
+        s = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        e = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+    return f"{_RU_MONTHS[s.month]} {s.day:02d}, {s:%H:%M} - {e:%H:%M}"
+
+
+def bnm_card_data(notice: dict) -> dict:
+    """Convert a stored BNM safety notice into the dict the card is drawn from.
+
+    Each lettered hazard area is its own polygon group, so the map shows the
+    high-risk and hazard areas separately.
+    """
+    flight = str(notice.get("flight") or "").strip()
+    if flight:
+        details = f"ОПАСНЫЕ ЗОНЫ ДЛЯ СУДОВ ПРИ ЗАПУСКЕ SPACEX STARSHIP FLT-{flight}"
+    else:
+        details = f"ОПАСНЫЕ ЗОНЫ ДЛЯ СУДОВ: {notice.get('mission') or 'КОСМИЧЕСКИЙ ЗАПУСК'}"
+
+    groups = [
+        [tuple(p) for p in area.get("coords") or []]
+        for area in notice.get("areas") or []
+    ]
+    groups = [g for g in groups if g]
+
+    windows = [
+        line
+        for w in notice.get("windows") or []
+        if len(w) == 2 and (line := _bnm_window_line(*w))
+    ]
+
+    # "CGD-H BNM 0108-26": the district prefix goes on the meta line so the
+    # number fits the left column at the title size.
+    bnm_id = str(notice.get("bnm_id") or "")
+    district, _, number = bnm_id.partition(" ")
+    return {
+        "title": "ОПОВЕЩЕНИЕ BNM",
+        "number": number or bnm_id,
+        "details": details,
+        "coords": groups or None,
+        "radius_nm": None,
+        "meta": f"(ДЛЯ МОРСКОГО ТРАНСПОРТА) USCG {district}".rstrip(),
+        "author": "@sanitaravel",
+        "start": None,
+        "end": None,
+        "windows": windows,
+        "zone": None,
+        "top": None,
     }

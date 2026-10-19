@@ -94,12 +94,13 @@ async def _send_with_retries(send, description: str):
 
 async def send_photo(
     chat_id: str, photo_path: str, caption: Optional[str] = None
-) -> bool:
+) -> Optional[int]:
     """Send a photo with an optional HTML caption to a chat.
 
-    Returns ``True`` on success, ``False`` on failure (including when the bot
-    lacks access to the chat / channel — HTTP 403 Forbidden). Timeouts and
-    flood-control errors are retried a bounded number of times.
+    Returns the sent ``message_id`` on success, or ``None`` on failure
+    (including when the bot lacks access to the chat / channel — HTTP 403
+    Forbidden). Timeouts and flood-control errors are retried a bounded number
+    of times.
     """
     from telegram import InputFile  # lazy import
     from telegram.error import Forbidden  # lazy import
@@ -107,7 +108,7 @@ async def send_photo(
     async def send():
         # Reopen the file on every attempt: a failed upload consumes it.
         with open(photo_path, "rb") as fh:
-            await _get_bot().send_photo(
+            return await _get_bot().send_photo(
                 chat_id=chat_id,
                 photo=InputFile(fh),
                 caption=caption,
@@ -116,19 +117,19 @@ async def send_photo(
 
     try:
         logger.info(f'Caption text: {caption if caption else "(no caption)"}')
-        await _send_with_retries(send, f"photo {photo_path} to {chat_id}")
-        return True
+        message = await _send_with_retries(send, f"photo {photo_path} to {chat_id}")
+        return message.message_id
     except Forbidden:
         logger.warning(
             f"Failed to send photo {photo_path} to {chat_id}: bot lacks access "
             f"(is it an admin of the channel?)"
         )
-        return False
+        return None
     except Exception as e:
         logger.exception(
             f"Failed to send photo {photo_path} via python-telegram-bot to {chat_id}: {e}"
         )
-        return False
+        return None
 
 
 async def send_message(chat_id: str, text: str) -> Optional[int]:
