@@ -126,6 +126,10 @@ For example, `FAA-2025-3124-0030` has 4 PDFs at
 
 ## 2. USCG Broadcast Notices to Mariners
 
+> **Implemented** (`feat/uscg-bnm`): `src/scrapers/uscg_bnm_fetcher.py`
+> and `prefill_uscg_bnm.py`. Topics `414` and `422` are read; cancellations
+> are posted as their own message, not yet as a reply to the original post.
+
 The maritime counterpart of the FAA NOTAMs. For every Starship flight the
 Coast Guard issues BNMs with **hazard-area polygons and launch-day hazard
 periods**, then a cancellation that **states the outcome** (e.g. "STARSHIP

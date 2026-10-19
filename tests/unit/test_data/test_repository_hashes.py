@@ -24,6 +24,7 @@ from src.data import (
     regulations_gov_documents,
     road_alerts,
     sec_edgar_filings,
+    uscg_bnm_notices,
 )
 from src.data.connection import get_connection
 
@@ -99,6 +100,24 @@ SEC_EDGAR_FILING = {
     "index_url": "https://www.sec.gov/Archives/edgar/data/1181412/000162828026056945/0001628280-26-056945-index.htm",
 }
 
+USCG_BNM_NOTICE = {
+    "notice_key": "SAFETY CGD-H BNM 0108-26",
+    "bnm_id": "CGD-H BNM 0108-26",
+    "kind": "SAFETY",
+    "region": "TX - GULF OF AMERICA - CARIBBEAN SEA",
+    "title": "SAFETY/TX - GULF OF AMERICA - CARIBBEAN SEA/SPACE OPERATIONS/CGD-H BNM 0108-26",
+    "flight": "14",
+    "mission": "STARSHIP FLIGHT 14",
+    "starship": True,
+    "areas": [{"label": "HAZARD AREA", "coords": [[25.966667, -97.216667], [26.033333, -97.216667]]}],
+    "windows": [["2026-09-28T12:15:00Z", "2026-09-28T14:14:00Z"]],
+    "cancel_at": "2026-10-04T15:14:00Z",
+    "cancels": "",
+    "outcome": "",
+    "published_at": "2026-09-25T18:24:01Z",
+    "link": "https://content.govdelivery.com/accounts/USDHSCG/bulletins/42c8bcc",
+}
+
 EXPECTED_FAA_ACTIVITY = "192ff71ec0fe2b0074c8070078b237d717641730194a5cebd10e51166606816e"
 EXPECTED_FCC = "1432405b56c7b924a288e7bef4d68246763a5dff16a82152c7514a68f1c79e46"
 EXPECTED_LICENSE = "ca0fa1f8eaeef96e54d4a974b040b0b9baf630f4ce7c82b8ae5c369caadb9600"
@@ -106,6 +125,7 @@ EXPECTED_COMPASS = "27f2633f9ac9895d8676f35203e39f274d203710d292de691d0f1a430a08
 EXPECTED_FR = "0a828313cd958511ccd4d6d265eef996880eb826bc6a46bf248ce89c47ee079d"
 EXPECTED_REGULATIONS_GOV = "19c9521d3e70e2c27fe07cd9136ab0dda475e5489a2f924f1c3c8224961ec54d"
 EXPECTED_SEC_EDGAR = "1c14e3d59c18ba67834e2214bf09ed83b675768c093a762dd18ca4e4b2f062db"
+EXPECTED_USCG_BNM = "748624a2e3ab671a68a3b0530e94f42844282219eef442e4b2a4a8352a895785"
 
 CASES = [
     (faa_activities.save, FAA_ACTIVITY, "faa_activities", "mission",
@@ -122,6 +142,8 @@ CASES = [
      "regulations_gov_documents", "document_id", EXPECTED_REGULATIONS_GOV),
     (sec_edgar_filings.save, SEC_EDGAR_FILING,
      "sec_edgar_filings", "accession_number", EXPECTED_SEC_EDGAR),
+    (uscg_bnm_notices.save, USCG_BNM_NOTICE,
+     "uscg_bnm_notices", "notice_key", EXPECTED_USCG_BNM),
 ]
 
 

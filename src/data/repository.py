@@ -1,8 +1,8 @@
 """Base class for tables of items that are posted to Telegram.
 
 FAA activities, FCC ELS applications, FAA licenses, COMPASS files, Federal
-Register and Regulations.gov documents, SEC EDGAR filings and Starbase alerts
-are stored the same way: one row per
+Register and Regulations.gov documents, SEC EDGAR filings, USCG Broadcast
+Notices to Mariners and Starbase alerts are stored the same way: one row per
 item keyed by a source identifier, a SHA-256 ``payload_hash`` for change
 detection, and a "posted" flag with its timestamp (``telegram_posted`` /
 ``telegram_posted_at``, plus ``telegram_message_id``; the Starbase tables

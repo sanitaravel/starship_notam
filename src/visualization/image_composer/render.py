@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from src.core.logging import logger
 from src.visualization.fonts import load_font
-from src.visualization.image_composer.card_data import notam_from_db_row
+from src.visualization.image_composer.card_data import bnm_card_data, notam_from_db_row
 from src.visualization.image_composer.fallback_map import draw_fallback_map
 from src.visualization.image_composer.layout import (
     BG_COLOR,
@@ -52,8 +52,8 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
     caption_font = load_font("JetBrainsMono-Regular.ttf", 14)
 
     # Draw texts with specified styles
-    # Title: ОПОВЕЩЕНИЕ NOTAM
-    draw.text((left_x, left_y), "ОПОВЕЩЕНИЕ NOTAM", font=title_font, fill=WHITE)
+    # Title: ОПОВЕЩЕНИЕ NOTAM (ОПОВЕЩЕНИЕ BNM on maritime notices)
+    draw.text((left_x, left_y), notam.get("title", "ОПОВЕЩЕНИЕ NOTAM"), font=title_font, fill=WHITE)
     left_y += 48 + 4
 
     # Meta line (ДЛЯ ВОЗДУШНОГО ТРАНСПОРТА)
@@ -226,4 +226,17 @@ def plot_single_notam(name: str, parsed: dict, out_path: str) -> str:
         return render_notam_image(notam_from_db_row(name, parsed), output_path=out_path)
     except Exception:
         logger.exception("plot_single_notam failed for %s", name)
+        raise
+
+
+def plot_bnm_notice(notice: dict, out_path: str) -> str:
+    """Blocking helper: render the hazard-area card of a BNM safety notice.
+
+    Suitable for running in a thread (``asyncio.to_thread``). The card is the
+    NOTAM card with a maritime title, one polygon per lettered area.
+    """
+    try:
+        return render_notam_image(bnm_card_data(notice), output_path=out_path)
+    except Exception:
+        logger.exception("plot_bnm_notice failed for %s", notice.get("bnm_id"))
         raise

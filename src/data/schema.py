@@ -255,6 +255,39 @@ CREATE TABLE IF NOT EXISTS sec_edgar_filings (
     telegram_posted_at TEXT,
     telegram_message_id TEXT
 );
+-- Starship space-operations bulletins from the USCG Broadcast Notices to
+-- Mariners feeds (config.USCG_BNM_TOPICS). notice_key is the kind plus the
+-- BNM number (UNIQUE key, e.g. "SAFETY CGD-H BNM 0108-26"); a row is posted
+-- once, when the bulletin first appears (see uscg_bnm_repo). areas_json and
+-- windows_json hold the hazard polygons and the UTC launch windows.
+CREATE TABLE IF NOT EXISTS uscg_bnm_notices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    notice_key TEXT UNIQUE NOT NULL,
+
+    bnm_id TEXT,
+    kind TEXT,
+    region TEXT,
+    title TEXT,
+    flight TEXT,
+    mission TEXT,
+    areas_json TEXT,
+    windows_json TEXT,
+    cancel_at TEXT,
+    cancels TEXT,
+    outcome TEXT,
+    published_at TEXT,
+    link TEXT,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    payload_hash TEXT,
+
+    telegram_posted INTEGER DEFAULT 0,
+    telegram_posted_at TEXT,
+    telegram_message_id TEXT
+);
 """
 
 # Columns added after a table was first released. Databases created before
@@ -337,7 +370,8 @@ def init_db(db_path: Optional[str] = None) -> None:
 
     Ensures that all required tables (notams, faa_activities, starbase_beach,
     starbase_road, fcc_els_applications, faa_licenses, compass_files,
-    federal_register_documents, regulations_gov_documents, sec_edgar_filings)
+    federal_register_documents, regulations_gov_documents, sec_edgar_filings,
+    uscg_bnm_notices)
     exist and have every column listed in ``_ADDED_COLUMNS``.
 
     On failure, any pending transaction is rolled back so the database is never

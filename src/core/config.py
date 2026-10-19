@@ -192,3 +192,15 @@ SEC_EDGAR_FORMS: tuple = (
     "S-1", "S-1/A", "S-3", "S-3/A",
     "424B1", "424B2", "424B3", "424B4", "424B5", "424B7", "424B8",
 )
+
+# --- USCG Broadcast Notices to Mariners (maritime hazard areas) configuration ---
+
+# GovDelivery RSS feed of one Coast Guard bulletin topic; each returns the last
+# 100 bulletins with their full text (https://www.navcen.uscg.gov/subscribe-email-rss-feeds).
+USCG_BNM_FEED_URL: str = "https://public.govdelivery.com/topics/{topic}/feed.rss"
+
+# Topics read every cycle: Heartland District (Texas, the Starbase launch and
+# booster areas) and Southeast District (the downrange Gulf / Caribbean
+# corridor, and Cape Canaveral). Only their SPACE OPERATIONS bulletins about
+# Starship are kept.
+USCG_BNM_TOPICS: tuple = ("USDHSCG_414", "USDHSCG_422")
