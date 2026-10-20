@@ -1,14 +1,11 @@
-"""Scrapers package: external data fetching via HTTP and Selenium.
+"""Scrapers package: external data fetching over HTTP.
 
 Re-exports the public scraper entry points:
     from src.scrapers import faa_advisory_fetcher, search_notams
 
 The plain-HTTP sources are :class:`~src.scrapers.http_fetcher.HttpFetcher`
-instances (call ``.fetch()``); the Selenium sources are functions.
-
-Heavy dependencies (e.g. ``selenium``) are imported lazily inside the
-individual scraper functions so that importing this package does not require
-those packages to be installed.
+instances (call ``.fetch()``); the sources that need a session (a login
+cookie, a form round-trip or paging) are functions.
 """
 
 from src.scrapers.compass_fetcher import compass_files_fetcher

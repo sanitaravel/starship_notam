@@ -20,8 +20,8 @@ one is posted only once.
 
 ## Running with Docker (recommended)
 
-[`compose.yaml`](compose.yaml) runs everything the bot needs: the bot, a
-PostgreSQL database and a Selenium Chrome browser. You only need Docker.
+[`compose.yaml`](compose.yaml) runs everything the bot needs: the bot and a
+PostgreSQL database. You only need Docker.
 
 The steps below run the bot by hand on any machine. To run it on a Linux
 server that deploys every release from `main` automatically, follow
@@ -31,7 +31,6 @@ server that deploys every release from `main` automatically, follow
 
 - Docker Engine with the Compose plugin (`docker compose version` should print
   v2.x), or Docker Desktop. It runs on amd64 and arm64.
-- About 2 GB of free RAM. Chrome alone gets a 2 GB `/dev/shm`.
 - A Telegram bot and a channel:
   1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token.
   2. Add the bot to your channel as an **administrator** with permission to
@@ -62,7 +61,7 @@ POSTGRES_PASSWORD=ChooseALongRandomPassword
   `ALTER USER` in `psql`.
 - **Other settings** in [`.env.example`](.env.example) are optional, such as
   `RUNS_PER_HOUR`.
-- **Ignored under Compose:** `RUN_MODE`, `DATABASE_URL` and `NOTAM_DB_PATH`.
+- **Ignored under Compose:** `DATABASE_URL` and `NOTAM_DB_PATH`.
   Compose sets them for the containers itself, so a `.env` you also use for
   local runs works unchanged.
 - **Not in the image:** `.env` is never copied into the image.
@@ -75,9 +74,8 @@ docker compose up -d --build
 
 The services start in this order:
 
-1. **`postgres`** (PostgreSQL 17) and **`selenium`**
-   (`selenium/standalone-chrome`) start first. Everything else waits until
-   both report healthy.
+1. **`postgres`** (PostgreSQL 17) starts first. Everything else waits until
+   it reports healthy.
 2. **`prefill`** runs `prefill_compass.py --if-empty`,
    `prefill_federal_register.py --if-empty`,
    `prefill_regulations_gov.py --if-empty` and
@@ -99,7 +97,7 @@ The services start in this order:
 ### 4. Check that it works
 
 ```sh
-docker compose ps        # postgres and selenium "healthy", prefill "exited (0)", bot "healthy"
+docker compose ps        # postgres "healthy", prefill "exited (0)", bot "healthy"
 docker compose logs -f bot
 ```
 
@@ -163,8 +161,10 @@ Register, Regulations.gov and SEC EDGAR again and re-posts everything that is cu
 
 ## Running without Docker
 
-Requirements: Python 3.12+ and Google Chrome. The NOTAM search, FCC ELS and
-FAA DRS scrapers drive a headless Chrome through Selenium.
+Requirements: Python 3.12+. No browser is needed: every source is fetched
+over plain HTTP. The NOTAM search and FCC ELS fetchers use `curl_cffi` with
+Chrome TLS impersonation, because their Akamai front end blocks plain
+`requests`.
 
 ```sh
 python -m venv venv
@@ -173,8 +173,7 @@ pip install -e .                  # or ".[lock]" for the fully pinned environmen
 cp .env.example .env              # then fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
 ```
 
-Set `RUN_MODE=standalone` in `.env` so Selenium launches your local Chrome
-(the default, `docker`, expects the Selenium container). Then:
+Then:
 
 ```sh
 python prefill_compass.py          # once, so the existing COMPASS files are not announced

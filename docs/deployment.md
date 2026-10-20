@@ -38,7 +38,7 @@ Server, every 5 min:  deploy/deploy.sh                  │
 
 ## One-time server setup
 
-Requirements: a Linux x86_64 server with systemd, about 2 GB of free RAM, and
+Requirements: a Linux x86_64 server with systemd and
 the Telegram bot and channel from the [README](../README.md#1-prerequisites).
 
 1. **Install Docker Engine with the Compose plugin**
@@ -93,8 +93,8 @@ the Telegram bot and channel from the [README](../README.md#1-prerequisites).
    journalctl -fu starship-notam-deploy
    ```
 
-   Within about two minutes it pulls the images, starts PostgreSQL and
-   Selenium, runs the prefill and starts the bot. It ends with
+   Within about two minutes it pulls the images, starts PostgreSQL,
+   runs the prefill and starts the bot. It ends with
    `Deployed <commit>`.
 
 > **The first start posts everything that is currently active** (NOTAMs,

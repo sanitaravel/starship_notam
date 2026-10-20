@@ -15,7 +15,7 @@ Design constraints:
       terminate due to a transient error.
     - Scrapers return data without persisting; this package is responsible for
       persistence via the ``data`` layer.
-    - Blocking work (Selenium scraping, HTTP fetches, matplotlib rendering) is
+    - Blocking work (HTTP fetches, matplotlib rendering) is
       delegated to worker threads via ``asyncio.to_thread``.
 
 Submodules:
