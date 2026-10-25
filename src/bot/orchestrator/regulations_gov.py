@@ -72,7 +72,7 @@ async def process_regulations_gov_documents(chat_list: list[str]) -> None:
         logger.info("REGULATIONS_GOV_API_KEY is not set; skipping Regulations.gov")
         return
 
-    logger.info("Refreshing Regulations.gov documents needing Telegram post")
+    logger.info("Refreshing Regulations.gov documents needing a post")
     try:
         documents = await asyncio.to_thread(fetch_regulations_gov_documents)
         _save_regulations_gov_documents(documents or [])

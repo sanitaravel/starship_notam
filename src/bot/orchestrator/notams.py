@@ -151,7 +151,7 @@ async def process_notam_images(chat_list: list[str]) -> None:
 
             if success_any:
                 logger.info(
-                    f"Sent image for {name} to Telegram; marking in DB and deleting file"
+                    f"Sent image for {name}; marking in DB and deleting file"
                 )
                 try:
                     mark_image_generated(name, config.DB_PATH)

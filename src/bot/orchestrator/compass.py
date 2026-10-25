@@ -31,7 +31,7 @@ def _save_compass_files(files: list[dict]) -> None:
 
 async def process_compass_files(chat_list: list[str]) -> None:
     """Fetch the COMPASS Master Slide Deck list and post any new files."""
-    logger.info("Refreshing COMPASS files needing Telegram post")
+    logger.info("Refreshing COMPASS files needing a post")
     try:
         files = await asyncio.to_thread(compass_files_fetcher.fetch)
         _save_compass_files(files or [])
