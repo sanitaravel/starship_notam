@@ -7,4 +7,6 @@
 !main.py
 !prefill_compass.py
 !prefill_federal_register.py
+!prefill_regulations_gov.py
+!prefill_sec_edgar.py
 **/__pycache__

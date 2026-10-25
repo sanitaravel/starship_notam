@@ -23,7 +23,7 @@ source or add one.
 | Path | Contents |
 | --- | --- |
 | `src/core/` | `config.py` (env vars, URLs, source settings), `logging.py` |
-| `src/scrapers/` | Fetchers: `HttpFetcher` subclasses for HTTP sources, Selenium functions for the rest |
+| `src/scrapers/` | Fetchers: `HttpFetcher` subclasses, plus session-based functions for NOTAM Search, FCC ELS and FAA DRS (requests / curl_cffi, no browser) |
 | `src/parsers/` | Pure parsing functions: text/JSON/XML in, dicts out |
 | `src/data/` | `schema.py` (tables, column migrations, `init_db`), one repository per source |
 | `src/bot/formatting/` | Telegram HTML messages, one module per source |
@@ -44,11 +44,11 @@ source or add one.
   formatting, transport).
 - Each layer may import only its own third-party packages at module level
   (`core`: rich, dotenv; `data`: standard library only, psycopg lazily;
-  `parsers`: bs4; `scrapers`: selenium, requests; `bot`:
+  `parsers`: bs4; `scrapers`: requests, curl_cffi; `bot`:
   telegram, httpx (lazily), dotenv; `visualization`: matplotlib, cartopy, PIL, shapely). Heavy
   packages are imported lazily inside functions.
   `tests/integration/test_dependency_boundaries.py` enforces this.
-- Blocking work (HTTP, Selenium, rendering) runs in `asyncio.to_thread` from
+- Blocking work (HTTP, rendering) runs in `asyncio.to_thread` from
   the orchestrator. Every step catches its own exceptions, so one failing
   source never stops the loop.
 

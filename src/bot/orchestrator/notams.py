@@ -88,14 +88,14 @@ def persist_notam_results(results: list[dict], keyword: str) -> None:
 async def refresh_notams_from_source() -> None:
     """Scrape NOTAMs for the configured keywords and persist the results.
 
-    All keywords run in one browser session (see ``search_notams_many``);
+    All keywords run on one HTTP session (see ``search_notams_many``);
     a failure for one keyword does not stop the others.
     """
     try:
         logger.info(f"Running NOTAM requests for keywords: {', '.join(_NOTAM_KEYWORDS)}")
         results = await asyncio.to_thread(search_notams_many, _NOTAM_KEYWORDS)
     except Exception:
-        logger.exception("NOTAM request failed: could not start the browser")
+        logger.exception("NOTAM request failed")
         return
     for keyword in _NOTAM_KEYWORDS:
         persist_notam_results(results.get(keyword), keyword)

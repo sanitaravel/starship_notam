@@ -56,25 +56,6 @@ if not (TELEGRAM_CHANNEL_ID or DISCORD_WEBHOOK_URL):
 
 # --- Optional configuration with defaults ---
 
-# How the bot runs: "docker" (inside the compose stack, using the Selenium grid
-# container) or "standalone" (directly on the host, launching a local Chrome).
-RUN_MODES = ("docker", "standalone")
-
-if "DEBUG_MODE" in os.environ:
-    raise RuntimeError(
-        "DEBUG_MODE has been replaced by RUN_MODE. "
-        "Use RUN_MODE=standalone (was DEBUG_MODE=1) or RUN_MODE=docker."
-    )
-
-RUN_MODE: str = os.environ.get("RUN_MODE", "docker").strip().lower()
-if RUN_MODE not in RUN_MODES:
-    raise RuntimeError(
-        f"RUN_MODE must be one of {', '.join(RUN_MODES)}; got {RUN_MODE!r}."
-    )
-
-# Selenium grid used in docker mode.
-SELENIUM_GRID_URL: str = "http://selenium:4444/wd/hub"
-
 # Database target: a PostgreSQL URL (postgresql://user:pass@host:5432/db) when
 # DATABASE_URL is set, otherwise the SQLite file at NOTAM_DB_PATH.
 DB_PATH: str = (
@@ -111,16 +92,20 @@ FAA_LICENSE_DOC_ID: str = os.environ.get(
     "DRSDOCID173891218620231102140506.0001",
 ).strip()
 
-# The human-facing DRS document viewer URL (the page a reader would open). Used
-# both to establish WAF/session cookies in the browser and as the "source"
-# link in Telegram notifications.
+# The human-facing DRS document viewer URL (the page a reader would open), used
+# as the "source" link in Telegram notifications.
 FAA_LICENSE_VIEWER_URL: str = (
     f"{FAA_LICENSE_BASE_URL}/browse/excelExternalWindow/{FAA_LICENSE_DOC_ID}"
 )
 
+# Guest login: redirects to targetUrl and sets the jwt/user cookies the
+# summary API requires.
+FAA_LICENSE_GUEST_LOGIN_URL: str = (
+    f"{FAA_LICENSE_BASE_URL}/guest/login?targetUrl=/browse"
+)
+
 # The DRS JSON summary API returning the document's metadata ("Document
-# Details" panel). Queried from within the browser context after the viewer
-# page has loaded so the Akamai/AWS session cookies are attached.
+# Details" panel). Needs the guest token in the jwt/user request headers.
 FAA_LICENSE_SUMMARY_URL: str = (
     f"{FAA_LICENSE_BASE_URL}"
     f"/api/browse/documents/summaryguiddocview/{FAA_LICENSE_DOC_ID}"

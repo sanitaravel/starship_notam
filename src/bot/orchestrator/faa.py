@@ -42,7 +42,7 @@ async def process_faa_activities(chat_list: list[str]) -> None:
 async def process_faa_licenses(chat_list: list[str]) -> None:
     """Fetch the FAA DRS launch license, persist it, and post any changes.
 
-    The (blocking, Selenium-backed) fetch is offloaded to a worker thread; the
+    The (blocking) fetch is offloaded to a worker thread; the
     record is persisted through the data layer (which performs SHA-256 change
     detection and re-flags changed records for posting).
     """

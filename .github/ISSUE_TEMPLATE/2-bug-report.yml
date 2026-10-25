@@ -49,7 +49,7 @@ body:
       label: How do you run the bot?
       options:
         - Docker Compose
-        - Without Docker (RUN_MODE=standalone)
+        - Without Docker
     validations:
       required: true
 

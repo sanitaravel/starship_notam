@@ -8,6 +8,7 @@ operations.
 Public API:
     parse_fcc_els_results_html(html: str) -> list[dict]
     parse_fcc_els_detail_html(html: str) -> dict
+    parse_fcc_els_search_form(html: str, form_name: str) -> tuple[str, dict] | None
 """
 
 from __future__ import annotations
@@ -352,3 +353,43 @@ def parse_fcc_els_detail_html(html: str) -> dict:
         detail[_EXPLANATION_KEY] = explanation
 
     return detail
+
+
+_FORM_BUTTON_TYPES = ("submit", "button", "reset", "image")
+
+
+def parse_fcc_els_search_form(html: str, form_name: str) -> tuple[str, dict[str, str]] | None:
+    """Return the ``(action, fields)`` a browser would submit for a form.
+
+    ``fields`` maps every named input, select and textarea of the form named
+    ``form_name`` to its default value: checked checkboxes/radios only, the
+    selected (else first) option of a select, no buttons. The search results
+    page answers ``503`` when any of these fields is missing from the POST.
+
+    Returns ``None`` when the page has no such form.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form", attrs={"name": form_name})
+    if form is None:
+        return None
+
+    fields: dict[str, str] = {}
+    for element in form.find_all(["input", "select", "textarea"]):
+        name = element.get("name")
+        if not name:
+            continue
+        if element.name == "select":
+            option = element.find("option", selected=True) or element.find("option")
+            fields[name] = option.get("value", option.get_text()) if option else ""
+        elif element.name == "textarea":
+            fields[name] = element.get_text()
+        else:
+            kind = (element.get("type") or "text").lower()
+            if kind in _FORM_BUTTON_TYPES:
+                continue
+            if kind in ("checkbox", "radio"):
+                if element.has_attr("checked"):
+                    fields[name] = element.get("value", "on")
+                continue
+            fields[name] = element.get("value", "")
+    return form.get("action") or "", fields
