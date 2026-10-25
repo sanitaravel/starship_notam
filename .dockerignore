@@ -5,6 +5,5 @@
 !fonts/
 !src/
 !main.py
-!prefill_compass.py
-!prefill_federal_register.py
+!prefill_*.py
 **/__pycache__

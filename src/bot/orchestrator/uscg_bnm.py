@@ -92,7 +92,7 @@ def _render_map(notice: dict) -> str | None:
 
 async def process_uscg_bnm_notices(chat_list: list[str]) -> None:
     """Fetch the USCG BNM feeds and post new Starship bulletins."""
-    logger.info("Refreshing USCG Broadcast Notices to Mariners needing Telegram post")
+    logger.info("Refreshing USCG Broadcast Notices to Mariners needing a post")
     try:
         notices, _ = await asyncio.to_thread(_fetch_notices)
         _save_uscg_bnm_notices(notices)

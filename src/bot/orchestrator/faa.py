@@ -17,7 +17,7 @@ from src.scrapers import faa_advisory_fetcher, fetch_faa_license
 
 async def process_faa_activities(chat_list: list[str]) -> None:
     """Fetch FAA advisories, persist them, and post any that need posting."""
-    logger.info("Refreshing FAA activities needing Telegram post")
+    logger.info("Refreshing FAA activities needing a post")
     try:
         logger.info("Getting FAA activities")
         activities = await asyncio.to_thread(faa_advisory_fetcher.fetch)
@@ -42,11 +42,11 @@ async def process_faa_activities(chat_list: list[str]) -> None:
 async def process_faa_licenses(chat_list: list[str]) -> None:
     """Fetch the FAA DRS launch license, persist it, and post any changes.
 
-    The (blocking, Selenium-backed) fetch is offloaded to a worker thread; the
+    The (blocking) fetch is offloaded to a worker thread; the
     record is persisted through the data layer (which performs SHA-256 change
     detection and re-flags changed records for posting).
     """
-    logger.info("Refreshing FAA DRS launch license needing Telegram post")
+    logger.info("Refreshing FAA DRS launch license needing a post")
     try:
         logger.info("Getting FAA DRS launch license")
         record = await asyncio.to_thread(fetch_faa_license)

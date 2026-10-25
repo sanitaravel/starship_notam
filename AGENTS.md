@@ -7,7 +7,8 @@ rules for changing it.
 ## What this is
 
 A Python 3.12 bot that watches Starship-related sources and posts new items
-to one Telegram channel, in Russian. Sources: FAA NOTAMs (map cards), FAA
+to one Telegram channel and/or one Discord channel (through a webhook), in
+Russian. Sources: FAA NOTAMs (map cards), FAA
 ATCSCC advisories, Starbase beach and road closures, FCC ELS, the FAA DRS
 launch licence, COMPASS, the Federal Register, Regulations.gov, SEC EDGAR and
 USCG Broadcast Notices to Mariners (map cards). Each item is stored in SQLite
@@ -22,12 +23,13 @@ source or add one.
 | Path | Contents |
 | --- | --- |
 | `src/core/` | `config.py` (env vars, URLs, source settings), `logging.py` |
-| `src/scrapers/` | Fetchers: `HttpFetcher` subclasses for HTTP sources, Selenium functions for the rest |
+| `src/scrapers/` | Fetchers: `HttpFetcher` subclasses, plus session-based functions for NOTAM Search, FCC ELS and FAA DRS (requests / curl_cffi, no browser) |
 | `src/parsers/` | Pure parsing functions: text/JSON/XML in, dicts out |
 | `src/data/` | `schema.py` (tables, column migrations, `init_db`), one repository per source |
 | `src/bot/formatting/` | Telegram HTML messages, one module per source |
+| `src/bot/discord_markdown.py` | Converts that HTML to Discord markdown and splits long posts |
 | `src/bot/orchestrator/` | One module per source (fetch, save, post), `loop.py` runs them all each cycle |
-| `src/bot/transport.py` | The only module that talks to the Telegram API |
+| `src/bot/transport.py` | The only module that talks to the Telegram API; hands `DiscordWebhook` destinations to `discord_webhook.py`, the only module that talks to Discord |
 | `src/visualization/` | Map rendering (Cartopy) and the PIL card shared by NOTAMs and BNMs |
 | `prefill_*.py` | One-off scripts that mark everything a source lists now as already posted |
 | `tests/unit/`, `tests/integration/` | pytest suite |
@@ -42,11 +44,11 @@ source or add one.
   formatting, transport).
 - Each layer may import only its own third-party packages at module level
   (`core`: rich, dotenv; `data`: standard library only, psycopg lazily;
-  `parsers`: bs4; `scrapers`: selenium, requests; `bot`:
-  telegram, dotenv; `visualization`: matplotlib, cartopy, PIL, shapely). Heavy
+  `parsers`: bs4; `scrapers`: requests, curl_cffi; `bot`:
+  telegram, httpx (lazily), dotenv; `visualization`: matplotlib, cartopy, PIL, shapely). Heavy
   packages are imported lazily inside functions.
   `tests/integration/test_dependency_boundaries.py` enforces this.
-- Blocking work (HTTP, Selenium, rendering) runs in `asyncio.to_thread` from
+- Blocking work (HTTP, rendering) runs in `asyncio.to_thread` from
   the orchestrator. Every step catches its own exceptions, so one failing
   source never stops the loop.
 
@@ -93,6 +95,9 @@ Regulations.gov and USCG BNM are the most recent.
   pinned hashes in `test_repository_hashes.py` catch this; don't update them
   for an existing source without a migration plan.
 - Telegram messages are in Russian; code, comments and docs are in English.
+- Formatters write Telegram HTML only (`<b>`, `<i>`, `<code>`, `<a href>`,
+  `<blockquote>`); `discord_markdown` translates exactly those tags for
+  Discord. A new tag needs a case there too.
 
 ## Commands
 

@@ -14,7 +14,7 @@ from src.scrapers import starbase_status_fetcher
 
 async def ingest_starbase_alerts() -> None:
     """Fetch Starbase status and persist beach/road alerts."""
-    logger.info("Refreshing Starbase alerts needing Telegram post")
+    logger.info("Refreshing Starbase alerts needing a post")
     try:
         logger.info("Fetching Starbase status")
         data = await asyncio.to_thread(starbase_status_fetcher.fetch)

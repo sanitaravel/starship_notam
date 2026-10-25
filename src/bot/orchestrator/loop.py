@@ -6,6 +6,7 @@ import asyncio
 from datetime import datetime, timedelta
 from functools import partial
 
+from src.bot.discord_webhook import DiscordWebhook
 from src.bot.orchestrator import shutdown
 from src.bot.orchestrator.compass import process_compass_files
 from src.bot.orchestrator.faa import process_faa_activities, process_faa_licenses
@@ -33,16 +34,27 @@ from src.data import init_db
 from src.healthcheck import write_heartbeat
 
 
+def destinations() -> list[str | DiscordWebhook]:
+    """Return the configured destinations: the Telegram channel and/or Discord webhook."""
+    chat_list: list[str | DiscordWebhook] = []
+    if config.TELEGRAM_CHANNEL_ID:
+        chat_list.append(config.TELEGRAM_CHANNEL_ID)
+    if config.DISCORD_WEBHOOK_URL:
+        chat_list.append(DiscordWebhook(config.DISCORD_WEBHOOK_URL))
+    return chat_list
+
+
 async def generate_and_send() -> None:
     """Run one full ingestion + delivery cycle.
 
     Each step is independently wrapped in try/except (inside the step
     functions), so a failure in one step does not prevent the others from
-    running. All content is delivered to the single configured Telegram
-    channel (``config.TELEGRAM_CHANNEL_ID``). After a stop request the cycle
-    ends early, between items (see ``shutdown``).
+    running. All content is delivered to every configured destination (see
+    :func:`destinations`); an item counts as posted once any of them got it.
+    After a stop request the cycle ends early, between items (see
+    ``shutdown``).
     """
-    chat_list = [config.TELEGRAM_CHANNEL_ID]
+    chat_list = destinations()
     steps = (
         refresh_notams_from_source,
         partial(process_notam_images, chat_list),
@@ -74,13 +86,16 @@ async def generate_and_send() -> None:
 def ensure_setup() -> None:
     """Validate required configuration and initialize the database.
 
-    ``core.config`` already raises at import time if ``TELEGRAM_BOT_TOKEN`` is
-    missing, but we keep an explicit guard here for defensive clarity and
+    ``core.config`` already raises at import time if no destination is
+    configured, but we keep an explicit guard here for defensive clarity and
     ensure the database schema exists before the loop starts.
     """
-    if not config.TELEGRAM_BOT_TOKEN:
-        logger.error("TELEGRAM_BOT_TOKEN must be set in environment")
+    if not destinations():
+        logger.error(
+            "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID, or DISCORD_WEBHOOK_URL"
+        )
         raise SystemExit(1)
+    logger.info("Posting to: " + ", ".join(str(d) for d in destinations()))
     # ensure DB exists/initialized
     init_db(config.DB_PATH)
 
@@ -159,4 +174,4 @@ async def main_loop() -> None:
         remove_stop_handlers()
         shutdown.clear_stop_event()
 
-    logger.info("Telegram NOTAM bot stopped")
+    logger.info("Starship NOTAM bot stopped")

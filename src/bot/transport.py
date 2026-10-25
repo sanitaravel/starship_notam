@@ -1,7 +1,9 @@
-"""Telegram API transport layer.
+"""Transport layer: send photos and messages to the configured destinations.
 
-This module owns all Telegram API interaction: sending photos and messages to
-the single configured channel.
+This module owns all Telegram API interaction. A destination is either a
+Telegram chat id (a string) or a ``DiscordWebhook``; :func:`send_photo` and
+:func:`send_message` hand the latter to ``bot.discord_webhook``, so callers
+treat both alike.
 
 Design constraints:
     - Uses a lazy import for ``telegram`` (python-telegram-bot) so this module
@@ -18,6 +20,8 @@ import asyncio
 import warnings
 from typing import Optional
 
+from src.bot import discord_webhook
+from src.bot.discord_webhook import DiscordWebhook
 from src.core import config
 from src.core.logging import logger
 
@@ -93,15 +97,18 @@ async def _send_with_retries(send, description: str):
 
 
 async def send_photo(
-    chat_id: str, photo_path: str, caption: Optional[str] = None
-) -> Optional[int]:
+    chat_id: str | DiscordWebhook, photo_path: str, caption: Optional[str] = None
+) -> Optional[int | str]:
     """Send a photo with an optional HTML caption to a chat.
 
     Returns the sent ``message_id`` on success, or ``None`` on failure
     (including when the bot lacks access to the chat / channel — HTTP 403
     Forbidden). Timeouts and flood-control errors are retried a bounded number
-    of times.
+    of times. A ``DiscordWebhook`` destination is sent by ``discord_webhook``.
     """
+    if isinstance(chat_id, DiscordWebhook):
+        return await discord_webhook.send_photo(chat_id, photo_path, caption)
+
     from telegram import InputFile  # lazy import
     from telegram.error import Forbidden  # lazy import
 
@@ -132,13 +139,17 @@ async def send_photo(
         return None
 
 
-async def send_message(chat_id: str, text: str) -> Optional[int]:
+async def send_message(chat_id: str | DiscordWebhook, text: str) -> Optional[int | str]:
     """Send an HTML text message to a chat.
 
     Returns the sent ``message_id`` on success, or ``None`` on failure,
     including when the bot is blocked (Forbidden). Timeouts and flood-control
-    errors are retried a bounded number of times.
+    errors are retried a bounded number of times. A ``DiscordWebhook``
+    destination is sent by ``discord_webhook``.
     """
+    if isinstance(chat_id, DiscordWebhook):
+        return await discord_webhook.send_message(chat_id, text)
+
     from telegram.error import Forbidden  # lazy import
 
     async def send():

@@ -17,45 +17,44 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _dotenv_path = Path(os.environ.get("NOTAM_ENV_FILE") or _PROJECT_ROOT / ".env")
 load_dotenv(dotenv_path=str(_dotenv_path), override=True)
 
-# --- Required configuration ---
+# --- Destinations (at least one is required) ---
 
 TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip().strip('"')
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError(
-        "Required environment variable TELEGRAM_BOT_TOKEN is not set or is empty. "
-        "Please set it in your .env file or system environment."
-    )
 
 # The single Telegram channel the bot posts to. Set only in .env. Use the
 # channel's numeric id (typically the -100... form) or its public @username.
 # The bot must be an administrator of the channel with permission to post.
 TELEGRAM_CHANNEL_ID: str = os.environ.get("TELEGRAM_CHANNEL_ID", "").strip().strip('"')
-if not TELEGRAM_CHANNEL_ID:
+
+if bool(TELEGRAM_BOT_TOKEN) != bool(TELEGRAM_CHANNEL_ID):
     raise RuntimeError(
-        "Required environment variable TELEGRAM_CHANNEL_ID is not set or is empty. "
-        "Please set it in your .env file or system environment."
+        "TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID must be set together. "
+        "Set both to post to Telegram, or neither to skip it."
+    )
+
+# Discord channel webhook the bot posts to (Channel settings -> Integrations ->
+# Webhooks). Leave empty to skip Discord. The URL contains the webhook's
+# secret token, so it is never logged.
+DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "").strip().strip('"')
+
+_DISCORD_WEBHOOK_PREFIXES = tuple(
+    f"https://{host}/api/webhooks/"
+    for host in ("discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com")
+)
+if DISCORD_WEBHOOK_URL and not DISCORD_WEBHOOK_URL.startswith(_DISCORD_WEBHOOK_PREFIXES):
+    raise RuntimeError(
+        "DISCORD_WEBHOOK_URL must be a Discord webhook URL "
+        "(https://discord.com/api/webhooks/<id>/<token>)."
+    )
+
+if not (TELEGRAM_CHANNEL_ID or DISCORD_WEBHOOK_URL):
+    raise RuntimeError(
+        "No destination configured. Set TELEGRAM_BOT_TOKEN and "
+        "TELEGRAM_CHANNEL_ID, or DISCORD_WEBHOOK_URL, or both, in your .env "
+        "file or system environment."
     )
 
 # --- Optional configuration with defaults ---
-
-# How the bot runs: "docker" (inside the compose stack, using the Selenium grid
-# container) or "standalone" (directly on the host, launching a local Chrome).
-RUN_MODES = ("docker", "standalone")
-
-if "DEBUG_MODE" in os.environ:
-    raise RuntimeError(
-        "DEBUG_MODE has been replaced by RUN_MODE. "
-        "Use RUN_MODE=standalone (was DEBUG_MODE=1) or RUN_MODE=docker."
-    )
-
-RUN_MODE: str = os.environ.get("RUN_MODE", "docker").strip().lower()
-if RUN_MODE not in RUN_MODES:
-    raise RuntimeError(
-        f"RUN_MODE must be one of {', '.join(RUN_MODES)}; got {RUN_MODE!r}."
-    )
-
-# Selenium grid used in docker mode.
-SELENIUM_GRID_URL: str = "http://selenium:4444/wd/hub"
 
 # Database target: a PostgreSQL URL (postgresql://user:pass@host:5432/db) when
 # DATABASE_URL is set, otherwise the SQLite file at NOTAM_DB_PATH.
@@ -93,16 +92,20 @@ FAA_LICENSE_DOC_ID: str = os.environ.get(
     "DRSDOCID173891218620231102140506.0001",
 ).strip()
 
-# The human-facing DRS document viewer URL (the page a reader would open). Used
-# both to establish WAF/session cookies in the browser and as the "source"
-# link in Telegram notifications.
+# The human-facing DRS document viewer URL (the page a reader would open), used
+# as the "source" link in Telegram notifications.
 FAA_LICENSE_VIEWER_URL: str = (
     f"{FAA_LICENSE_BASE_URL}/browse/excelExternalWindow/{FAA_LICENSE_DOC_ID}"
 )
 
+# Guest login: redirects to targetUrl and sets the jwt/user cookies the
+# summary API requires.
+FAA_LICENSE_GUEST_LOGIN_URL: str = (
+    f"{FAA_LICENSE_BASE_URL}/guest/login?targetUrl=/browse"
+)
+
 # The DRS JSON summary API returning the document's metadata ("Document
-# Details" panel). Queried from within the browser context after the viewer
-# page has loaded so the Akamai/AWS session cookies are attached.
+# Details" panel). Needs the guest token in the jwt/user request headers.
 FAA_LICENSE_SUMMARY_URL: str = (
     f"{FAA_LICENSE_BASE_URL}"
     f"/api/browse/documents/summaryguiddocview/{FAA_LICENSE_DOC_ID}"

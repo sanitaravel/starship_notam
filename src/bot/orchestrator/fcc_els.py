@@ -14,7 +14,7 @@ from src.scrapers import fetch_fcc_els_applications
 
 async def process_fcc_els_applications(chat_list: list[str]) -> None:
     """Fetch FCC ELS applications, persist them, and post any needing posting."""
-    logger.info("Refreshing FCC ELS applications needing Telegram post")
+    logger.info("Refreshing FCC ELS applications needing a post")
     try:
         logger.info("Getting FCC ELS applications")
         apps = await asyncio.to_thread(fetch_fcc_els_applications)

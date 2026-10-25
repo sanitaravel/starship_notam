@@ -5,7 +5,7 @@ design (see requirements 9.1, 9.2, 9.3, 9.5, 9.6):
 
     * A single layer can be imported on its own, quickly, and without dragging
       in the heavy optional dependencies belonging to *other* layers
-      (Selenium, python-telegram-bot, Cartopy, Matplotlib).
+      (curl_cffi, python-telegram-bot, Cartopy, Matplotlib).
     * Importing the parser / data / visualization layers has no observable
       side effects: no database file is created, no database connection is
       opened, and no network request is issued.
@@ -36,7 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # Heavy optional dependencies. Importing a layer module must NOT pull these into
 # ``sys.modules`` as a side effect; they are only allowed to load lazily inside
 # the function bodies that actually need them.
-HEAVY_MODULES = ["selenium", "telegram", "cartopy", "matplotlib"]
+HEAVY_MODULES = ["curl_cffi", "telegram", "cartopy", "matplotlib"]
 
 # Maximum time (seconds) any single layer is allowed to take to import.
 # Requirements 9.2, 9.3, 9.6 mandate a 2-second ceiling.
@@ -107,10 +107,10 @@ def _run_import_probe(module_name: str, watch_modules: list[str]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 9.1 — Parser layer imports without DB / Selenium / Telegram side effects
+# 9.1 — Parser layer imports without DB / curl_cffi / Telegram side effects
 # ---------------------------------------------------------------------------
 def test_parsers_import_without_heavy_dependencies():
-    """Importing the parser layer must not load Selenium/Telegram/Cartopy/Matplotlib.
+    """Importing the parser layer must not load curl_cffi/Telegram/Cartopy/Matplotlib.
 
     Requirement 9.1: the parser modules import without a database connection or
     network request, and without dragging in the heavy I/O dependencies that
@@ -156,10 +156,10 @@ def test_parsers_do_not_import_requests_or_sqlite():
 
 
 # ---------------------------------------------------------------------------
-# 9.2 — Data layer imports quickly without Selenium/Telegram/Cartopy
+# 9.2 — Data layer imports quickly without curl_cffi/Telegram/Cartopy
 # ---------------------------------------------------------------------------
 def test_data_layer_imports_without_heavy_dependencies():
-    """Requirement 9.2: the data layer imports without Selenium/Telegram/Cartopy."""
+    """Requirement 9.2: the data layer imports without curl_cffi/Telegram/Cartopy."""
     result = _run_import_probe("src.data", HEAVY_MODULES)
 
     assert result["loaded"] == [], (
@@ -241,20 +241,6 @@ def test_each_layer_imports_within_time_limit(layer):
 # 9.5 — Optional dependencies are imported lazily (inside functions), and the
 #        error surfaces only when the dependent function is called.
 # ---------------------------------------------------------------------------
-def test_scraper_selenium_import_is_lazy():
-    """Requirement 9.5: Selenium is not imported when the scraper module loads.
-
-    ``search_notams`` imports Selenium inside its body. Importing the scraper
-    module (or the whole scrapers package) must therefore not load Selenium.
-    """
-    result = _run_import_probe("src.scrapers.notam_scraper", ["selenium"])
-
-    assert "selenium" not in result["loaded"], (
-        "Importing the notam_scraper module eagerly loaded 'selenium'; the "
-        "dependency must be imported lazily inside search_notams()."
-    )
-
-
 def test_bot_transport_telegram_import_is_lazy():
     """Requirement 9.5: python-telegram-bot is not imported when transport loads.
 
@@ -266,6 +252,20 @@ def test_bot_transport_telegram_import_is_lazy():
     assert "telegram" not in result["loaded"], (
         "Importing the bot.transport module eagerly loaded 'telegram'; the "
         "dependency must be imported lazily inside the send functions."
+    )
+
+
+def test_bot_discord_webhook_httpx_import_is_lazy():
+    """httpx is not imported when the Discord webhook transport loads.
+
+    ``discord_webhook`` imports ``httpx`` inside its request helper, so
+    importing the transport (which imports it) must not load it.
+    """
+    result = _run_import_probe("src.bot.transport", ["httpx"])
+
+    assert "httpx" not in result["loaded"], (
+        "Importing the bot.transport module eagerly loaded 'httpx'; the "
+        "dependency must be imported lazily inside discord_webhook."
     )
 
 

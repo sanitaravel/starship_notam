@@ -1,75 +1,58 @@
-"""Selenium-based FCC ELS (Experimental Licensing System) search automation.
+"""HTTP-based FCC ELS (Experimental Licensing System) search.
 
-This module drives the FCC ELS Generic Search web application to search for
-SpaceX license applications over a rolling one-month window, follows each
-result row's "View Form -> Current" (``STA_Print.cfm``) detail link, and
-returns a list of merged application dicts.
+This module submits the FCC ELS Generic Search form for SpaceX license
+applications over a rolling one-month window, follows each result row's
+"View Form -> Current" (``STA_Print.cfm``) detail link, and returns a list of
+merged application dicts.
 
-Unlike the FAA NOTAM search (an Angular SPA), the FCC ELS site is a classic
-server-rendered ColdFusion (``.cfm``) application: the results table and the
-detail form are present in ``driver.page_source`` immediately after load, so
-the heavy parsing is delegated to the pure functions in
-:mod:`src.parsers.fcc_els_parser`.
-
-The heavy Selenium dependency is imported lazily inside
-:func:`fetch_fcc_els_applications` so that importing this module (and the
-``scrapers`` package) does not require Selenium to be installed. This keeps the
-scraper layer independently importable in test environments.
+The FCC ELS site is a classic server-rendered ColdFusion (``.cfm``)
+application, so each step is a single request; the heavy parsing is delegated
+to the pure functions in :mod:`src.parsers.fcc_els_parser`. The host sits
+behind Akamai, which rejects plain ``requests`` by its TLS fingerprint, so the
+requests go through :mod:`curl_cffi` impersonating Chrome. The search form
+must be loaded first: it sets the session cookie, and the results page answers
+``503`` unless the POST carries every field of the form.
 
 The scraper performs no persistence: it returns the scraped results to the
 caller and is fail-safe (returns ``[]`` and never raises to the caller on any
-search/navigation failure).
+request failure).
 """
 
 import calendar
 from datetime import date
 from urllib.parse import urljoin
 
+from curl_cffi import requests as cffi_requests
+
 from src.core import config
 from src.core.logging import logger
-from src.scrapers.driver import browser_session
 from src.parsers.fcc_els_parser import (
     parse_fcc_els_detail_html,
     parse_fcc_els_results_html,
+    parse_fcc_els_search_form,
 )
 
-# --- Form field locators -------------------------------------------------
+# --- Search form ---------------------------------------------------------
 #
-# These identify the four search-form fields on the FCC ELS Generic Search
-# page (``GenericSearch.cfm``). The names below were verified against the live
-# page's HTML source: the form is ``name="generic_search_form"`` and posts to
-# ``GenericSearchResult.cfm``.
+# The form on the FCC ELS Generic Search page (``GenericSearch.cfm``) is
+# ``name="generic_search_form"`` and posts to ``GenericSearchResult.cfm``. We
+# fill four of its fields and submit the rest at their defaults:
 #
-#   Applicant Name      -> <input name="name_licensee">
-#   Receipt Date (from) -> <input name="receipt_date_from">
-#   Receipt Date (to)   -> <input name="receipt_date_to">
-#   Records per page    -> <input name="show_records" value="10"> (a text input,
-#                          NOT a <select>; defaults to "10")
-#
-# They are centralized here so they are easy to correct against the live page.
+#   Applicant Name      -> name_licensee
+#   Receipt Date (from) -> receipt_date_from
+#   Receipt Date (to)   -> receipt_date_to
+#   Records per page    -> show_records (defaults to "10")
+_SEARCH_FORM_NAME = "generic_search_form"
 _LICENSEE_FIELD_NAME = "name_licensee"
 _RECEIPT_FROM_FIELD_NAME = "receipt_date_from"
 _RECEIPT_TO_FIELD_NAME = "receipt_date_to"
 _SHOW_RECORDS_FIELD_NAME = "show_records"
 
-# Locator used to detect that the results table has rendered after submitting
-# the search. Best-effort; may need adjustment against the live page.
-_RESULTS_TABLE_CSS = "table"
-
-# Number of detail-page load attempts per result row.
+# Number of detail-page request attempts per result row.
 _DETAIL_MAX_ATTEMPTS = 3
 
-# Per-page load timeout (seconds) applied when fetching a detail page.
-_PAGE_LOAD_TIMEOUT = 30
-
-
-def _fill(field, value: str) -> None:
-    """Clear a form ``field`` (best-effort) and type ``value`` into it."""
-    try:
-        field.clear()
-    except Exception:
-        pass
-    field.send_keys(value)
+# Seconds before each request is abandoned.
+_TIMEOUT = 30
 
 
 def _receipt_date_to(today: date | None = None) -> str:
@@ -114,155 +97,117 @@ def _receipt_date_from(today: date | None = None) -> str:
 def fetch_fcc_els_applications() -> list[dict]:
     """Search FCC ELS for SpaceX applications and return application dicts.
 
-    Fail-safe: returns ``[]`` on any search/navigation failure and never raises
-    to the caller. The browser session is always closed (see
-    :func:`~src.scrapers.driver.browser_session`). Performs
-    no database writes.
+    Fail-safe: returns ``[]`` on any search failure and never raises to the
+    caller. Performs no database writes.
 
     Each returned dict has the keys ``file_number``, ``application_seq``,
     ``applicant_name``, ``call_sign``, ``receipt_date``, ``status``,
     ``status_date``, ``current_detail_url``, and ``detail`` (a
     ``{label: value}`` dict, possibly empty).
     """
-    # Lazy imports -- selenium is an optional heavy dependency only needed at
-    # call time, not at module import time (keeps the scrapers package
-    # importable without selenium installed).
-    try:
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.support.ui import WebDriverWait
-    except Exception as e:  # pragma: no cover - environment-dependent
-        logger.error(f"Selenium is not available for FCC ELS scrape: {e}")
-        return []
-
     results: list[dict] = []
-
     try:
-        with browser_session() as driver:
-            url = config.FCC_ELS_SEARCH_URL
-            logger.info(f"Opening FCC ELS search page: {url}")
-            driver.get(url)
-
-            # --- Wait for the four search-form fields to be present -----------
-            wait = WebDriverWait(driver, 30)
-            try:
-                licensee_field = wait.until(
-                    EC.presence_of_element_located((By.NAME, _LICENSEE_FIELD_NAME))
-                )
-                receipt_from_field = wait.until(
-                    EC.presence_of_element_located((By.NAME, _RECEIPT_FROM_FIELD_NAME))
-                )
-                receipt_to_field = wait.until(
-                    EC.presence_of_element_located((By.NAME, _RECEIPT_TO_FIELD_NAME))
-                )
-                show_records_field = wait.until(
-                    EC.presence_of_element_located((By.NAME, _SHOW_RECORDS_FIELD_NAME))
-                )
-            except Exception as e:
-                logger.error(f"Timed out waiting for FCC ELS search form fields: {e}")
+        with cffi_requests.Session(impersonate="chrome") as session:
+            rows = _search(session)
+            if rows is None:
                 return []
-
-            # --- Fill the form ------------------------------------------------
-            receipt_from = _receipt_date_from()
-            receipt_to = _receipt_date_to()
-            logger.info(
-                "Filling FCC ELS search: licensee=%r, receipt_from=%s, "
-                "receipt_to=%s, show_records=%s",
-                config.FCC_ELS_SEARCH_TERM,
-                receipt_from,
-                receipt_to,
-                config.FCC_ELS_RECORD_LIMIT,
-            )
-            _fill(licensee_field, config.FCC_ELS_SEARCH_TERM)
-            _fill(receipt_from_field, receipt_from)
-            _fill(receipt_to_field, receipt_to)
-            # show-records is a plain text input pre-filled with a default of "10".
-            try:
-                _fill(show_records_field, str(config.FCC_ELS_RECORD_LIMIT))
-            except Exception as e:
-                logger.info(f"Could not set FCC ELS show-records field: {e}")
-
-            # --- Submit the search --------------------------------------------
-            try:
-                licensee_field.submit()
-                logger.info("Submitted FCC ELS search form")
-            except Exception as e:
-                logger.error(f"Failed to submit FCC ELS search form: {e}")
-                return []
-
-            # --- Wait for the results table -----------------------------------
-            try:
-                WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located(
-                        (By.CSS_SELECTOR, _RESULTS_TABLE_CSS)
-                    )
-                )
-            except Exception as e:
-                logger.error(f"Timed out waiting for FCC ELS results table: {e}")
-                return []
-
-            # --- Parse the results page ---------------------------------------
-            rows = parse_fcc_els_results_html(driver.page_source)
-            logger.info(f"Parsed {len(rows)} FCC ELS result row(s)")
-
-            # --- Per-row detail retrieval and merge ---------------------------
             for row in rows:
-                file_number = row.get("file_number")
-                # The parser returns the raw href as scraped, which on this site is
-                # a root-relative URL (e.g. "/oetcf/els/reports/STA_Print.cfm?..").
-                # Selenium's driver.get() requires an absolute URL, so resolve it
-                # against the search page URL (same scheme/host).
-                raw_detail_url = row.get("current_detail_url")
-                detail_url = urljoin(config.FCC_ELS_SEARCH_URL, raw_detail_url)
-                detail: dict | None = None
-
-                for attempt in range(1, _DETAIL_MAX_ATTEMPTS + 1):
-                    try:
-                        driver.set_page_load_timeout(_PAGE_LOAD_TIMEOUT)
-                        driver.get(detail_url)
-                        detail = parse_fcc_els_detail_html(driver.page_source)
-                        break
-                    except Exception as e:
-                        logger.info(
-                            "FCC ELS detail attempt %d/%d failed for file_number "
-                            "%r: %s",
-                            attempt,
-                            _DETAIL_MAX_ATTEMPTS,
-                            file_number,
-                            e,
-                        )
-
-                if detail is None:
-                    # All retries exhausted (or a parse failure). Discard the
-                    # partial data for this row and continue with the next.
-                    logger.error(
-                        "Discarding FCC ELS application %r: failed to retrieve or "
-                        "parse detail page after %d attempts",
-                        file_number,
-                        _DETAIL_MAX_ATTEMPTS,
-                    )
-                    continue
-
-                app = {
-                    "file_number": row.get("file_number"),
-                    "application_seq": row.get("application_seq"),
-                    "applicant_name": row.get("applicant_name"),
-                    "call_sign": row.get("call_sign"),
-                    "receipt_date": row.get("receipt_date"),
-                    "status": row.get("status"),
-                    "status_date": row.get("status_date"),
-                    "current_detail_url": row.get("current_detail_url"),
-                    "detail": detail,
-                }
-                results.append(app)
-
+                app = _with_detail(session, row)
+                if app is not None:
+                    results.append(app)
     except Exception as e:
-        # Any unexpected search/navigation failure (including the browser not
-        # starting) is fail-safe: log and return whatever was accumulated
-        # (never raise to the caller).
+        # Any unexpected request failure is fail-safe: log and return whatever
+        # was accumulated (never raise to the caller).
         logger.error(f"FCC ELS scrape failed: {e}")
-
     return results
+
+
+def _search(session) -> list[dict] | None:
+    """Load the search form, submit it and parse the results table."""
+    search_url = config.FCC_ELS_SEARCH_URL
+    logger.info(f"Opening FCC ELS search page: {search_url}")
+    page = session.get(search_url, timeout=_TIMEOUT)
+    page.raise_for_status()
+    form = parse_fcc_els_search_form(page.text, _SEARCH_FORM_NAME)
+    if form is None:
+        logger.error("FCC ELS search page has no search form")
+        return None
+    action, fields = form
+
+    receipt_from = _receipt_date_from()
+    receipt_to = _receipt_date_to()
+    logger.info(
+        "Submitting FCC ELS search: licensee=%r, receipt_from=%s, "
+        "receipt_to=%s, show_records=%s",
+        config.FCC_ELS_SEARCH_TERM,
+        receipt_from,
+        receipt_to,
+        config.FCC_ELS_RECORD_LIMIT,
+    )
+    fields.update({
+        _LICENSEE_FIELD_NAME: config.FCC_ELS_SEARCH_TERM,
+        _RECEIPT_FROM_FIELD_NAME: receipt_from,
+        _RECEIPT_TO_FIELD_NAME: receipt_to,
+        _SHOW_RECORDS_FIELD_NAME: str(config.FCC_ELS_RECORD_LIMIT),
+    })
+    response = session.post(
+        urljoin(search_url, action),
+        data=fields,
+        headers={"Referer": search_url},
+        timeout=_TIMEOUT,
+    )
+    response.raise_for_status()
+
+    rows = parse_fcc_els_results_html(response.text)
+    logger.info(f"Parsed {len(rows)} FCC ELS result row(s)")
+    return rows
+
+
+def _with_detail(session, row: dict) -> dict | None:
+    """Fetch a result row's detail page and merge it in; ``None`` on failure."""
+    file_number = row.get("file_number")
+    # The parser returns the raw, root-relative href (e.g.
+    # "/oetcf/els/reports/STA_Print.cfm?.."); resolve it against the search page.
+    detail_url = urljoin(config.FCC_ELS_SEARCH_URL, row.get("current_detail_url"))
+    detail: dict | None = None
+
+    for attempt in range(1, _DETAIL_MAX_ATTEMPTS + 1):
+        try:
+            response = session.get(detail_url, timeout=_TIMEOUT)
+            response.raise_for_status()
+            detail = parse_fcc_els_detail_html(response.text)
+            break
+        except Exception as e:
+            logger.info(
+                "FCC ELS detail attempt %d/%d failed for file_number %r: %s",
+                attempt,
+                _DETAIL_MAX_ATTEMPTS,
+                file_number,
+                e,
+            )
+
+    if detail is None:
+        # All retries exhausted (or a parse failure). Discard the partial data
+        # for this row and continue with the next.
+        logger.error(
+            "Discarding FCC ELS application %r: failed to retrieve or parse "
+            "detail page after %d attempts",
+            file_number,
+            _DETAIL_MAX_ATTEMPTS,
+        )
+        return None
+
+    return {
+        "file_number": row.get("file_number"),
+        "application_seq": row.get("application_seq"),
+        "applicant_name": row.get("applicant_name"),
+        "call_sign": row.get("call_sign"),
+        "receipt_date": row.get("receipt_date"),
+        "status": row.get("status"),
+        "status_date": row.get("status_date"),
+        "current_detail_url": row.get("current_detail_url"),
+        "detail": detail,
+    }
 
 
 if __name__ == "__main__":
