@@ -1,7 +1,7 @@
 # Starship NOTAM bot stack.
 #
-#   cp .env.example .env    # fill in TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
-#                           # and POSTGRES_PASSWORD
+#   cp .env.example .env    # fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
+#                           # and/or DISCORD_WEBHOOK_URL, and POSTGRES_PASSWORD
 #   docker compose up -d --build
 #
 # Start-up order: postgres and selenium (healthy) -> prefill (exits

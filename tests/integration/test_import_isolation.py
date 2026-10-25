@@ -269,6 +269,20 @@ def test_bot_transport_telegram_import_is_lazy():
     )
 
 
+def test_bot_discord_webhook_httpx_import_is_lazy():
+    """httpx is not imported when the Discord webhook transport loads.
+
+    ``discord_webhook`` imports ``httpx`` inside its request helper, so
+    importing the transport (which imports it) must not load it.
+    """
+    result = _run_import_probe("src.bot.transport", ["httpx"])
+
+    assert "httpx" not in result["loaded"], (
+        "Importing the bot.transport module eagerly loaded 'httpx'; the "
+        "dependency must be imported lazily inside discord_webhook."
+    )
+
+
 def test_visualization_matplotlib_and_cartopy_imports_are_lazy():
     """Requirement 9.5: Matplotlib/Cartopy load only inside render_map().
 

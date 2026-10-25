@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "starship_notam"
 version = "0.1.0"
-description = "Starship NOTAM monitoring and Telegram bot"
+description = "Starship NOTAM monitoring bot for Telegram and Discord"
 requires-python = ">=3.12"
 
 # Direct runtime dependencies, grouped by the package layer that imports them:
@@ -13,7 +13,7 @@ requires-python = ">=3.12"
 #   - data          -> Python standard library only (psycopg, lazily, for PostgreSQL)
 #   - parsers       -> beautifulsoup4
 #   - scrapers      -> selenium, requests
-#   - bot           -> python-telegram-bot, python-dotenv
+#   - bot           -> python-telegram-bot, httpx (Discord webhooks), python-dotenv
 #   - visualization -> matplotlib, cartopy, pillow, shapely
 dependencies = [
     # core / logging layer
@@ -26,6 +26,7 @@ dependencies = [
     "requests==2.34.2",
     # bot layer
     "python-telegram-bot==22.8",
+    "httpx==0.28.1",
     # visualization layer
     "matplotlib==3.11.0",
     "Cartopy==0.25.0",

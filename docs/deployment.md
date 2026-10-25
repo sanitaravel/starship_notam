@@ -39,7 +39,8 @@ Server, every 5 min:  deploy/deploy.sh                  │
 ## One-time server setup
 
 Requirements: a Linux x86_64 server with systemd, about 2 GB of free RAM, and
-the Telegram bot and channel from the [README](../README.md#1-prerequisites).
+the Telegram bot and channel and/or the Discord webhook from the
+[README](../README.md#1-prerequisites).
 
 1. **Install Docker Engine with the Compose plugin**
    ([instructions](https://docs.docker.com/engine/install/)), then check:
@@ -66,8 +67,8 @@ the Telegram bot and channel from the [README](../README.md#1-prerequisites).
    sudo chown -R notam:notam /opt/starship_notam
    ```
 
-4. **Create `.env`** as the `notam` user and fill in `TELEGRAM_BOT_TOKEN`,
-   `TELEGRAM_CHANNEL_ID` and `POSTGRES_PASSWORD` (see
+4. **Create `.env`** as the `notam` user and fill in `TELEGRAM_BOT_TOKEN` and
+   `TELEGRAM_CHANNEL_ID` and/or `DISCORD_WEBHOOK_URL`, and `POSTGRES_PASSWORD` (see
    [README, step 2](../README.md#2-get-the-code-and-configure-it)):
 
    ```sh

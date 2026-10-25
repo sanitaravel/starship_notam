@@ -17,23 +17,41 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _dotenv_path = Path(os.environ.get("NOTAM_ENV_FILE") or _PROJECT_ROOT / ".env")
 load_dotenv(dotenv_path=str(_dotenv_path), override=True)
 
-# --- Required configuration ---
+# --- Destinations (at least one is required) ---
 
 TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip().strip('"')
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError(
-        "Required environment variable TELEGRAM_BOT_TOKEN is not set or is empty. "
-        "Please set it in your .env file or system environment."
-    )
 
 # The single Telegram channel the bot posts to. Set only in .env. Use the
 # channel's numeric id (typically the -100... form) or its public @username.
 # The bot must be an administrator of the channel with permission to post.
 TELEGRAM_CHANNEL_ID: str = os.environ.get("TELEGRAM_CHANNEL_ID", "").strip().strip('"')
-if not TELEGRAM_CHANNEL_ID:
+
+if bool(TELEGRAM_BOT_TOKEN) != bool(TELEGRAM_CHANNEL_ID):
     raise RuntimeError(
-        "Required environment variable TELEGRAM_CHANNEL_ID is not set or is empty. "
-        "Please set it in your .env file or system environment."
+        "TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID must be set together. "
+        "Set both to post to Telegram, or neither to skip it."
+    )
+
+# Discord channel webhook the bot posts to (Channel settings -> Integrations ->
+# Webhooks). Leave empty to skip Discord. The URL contains the webhook's
+# secret token, so it is never logged.
+DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "").strip().strip('"')
+
+_DISCORD_WEBHOOK_PREFIXES = tuple(
+    f"https://{host}/api/webhooks/"
+    for host in ("discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com")
+)
+if DISCORD_WEBHOOK_URL and not DISCORD_WEBHOOK_URL.startswith(_DISCORD_WEBHOOK_PREFIXES):
+    raise RuntimeError(
+        "DISCORD_WEBHOOK_URL must be a Discord webhook URL "
+        "(https://discord.com/api/webhooks/<id>/<token>)."
+    )
+
+if not (TELEGRAM_CHANNEL_ID or DISCORD_WEBHOOK_URL):
+    raise RuntimeError(
+        "No destination configured. Set TELEGRAM_BOT_TOKEN and "
+        "TELEGRAM_CHANNEL_ID, or DISCORD_WEBHOOK_URL, or both, in your .env "
+        "file or system environment."
     )
 
 # --- Optional configuration with defaults ---
