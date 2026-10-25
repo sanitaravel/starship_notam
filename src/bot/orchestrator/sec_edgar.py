@@ -35,7 +35,7 @@ async def process_sec_edgar_filings(chat_list: list[str]) -> None:
         logger.info("SEC_USER_AGENT is not set; skipping SEC EDGAR")
         return
 
-    logger.info("Refreshing SEC EDGAR filings needing Telegram post")
+    logger.info("Refreshing SEC EDGAR filings needing a post")
     try:
         filings = await asyncio.to_thread(sec_edgar_filings_fetcher.fetch)
         _save_sec_edgar_filings(filings or [])

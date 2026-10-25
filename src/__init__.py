@@ -15,7 +15,7 @@ modules map onto the new sub-packages as follows:
 
 All public names are resolved lazily via a PEP 562 module-level ``__getattr__``.
 This keeps ``import src`` cheap and side-effect free: heavy
-dependencies (selenium, cartopy, matplotlib, python-telegram-bot, rich) are only
+dependencies (cartopy, matplotlib, python-telegram-bot, rich) are only
 imported on first attribute access, and configuration (which requires
 ``TELEGRAM_BOT_TOKEN``) is not loaded merely by importing this package.
 """

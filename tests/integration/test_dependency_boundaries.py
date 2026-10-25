@@ -51,7 +51,7 @@ LAYER_ALLOWED_THIRD_PARTY = {
     # data: standard library only (no third-party packages permitted).
     "data": set(),
     "parsers": {"bs4"},
-    "scrapers": {"selenium", "requests"},
+    "scrapers": {"requests", "curl_cffi"},
     "bot": {"telegram", "dotenv"},
     "visualization": {"matplotlib", "cartopy", "PIL", "shapely"},
 }

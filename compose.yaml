@@ -1,10 +1,10 @@
 # Starship NOTAM bot stack.
 #
-#   cp .env.example .env    # fill in TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
-#                           # and POSTGRES_PASSWORD
+#   cp .env.example .env    # fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
+#                           # and/or DISCORD_WEBHOOK_URL, and POSTGRES_PASSWORD
 #   docker compose up -d --build
 #
-# Start-up order: postgres and selenium (healthy) -> prefill (exits
+# Start-up order: postgres (healthy) -> prefill (exits
 # successfully) -> bot.
 #
 # On a server, deploy/deploy.sh runs the image CI published for a release
@@ -31,7 +31,6 @@ x-app: &app
   logging: *logging
   # Container paths win over whatever .env says for local runs.
   environment:
-    RUN_MODE: docker
     DATABASE_URL: postgresql://${POSTGRES_USER:-notam}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-notam}
     NOTAM_LOG_DIR: /app/logs
     # Rich wraps log lines at 80 columns when there is no terminal.
@@ -57,17 +56,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
-
-  selenium:
-    image: selenium/standalone-chrome:4.49.0-20260909
-    shm_size: 2gb
-    restart: unless-stopped
-    logging: *logging
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:4444/status"]
-      interval: 5s
-      timeout: 5s
-      retries: 24
 
   # Records the COMPASS files, Federal Register and Regulations.gov documents,
   # SEC EDGAR filings and USCG BNM bulletins already online as posted, so the
@@ -105,8 +93,6 @@ services:
       start_interval: 15s
     depends_on:
       postgres:
-        condition: service_healthy
-      selenium:
         condition: service_healthy
       prefill:
         condition: service_completed_successfully

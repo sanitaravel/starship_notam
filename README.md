@@ -1,7 +1,8 @@
 # Starship NOTAM bot
 
-A Telegram bot that watches public sources for SpaceX Starship activity and
-posts updates to a Telegram channel. On a fixed schedule it checks:
+A bot that watches public sources for SpaceX Starship activity and posts
+updates to a Telegram channel, a Discord channel, or both. On a fixed
+schedule it checks:
 
 | Source | What it tracks |
 | --- | --- |
@@ -21,8 +22,8 @@ one is posted only once.
 
 ## Running with Docker (recommended)
 
-[`compose.yaml`](compose.yaml) runs everything the bot needs: the bot, a
-PostgreSQL database and a Selenium Chrome browser. You only need Docker.
+[`compose.yaml`](compose.yaml) runs everything the bot needs: the bot and a
+PostgreSQL database. You only need Docker.
 
 The steps below run the bot by hand on any machine. To run it on a Linux
 server that deploys every release from `main` automatically, follow
@@ -32,13 +33,18 @@ server that deploys every release from `main` automatically, follow
 
 - Docker Engine with the Compose plugin (`docker compose version` should print
   v2.x), or Docker Desktop. It runs on amd64 and arm64.
-- About 2 GB of free RAM. Chrome alone gets a 2 GB `/dev/shm`.
-- A Telegram bot and a channel:
-  1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token.
-  2. Add the bot to your channel as an **administrator** with permission to
-     post messages.
-  3. Note the channel's id: its public `@username`, or the numeric `-100…` id
-     for a private channel.
+- At least one place to post to:
+  - **Telegram:** a bot and a channel.
+    1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token.
+    2. Add the bot to your channel as an **administrator** with permission to
+       post messages.
+    3. Note the channel's id: its public `@username`, or the numeric `-100…` id
+       for a private channel.
+  - **Discord:** a webhook for the channel. No bot account is needed.
+    1. In the channel's settings, open **Integrations → Webhooks** and click
+       **New Webhook**. You need the *Manage Webhooks* permission.
+    2. Name it (the name and avatar are what posts show as), then click
+       **Copy Webhook URL**.
 
 ### 2. Get the code and configure it
 
@@ -48,13 +54,28 @@ cd starship_notam
 cp .env.example .env
 ```
 
-Open `.env` and fill in the three required values:
+Open `.env` and fill in the destinations you use and the database password:
 
 ```sh
+# Telegram: set both, or leave both empty
 TELEGRAM_BOT_TOKEN=123456789:AA...        # from @BotFather
 TELEGRAM_CHANNEL_ID=@my_starship_channel  # or -1001234567890
+
+# Discord: leave empty to skip
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123.../AbC...
+
 POSTGRES_PASSWORD=ChooseALongRandomPassword
 ```
+
+- **Destinations**: with both set, every item goes to both. Posts on Discord
+  are the same Russian messages as on Telegram, with NOTAM and BNM map cards
+  attached as images; a message over Discord's 2,000-character limit is
+  split in two. An item counts as posted once either destination accepted
+  it, so if one of them is down at that moment, it misses that item.
+- **`DISCORD_WEBHOOK_URL`** contains the webhook's secret token: anyone with
+  it can post to the channel. Keep it out of screenshots and issues; the bot
+  never writes it to the log. If it leaks, delete the webhook in Discord and
+  create a new one.
 
 - **`POSTGRES_PASSWORD`**: use letters and digits only, because it becomes
   part of a database URL. It is set when the database volume is first
@@ -63,7 +84,7 @@ POSTGRES_PASSWORD=ChooseALongRandomPassword
   `ALTER USER` in `psql`.
 - **Other settings** in [`.env.example`](.env.example) are optional, such as
   `RUNS_PER_HOUR`.
-- **Ignored under Compose:** `RUN_MODE`, `DATABASE_URL` and `NOTAM_DB_PATH`.
+- **Ignored under Compose:** `DATABASE_URL` and `NOTAM_DB_PATH`.
   Compose sets them for the containers itself, so a `.env` you also use for
   local runs works unchanged.
 - **Not in the image:** `.env` is never copied into the image.
@@ -76,9 +97,8 @@ docker compose up -d --build
 
 The services start in this order:
 
-1. **`postgres`** (PostgreSQL 17) and **`selenium`**
-   (`selenium/standalone-chrome`) start first. Everything else waits until
-   both report healthy.
+1. **`postgres`** (PostgreSQL 17) starts first. Everything else waits until
+   it reports healthy.
 2. **`prefill`** runs `prefill_compass.py --if-empty`,
    `prefill_federal_register.py --if-empty`,
    `prefill_regulations_gov.py --if-empty`,
@@ -102,7 +122,7 @@ The services start in this order:
 ### 4. Check that it works
 
 ```sh
-docker compose ps        # postgres and selenium "healthy", prefill "exited (0)", bot "healthy"
+docker compose ps        # postgres "healthy", prefill "exited (0)", bot "healthy"
 docker compose logs -f bot
 ```
 
@@ -159,6 +179,11 @@ Register, Regulations.gov, SEC EDGAR and the USCG BNM feeds again and re-posts e
   wrong.
 - **`Forbidden` or `chat not found` in the bot log**: the bot is not an admin
   of the channel, or `TELEGRAM_CHANNEL_ID` is wrong.
+- **`Discord rejected ... HTTP 401` or `HTTP 404`**: the webhook was deleted
+  or `DISCORD_WEBHOOK_URL` is mistyped. Copy the URL again.
+- **`No destination configured`** or **`must be set together`**: set
+  `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHANNEL_ID` together, or
+  `DISCORD_WEBHOOK_URL`, or all three.
 - **`password authentication failed`**: `POSTGRES_PASSWORD` was changed after
   the database was created (see step 2).
 - **Changed `.env`?** Run `docker compose up -d` so the containers are
@@ -166,18 +191,19 @@ Register, Regulations.gov, SEC EDGAR and the USCG BNM feeds again and re-posts e
 
 ## Running without Docker
 
-Requirements: Python 3.12+ and Google Chrome. The NOTAM search, FCC ELS and
-FAA DRS scrapers drive a headless Chrome through Selenium.
+Requirements: Python 3.12+. No browser is needed: every source is fetched
+over plain HTTP. The NOTAM search and FCC ELS fetchers use `curl_cffi` with
+Chrome TLS impersonation, because their Akamai front end blocks plain
+`requests`.
 
 ```sh
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -e .                  # or ".[lock]" for the fully pinned environment
-cp .env.example .env              # then fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID
+cp .env.example .env              # then fill in your Telegram and/or Discord settings
 ```
 
-Set `RUN_MODE=standalone` in `.env` so Selenium launches your local Chrome
-(the default, `docker`, expects the Selenium container). Then:
+Then:
 
 ```sh
 python prefill_compass.py          # once, so the existing COMPASS files are not announced
@@ -233,7 +259,7 @@ src/
   parsers/        turn raw HTML/JSON/NOTAM text into dicts
   data/           database schema (SQLite/PostgreSQL) and one repository per source
   visualization/  map rendering and NOTAM card images
-  bot/            message formatting, Telegram transport, main loop
+  bot/            message formatting, Telegram and Discord transport, main loop
 tests/            unit and integration tests (pytest + Hypothesis)
 ```
 

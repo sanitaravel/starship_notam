@@ -31,7 +31,7 @@ def _save_federal_register_documents(documents: list[dict]) -> None:
 
 async def process_federal_register_documents(chat_list: list[str]) -> None:
     """Fetch FAA Federal Register documents about SpaceX and post new ones."""
-    logger.info("Refreshing Federal Register documents needing Telegram post")
+    logger.info("Refreshing Federal Register documents needing a post")
     try:
         documents = await asyncio.to_thread(federal_register_documents_fetcher.fetch)
         _save_federal_register_documents(documents or [])

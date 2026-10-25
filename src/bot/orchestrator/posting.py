@@ -37,10 +37,10 @@ async def post_pending(
     Telegram's 1024-character caption limit. The file is deleted afterwards.
     """
     if not items:
-        logger.info(f"No {label} needing Telegram post at this time")
+        logger.info(f"No {label} needing a post at this time")
         return
 
-    logger.info(f"Found {len(items)} {label} needing post to Telegram")
+    logger.info(f"Found {len(items)} {label} needing a post")
     for item in items:
         if shutdown.stopping():
             logger.info(f"Stop requested; leaving the remaining {label} for the next start")

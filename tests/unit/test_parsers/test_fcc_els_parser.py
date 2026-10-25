@@ -38,6 +38,7 @@ from hypothesis import strategies as st
 from src.parsers.fcc_els_parser import (
     parse_fcc_els_detail_html,
     parse_fcc_els_results_html,
+    parse_fcc_els_search_form,
 )
 
 
@@ -473,3 +474,43 @@ def test_unrecognized_detail_html_returns_empty_dict():
         "</table></body></html>"
     )
     assert parse_fcc_els_detail_html(empty_values) == {}
+
+
+def test_search_form_submits_every_field_at_its_default():
+    page = (
+        "<form name='other'><input name='ignored' value='x'></form>"
+        "<form name='generic_search_form' action='/r.cfm?RequestTimeout=500' method='post'>"
+        "<input name='name_licensee'>"
+        "<input type='hidden' name='fetchfrom' value='0'>"
+        "<input type='text' name='show_records' value='10'>"
+        "<input type='checkbox' name='all' value='Y' checked>"
+        "<input type='checkbox' name='unticked' value='Y'>"
+        "<input type='radio' name='power_type' value='n' checked>"
+        "<input type='radio' name='power_type' value='y'>"
+        "<select name='experiment_type'><option value='   '>Any</option>"
+        "<option value='A'>A</option></select>"
+        "<select name='state'><option value=''>-</option>"
+        "<option value='TX' selected>Texas</option></select>"
+        "<textarea name='narrative_comments'></textarea>"
+        "<input type='submit' name='go' value='Search'>"
+        "<input name=''>"
+        "</form>"
+    )
+
+    action, fields = parse_fcc_els_search_form(page, "generic_search_form")
+
+    assert action == "/r.cfm?RequestTimeout=500"
+    assert fields == {
+        "name_licensee": "",
+        "fetchfrom": "0",
+        "show_records": "10",
+        "all": "Y",
+        "power_type": "n",
+        "experiment_type": "   ",
+        "state": "TX",
+        "narrative_comments": "",
+    }
+
+
+def test_search_form_missing_returns_none():
+    assert parse_fcc_els_search_form("<form name='x'></form>", "generic_search_form") is None
