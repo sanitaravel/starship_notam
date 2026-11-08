@@ -46,6 +46,7 @@ _TABLES = (
     "regulations_gov_documents",
     "sec_edgar_filings",
     "uscg_bnm_notices",
+    "starship_documentaries",
 )
 
 

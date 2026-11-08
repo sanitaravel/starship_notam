@@ -16,6 +16,7 @@ schedule it checks:
 | [Regulations.gov](https://www.regulations.gov/search?filter=Starship) | New FAA and USCG docket documents about Starship, with their PDFs: final EAs and FONSIs, safety zones, and other material the Federal Register does not print. Needs a free `REGULATIONS_GOV_API_KEY`; skipped without one |
 | [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001181412) | New SpaceX (SPCX) filings: 8-K material events with their item names, 10-Q/10-K reports (with the Starship launch count) and securities offerings. Needs `SEC_USER_AGENT` with a contact address; skipped without one |
 | [USCG Broadcast Notices to Mariners](https://www.navcen.uscg.gov/subscribe-email-rss-feeds) | Maritime hazard areas for Starship launches from the Heartland and Southeast District feeds, each posted as a map card with its UTC windows, then the cancellation with the outcome (e.g. a successful launch). Falcon 9 and other Cape launches are left out |
+| [SpaceX Starship documentary](https://content.spacex.com/cms-assets/content-hub/documentary/StarshipDoc_Ep001/StarshipDoc_Ep001.m3u8) | New episodes of SpaceX's Starship documentary series, with their length and links to the HLS video (opens in Safari or VLC) |
 
 New or changed items are stored in a database (SQLite or PostgreSQL), so each
 one is posted only once.
@@ -102,12 +103,14 @@ The services start in this order:
 2. **`prefill`** runs `prefill_compass.py --if-empty`,
    `prefill_federal_register.py --if-empty`,
    `prefill_regulations_gov.py --if-empty`,
-   `prefill_sec_edgar.py --if-empty` and
-   `prefill_uscg_bnm.py --if-empty` once, and exits. On the very first
+   `prefill_sec_edgar.py --if-empty`,
+   `prefill_uscg_bnm.py --if-empty` and
+   `prefill_starship_doc.py --if-empty` once, and exits. On the very first
    start they record the files already on the COMPASS slide list, the
    documents already in the Federal Register and on Regulations.gov,
-   SpaceX's existing SEC filings and the Starship notices to mariners in the
-   Coast Guard feeds as posted, so the bot does not
+   SpaceX's existing SEC filings, the Starship notices to mariners in the
+   Coast Guard feeds and the documentary episodes already online as posted,
+   so the bot does not
    announce the whole existing back catalogue. On later starts they do
    nothing, so items published while the bot was down are still announced.
 3. **`bot`** starts after `prefill` succeeds. It runs a check cycle
@@ -167,7 +170,8 @@ Data lives in named Docker volumes:
 
 To start over with an empty database, run `docker compose down -v`. **This
 deletes all volumes.** The next start prefills COMPASS, the Federal
-Register, Regulations.gov, SEC EDGAR and the USCG BNM feeds again and re-posts everything that is currently active.
+Register, Regulations.gov, SEC EDGAR, the USCG BNM feeds and the Starship
+documentary again and re-posts everything that is currently active.
 
 ### Troubleshooting
 
@@ -175,8 +179,8 @@ Register, Regulations.gov, SEC EDGAR and the USCG BNM feeds again and re-posts e
   `POSTGRES_PASSWORD` in `.env`.
 - **`bot` never starts and `prefill` exited with code 1**: check
   `docker compose logs prefill`. The usual cause is that the COMPASS site
-  or the Federal Register, Regulations.gov or SEC EDGAR API or a USCG BNM
-  feed could not be reached (or `REGULATIONS_GOV_API_KEY` is wrong, or SEC rejected
+  or the Federal Register, Regulations.gov or SEC EDGAR API, a USCG BNM
+  feed or the SpaceX documentary playlists could not be reached (or `REGULATIONS_GOV_API_KEY` is wrong, or SEC rejected
   `SEC_USER_AGENT`). Run
   `docker compose up -d` again once they are reachable.
 - **`Unauthorized` in the bot log**: the token in `TELEGRAM_BOT_TOKEN` is
@@ -215,6 +219,7 @@ python prefill_federal_register.py # once, so the existing Federal Register docu
 python prefill_regulations_gov.py  # once (with REGULATIONS_GOV_API_KEY set), likewise for Regulations.gov
 python prefill_sec_edgar.py        # once (with SEC_USER_AGENT set), likewise for SpaceX's SEC filings
 python prefill_uscg_bnm.py         # once, likewise for the Coast Guard notices to mariners
+python prefill_starship_doc.py     # once, likewise for the Starship documentary episodes
 python -m src                      # or: python main.py, or: starship-notam
 ```
 

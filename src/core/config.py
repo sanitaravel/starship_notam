@@ -82,6 +82,7 @@ DEFAULT_SOURCE_INTERVALS: dict[str, int] = {
     "regulations_gov": 30,
     "sec_edgar": 10,
     "uscg_bnm": 15,
+    "starship_doc": 30,
     "starbase": 5,
 }
 
@@ -239,6 +240,19 @@ SEC_EDGAR_FORMS: tuple = (
     "S-1", "S-1/A", "S-3", "S-3/A",
     "424B1", "424B2", "424B3", "424B4", "424B5", "424B7", "424B8",
 )
+
+# --- SpaceX Starship documentary series configuration ---
+
+# HLS playlist of one episode: {id} is the folder name (StarshipDoc_Ep004) and
+# {variant} "" for the master playlist or "-4k" for the 4K rendition.
+STARSHIP_DOC_URL: str = (
+    "https://content.spacex.com/cms-assets/content-hub/documentary/"
+    "{id}/{id}{variant}.m3u8"
+)
+
+# How many consecutive episode numbers past the newest known one are probed
+# before giving up, so a skipped number doesn't hide later episodes.
+STARSHIP_DOC_LOOKAHEAD: int = int(os.environ.get("STARSHIP_DOC_LOOKAHEAD", "2"))
 
 # --- USCG Broadcast Notices to Mariners (maritime hazard areas) configuration ---
 

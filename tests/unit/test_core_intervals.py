@@ -25,6 +25,7 @@ def test_defaults():
         "regulations_gov": 30,
         "sec_edgar": 10,
         "uscg_bnm": 15,
+        "starship_doc": 30,
         "starbase": 5,
     }
     assert list(source_intervals({})) == list(DEFAULT_SOURCE_INTERVALS)

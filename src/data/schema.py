@@ -255,6 +255,30 @@ CREATE TABLE IF NOT EXISTS sec_edgar_filings (
     telegram_posted_at TEXT,
     telegram_message_id TEXT
 );
+-- Episodes of SpaceX's Starship documentary series, found by probing the HLS
+-- playlist URLs (config.STARSHIP_DOC_URL). episode_id is the folder name
+-- (UNIQUE key, e.g. "StarshipDoc_Ep004"); a row is posted once, when the
+-- episode first appears (see starship_doc_repo).
+CREATE TABLE IF NOT EXISTS starship_documentaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    episode_id TEXT UNIQUE NOT NULL,
+
+    episode INTEGER,
+    duration_seconds INTEGER,
+    published_at TEXT,
+    master_url TEXT,
+    playlist_url TEXT,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    payload_hash TEXT,
+
+    telegram_posted INTEGER DEFAULT 0,
+    telegram_posted_at TEXT,
+    telegram_message_id TEXT
+);
 -- Starship space-operations bulletins from the USCG Broadcast Notices to
 -- Mariners feeds (config.USCG_BNM_TOPICS). notice_key is the kind plus the
 -- BNM number (UNIQUE key, e.g. "SAFETY CGD-H BNM 0108-26"); a row is posted
@@ -371,7 +395,7 @@ def init_db(db_path: Optional[str] = None) -> None:
     Ensures that all required tables (notams, faa_activities, starbase_beach,
     starbase_road, fcc_els_applications, faa_licenses, compass_files,
     federal_register_documents, regulations_gov_documents, sec_edgar_filings,
-    uscg_bnm_notices)
+    uscg_bnm_notices, starship_documentaries)
     exist and have every column listed in ``_ADDED_COLUMNS``.
 
     On failure, any pending transaction is rolled back so the database is never

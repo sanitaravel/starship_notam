@@ -33,6 +33,7 @@ from src.bot.orchestrator.starbase import (
     process_beach_alerts,
     process_road_alerts,
 )
+from src.bot.orchestrator.starship_doc import process_starship_documentaries
 from src.bot.orchestrator.uscg_bnm import process_uscg_bnm_notices
 from src.core import config
 from src.core.logging import logger
@@ -82,6 +83,7 @@ def _sources(
         ),
         ("sec_edgar", (partial(process_sec_edgar_filings, chat_list),)),
         ("uscg_bnm", (partial(process_uscg_bnm_notices, chat_list),)),
+        ("starship_doc", (partial(process_starship_documentaries, chat_list),)),
         (
             "starbase",
             (
