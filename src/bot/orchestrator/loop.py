@@ -1,8 +1,13 @@
-"""The main loop: run every step once per cycle, then sleep until the next slot."""
+"""The main loop: wake every tick, run the sources that are due, then sleep.
+
+Each source has its own interval (``config.SOURCE_INTERVAL_MINUTES``); a
+``StepScheduler`` decides which of them run in the current cycle.
+"""
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from functools import partial
 
@@ -21,6 +26,7 @@ from src.bot.orchestrator.notams import (
 from src.bot.orchestrator.regulations_gov import (
     process_regulations_gov_documents,
 )
+from src.bot.orchestrator.schedule import StepScheduler
 from src.bot.orchestrator.sec_edgar import process_sec_edgar_filings
 from src.bot.orchestrator.starbase import (
     ingest_starbase_alerts,
@@ -44,8 +50,56 @@ def destinations() -> list[str | DiscordWebhook]:
     return chat_list
 
 
-async def generate_and_send() -> None:
-    """Run one full ingestion + delivery cycle.
+def _sources(
+    chat_list: list[str | DiscordWebhook],
+) -> tuple[tuple[str, tuple[Callable[[], Awaitable[None]], ...]], ...]:
+    """Return ``(source name, steps)`` in cycle order.
+
+    Names are the keys of ``config.SOURCE_INTERVAL_MINUTES``. Built per call
+    from the module-level step names, so patched steps are picked up.
+    """
+    return (
+        (
+            "notams",
+            (
+                refresh_notams_from_source,
+                partial(process_notam_images, chat_list),
+            ),
+        ),
+        ("faa_advisories", (partial(process_faa_activities, chat_list),)),
+        ("fcc_els", (partial(process_fcc_els_applications, chat_list),)),
+        ("faa_drs", (partial(process_faa_licenses, chat_list),)),
+        ("compass", (partial(process_compass_files, chat_list),)),
+        (
+            "federal_register",
+            (partial(process_federal_register_documents, chat_list),),
+        ),
+        # After the Federal Register step, so a notice it just stored is not
+        # announced a second time (see regulations_gov).
+        (
+            "regulations_gov",
+            (partial(process_regulations_gov_documents, chat_list),),
+        ),
+        ("sec_edgar", (partial(process_sec_edgar_filings, chat_list),)),
+        ("uscg_bnm", (partial(process_uscg_bnm_notices, chat_list),)),
+        (
+            "starbase",
+            (
+                ingest_starbase_alerts,
+                partial(process_beach_alerts, chat_list),
+                partial(process_road_alerts, chat_list),
+            ),
+        ),
+    )
+
+
+async def generate_and_send(scheduler: StepScheduler | None = None) -> None:
+    """Run one ingestion + delivery cycle for the sources that are due.
+
+    Without a *scheduler* every source runs. With one, a source runs only when
+    ``scheduler.due`` says so for its interval in
+    ``config.SOURCE_INTERVAL_MINUTES``; it is marked as run when it starts, so
+    a stop request before it starts leaves it due for the next cycle.
 
     Each step is independently wrapped in try/except (inside the step
     functions), so a failure in one step does not prevent the others from
@@ -54,33 +108,34 @@ async def generate_and_send() -> None:
     After a stop request the cycle ends early, between items (see
     ``shutdown``).
     """
-    chat_list = destinations()
-    steps = (
-        refresh_notams_from_source,
-        partial(process_notam_images, chat_list),
-        partial(process_faa_activities, chat_list),
-        partial(process_fcc_els_applications, chat_list),
-        partial(process_faa_licenses, chat_list),
-        partial(process_compass_files, chat_list),
-        partial(process_federal_register_documents, chat_list),
-        # After the Federal Register step, so a notice it just stored is not
-        # announced a second time (see regulations_gov).
-        partial(process_regulations_gov_documents, chat_list),
-        partial(process_sec_edgar_filings, chat_list),
-        partial(process_uscg_bnm_notices, chat_list),
-        ingest_starbase_alerts,
-        partial(process_beach_alerts, chat_list),
-        partial(process_road_alerts, chat_list),
-    )
-    for step in steps:
+    sources = _sources(destinations())
+    # Decided once, up front: the clock moves while the steps run.
+    if scheduler is not None:
+        due = [
+            name
+            for name, _ in sources
+            if scheduler.due(name, config.SOURCE_INTERVAL_MINUTES[name])
+        ]
+    else:
+        due = [name for name, _ in sources]
+    logger.info("Sources this cycle: " + (", ".join(due) or "none"))
+    for name, steps in sources:
         if shutdown.stopping():
             logger.info("Stop requested; skipping the rest of this cycle")
             return
-        await step()
-        # After every step, not just every cycle: the first cycle on a new
-        # database posts everything and can run longer than a deploy waits
-        # for the bot to turn healthy.
-        _record_heartbeat()
+        if name not in due:
+            continue
+        if scheduler is not None:
+            scheduler.mark_ran(name)
+        for step in steps:
+            if shutdown.stopping():
+                logger.info("Stop requested; skipping the rest of this cycle")
+                return
+            await step()
+            # After every step, not just every cycle: the first cycle on a
+            # new database posts everything and can run longer than a deploy
+            # waits for the bot to turn healthy.
+            _record_heartbeat()
 
 
 def ensure_setup() -> None:
@@ -156,10 +211,12 @@ async def main_loop() -> None:
     stop = shutdown.new_stop_event()
     remove_stop_handlers = shutdown.install_stop_handlers(stop)
 
+    scheduler = StepScheduler(60 / config.RUNS_PER_HOUR)
+
     try:
         while not stop.is_set():
             try:
-                await generate_and_send()
+                await generate_and_send(scheduler)
             except Exception:
                 logger.exception("Error in generate_and_send")
 

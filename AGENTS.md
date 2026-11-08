@@ -70,8 +70,10 @@ Regulations.gov and USCG BNM are the most recent.
    passed through `html.escape`, hashtags from `_common.py` at the end. Photo
    captions must fit 1024 characters.
 6. `src/bot/orchestrator/<name>.py`: fetch, save oldest first, then
-   `post_pending(...)` (pass `photo_fn` for a map card). Add the step to
-   `generate_and_send` in `loop.py`, and a `prefill_<name>_...()` function.
+   `post_pending(...)` (pass `photo_fn` for a map card). Add the source to
+   `_sources` in `loop.py` (in cycle order) and its default interval to
+   `DEFAULT_SOURCE_INTERVALS` in `config.py`, and a `prefill_<name>_...()`
+   function.
 7. `prefill_<name>.py` with `--if-empty`, added to the `prefill` service in
    `compose.yaml` and to the `COPY` line in `Dockerfile`.
 8. Re-export new public names from each package `__init__.py`.
@@ -82,7 +84,7 @@ Regulations.gov and USCG BNM are the most recent.
    `tests/unit/test_data/test_repository_hashes.py`.
 10. Docs: the sources table and prefill steps in `README.md`, an
     `> **Implemented**` note in `docs/source-research.md`, and every new env
-    var in `.env.example`.
+    var in `.env.example`, including its `<NAME>_INTERVAL_MINUTES` line.
 
 ## Code style
 

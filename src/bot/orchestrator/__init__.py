@@ -20,6 +20,7 @@ Design constraints:
 
 Submodules:
     loop              main_loop, generate_and_send, scheduling, set-up
+    schedule          StepScheduler: which sources are due this cycle
     shutdown          stop requests (SIGTERM/SIGINT) shared by the steps
     posting           post_pending: send an item, then mark it posted
     notams            scrape NOTAMs, render and send their images
@@ -34,7 +35,8 @@ Submodules:
 
 Public entry points:
     async main_loop() -> None
-    async generate_and_send() -> None
+    async generate_and_send(scheduler=None) -> None
+    StepScheduler(tick_minutes)
     prefill_compass_files() -> int
     prefill_federal_register_documents() -> int
     prefill_regulations_gov_documents() -> int
@@ -55,10 +57,12 @@ from src.bot.orchestrator.loop import (
 from src.bot.orchestrator.regulations_gov import (
     prefill_regulations_gov_documents,
 )
+from src.bot.orchestrator.schedule import StepScheduler
 from src.bot.orchestrator.sec_edgar import prefill_sec_edgar_filings
 from src.bot.orchestrator.uscg_bnm import prefill_uscg_bnm_notices
 
 __all__ = [
+    "StepScheduler",
     "ensure_setup",
     "generate_and_send",
     "main_loop",

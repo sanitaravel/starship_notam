@@ -23,8 +23,9 @@ HEARTBEAT_FILE = Path(
     or Path(tempfile.gettempdir()) / "notam-heartbeat"
 )
 
-# Slack on top of the run interval: a cycle takes one to three minutes, longer
-# when a source is slow.
+# Slack on top of the wake-up interval (60 / RUNS_PER_HOUR, 5 minutes by
+# default): the first cycle takes one to three minutes, longer when a source
+# is slow.
 GRACE_SECONDS = 15 * 60
 
 
@@ -57,7 +58,7 @@ def is_healthy(
 def main() -> int:
     # Same variable and default as core.config.RUNS_PER_HOUR, read directly so
     # the check does not import the configuration.
-    runs_per_hour = int(os.environ.get("RUNS_PER_HOUR", "2"))
+    runs_per_hour = int(os.environ.get("RUNS_PER_HOUR", "12"))
     if is_healthy(runs_per_hour=runs_per_hour):
         return 0
     print(f"No recent heartbeat in {HEARTBEAT_FILE}", file=sys.stderr)
