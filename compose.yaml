@@ -58,7 +58,7 @@ services:
       retries: 12
 
   # Records the COMPASS files, Federal Register and Regulations.gov documents,
-  # SEC EDGAR filings and USCG BNM bulletins already online as posted, so the
+  # SEC EDGAR filings, USCG BNM bulletins and Starship documentary episodes already online as posted, so the
   # bot announces only new ones. --if-empty makes each script a no-op once its table has rows.
   prefill:
     <<: *app
@@ -71,6 +71,7 @@ services:
         && python prefill_regulations_gov.py --if-empty
         && python prefill_sec_edgar.py --if-empty
         && python prefill_uscg_bnm.py --if-empty
+        && python prefill_starship_doc.py --if-empty
     restart: "no"
     depends_on:
       postgres:

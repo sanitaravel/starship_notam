@@ -175,6 +175,7 @@ async def test_stop_skips_the_remaining_steps(monkeypatch):
         "process_regulations_gov_documents",
         "process_sec_edgar_filings",
         "process_uscg_bnm_notices",
+        "process_starship_documentaries",
         "ingest_starbase_alerts",
         "process_beach_alerts",
         "process_road_alerts",
@@ -204,6 +205,7 @@ async def test_heartbeat_after_every_step(monkeypatch):
         "process_regulations_gov_documents",
         "process_sec_edgar_filings",
         "process_uscg_bnm_notices",
+        "process_starship_documentaries",
         "ingest_starbase_alerts",
         "process_beach_alerts",
         "process_road_alerts",
@@ -212,7 +214,7 @@ async def test_heartbeat_after_every_step(monkeypatch):
 
     await loop.generate_and_send()
 
-    assert events == ["step", "heartbeat"] * 13
+    assert events == ["step", "heartbeat"] * 14
 
 
 async def test_stop_flag_is_cleared_after_the_loop(monkeypatch, loop_harness):
@@ -292,6 +294,7 @@ STEP_NAMES = (
     "process_regulations_gov_documents",
     "process_sec_edgar_filings",
     "process_uscg_bnm_notices",
+    "process_starship_documentaries",
     "ingest_starbase_alerts",
     "process_beach_alerts",
     "process_road_alerts",

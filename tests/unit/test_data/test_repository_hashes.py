@@ -24,6 +24,7 @@ from src.data import (
     regulations_gov_documents,
     road_alerts,
     sec_edgar_filings,
+    starship_documentaries,
     uscg_bnm_notices,
 )
 from src.data.connection import get_connection
@@ -100,6 +101,15 @@ SEC_EDGAR_FILING = {
     "index_url": "https://www.sec.gov/Archives/edgar/data/1181412/000162828026056945/0001628280-26-056945-index.htm",
 }
 
+STARSHIP_DOCUMENTARY = {
+    "episode_id": "StarshipDoc_Ep004",
+    "episode": 4,
+    "duration_seconds": 1270,
+    "published_at": "2026-11-06T13:44:03Z",
+    "master_url": "https://content.spacex.com/cms-assets/content-hub/documentary/StarshipDoc_Ep004/StarshipDoc_Ep004.m3u8",
+    "playlist_url": "https://content.spacex.com/cms-assets/content-hub/documentary/StarshipDoc_Ep004/StarshipDoc_Ep004-4k.m3u8",
+}
+
 USCG_BNM_NOTICE = {
     "notice_key": "SAFETY CGD-H BNM 0108-26",
     "bnm_id": "CGD-H BNM 0108-26",
@@ -125,6 +135,7 @@ EXPECTED_COMPASS = "27f2633f9ac9895d8676f35203e39f274d203710d292de691d0f1a430a08
 EXPECTED_FR = "0a828313cd958511ccd4d6d265eef996880eb826bc6a46bf248ce89c47ee079d"
 EXPECTED_REGULATIONS_GOV = "19c9521d3e70e2c27fe07cd9136ab0dda475e5489a2f924f1c3c8224961ec54d"
 EXPECTED_SEC_EDGAR = "1c14e3d59c18ba67834e2214bf09ed83b675768c093a762dd18ca4e4b2f062db"
+EXPECTED_STARSHIP_DOC = "0986d149bab936936ad2e1030c352de91ad0aa4fe214e9f135f9932a8784131a"
 EXPECTED_USCG_BNM = "748624a2e3ab671a68a3b0530e94f42844282219eef442e4b2a4a8352a895785"
 
 CASES = [
@@ -142,6 +153,8 @@ CASES = [
      "regulations_gov_documents", "document_id", EXPECTED_REGULATIONS_GOV),
     (sec_edgar_filings.save, SEC_EDGAR_FILING,
      "sec_edgar_filings", "accession_number", EXPECTED_SEC_EDGAR),
+    (starship_documentaries.save, STARSHIP_DOCUMENTARY,
+     "starship_documentaries", "episode_id", EXPECTED_STARSHIP_DOC),
     (uscg_bnm_notices.save, USCG_BNM_NOTICE,
      "uscg_bnm_notices", "notice_key", EXPECTED_USCG_BNM),
 ]
