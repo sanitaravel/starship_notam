@@ -12,6 +12,7 @@ from src.parsers.coord_parser import (
 from src.parsers.notam_time import parse_notam_time
 from src.parsers.schedule import _RU_MONTHS, parse_notam_windows_with_dates
 from src.visualization.image_composer.titles import extract_starship_template
+from src.visualization.map_renderer import AREA_BLUE
 
 
 def notam_from_db_row(name: str, parsed: dict) -> dict:
@@ -168,4 +169,5 @@ def bnm_card_data(notice: dict) -> dict:
         "windows": windows,
         "zone": None,
         "top": None,
+        "area_color": AREA_BLUE,
     }
