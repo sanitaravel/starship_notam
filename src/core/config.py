@@ -5,6 +5,7 @@ constants consumed by all other packages.
 """
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -65,7 +66,51 @@ DB_PATH: str = (
 
 KEYWORD: str = os.environ.get("KEYWORD", "STARSHIP")
 
-RUNS_PER_HOUR: int = int(os.environ.get("RUNS_PER_HOUR", "2"))
+# The loop wakes on this clock-aligned tick (12 = every 5 minutes); each source
+# runs on its own interval below, a multiple of the tick in practice.
+RUNS_PER_HOUR: int = int(os.environ.get("RUNS_PER_HOUR", "12"))
+
+# Default poll interval in minutes per source. Override one with
+# <SOURCE>_INTERVAL_MINUTES (e.g. FCC_ELS_INTERVAL_MINUTES=60).
+DEFAULT_SOURCE_INTERVALS: dict[str, int] = {
+    "notams": 10,
+    "faa_advisories": 5,
+    "fcc_els": 30,
+    "faa_drs": 60,
+    "compass": 30,
+    "federal_register": 30,
+    "regulations_gov": 30,
+    "sec_edgar": 10,
+    "uscg_bnm": 15,
+    "starship_doc": 30,
+    "starbase": 5,
+}
+
+
+def source_intervals(env: Mapping[str, str]) -> dict[str, int]:
+    """Return the poll interval per source, applying env overrides.
+
+    An unset or empty ``<SOURCE>_INTERVAL_MINUTES`` keeps the default; any
+    other value must be an integer of at least 1, else ``RuntimeError``.
+    """
+    intervals = {}
+    for name, default in DEFAULT_SOURCE_INTERVALS.items():
+        var = f"{name.upper()}_INTERVAL_MINUTES"
+        raw = env.get(var, "").strip()
+        if not raw:
+            intervals[name] = default
+            continue
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 0
+        if value < 1:
+            raise RuntimeError(f"{var} must be an integer >= 1, got {raw!r}")
+        intervals[name] = value
+    return intervals
+
+
+SOURCE_INTERVAL_MINUTES: dict[str, int] = source_intervals(os.environ)
 
 # Commit the running image was built from (set by the Dockerfile from the
 # GIT_SHA build argument); "dev" outside a CI-built image.
@@ -195,6 +240,19 @@ SEC_EDGAR_FORMS: tuple = (
     "S-1", "S-1/A", "S-3", "S-3/A",
     "424B1", "424B2", "424B3", "424B4", "424B5", "424B7", "424B8",
 )
+
+# --- SpaceX Starship documentary series configuration ---
+
+# HLS playlist of one episode: {id} is the folder name (StarshipDoc_Ep004) and
+# {variant} "" for the master playlist or "-4k" for the 4K rendition.
+STARSHIP_DOC_URL: str = (
+    "https://content.spacex.com/cms-assets/content-hub/documentary/"
+    "{id}/{id}{variant}.m3u8"
+)
+
+# How many consecutive episode numbers past the newest known one are probed
+# before giving up, so a skipped number doesn't hide later episodes.
+STARSHIP_DOC_LOOKAHEAD: int = int(os.environ.get("STARSHIP_DOC_LOOKAHEAD", "2"))
 
 # --- USCG Broadcast Notices to Mariners (maritime hazard areas) configuration ---
 

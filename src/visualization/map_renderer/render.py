@@ -11,14 +11,19 @@ from src.visualization.map_renderer.extent import fit_extent
 from src.visualization.map_renderer.geometry import parse_radius, polygon_groups
 from src.visualization.map_renderer.graticule import draw_graticule
 from src.visualization.map_renderer.labels import draw_labels
-from src.visualization.map_renderer.layers import add_base_layers, draw_geometry
+from src.visualization.map_renderer.layers import AREA_RED, add_base_layers, draw_geometry
 
 # Right map fixed size (pixels). Kept here so callers may reference them.
 MAP_W = 743
 MAP_H = 662
 
 
-def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float | None = None) -> "Image.Image":
+def render_map(
+    coords,
+    size: tuple[int, int] = (MAP_W, MAP_H),
+    radius_nm: float | None = None,
+    area_color: tuple[int, int, int] = AREA_RED,
+) -> "Image.Image":
     """Render a map image (PIL.Image) showing the given coords polygon or point using Cartopy.
 
     Returns an RGBA PIL Image of exact ``size``.
@@ -33,6 +38,9 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
         The output image size in pixels as ``(width, height)``.
     radius_nm : float or None
         Optional radius in nautical miles used to draw a circle around a point.
+    area_color : tuple[int, int, int]
+        RGB colour of the area: ``AREA_RED`` (NOTAMs) or ``AREA_BLUE``
+        (maritime notices).
 
     Raises
     ------
@@ -100,7 +108,7 @@ def render_map(coords, size: tuple[int, int] = (MAP_W, MAP_H), radius_nm: float 
     add_base_layers(ax, cfeature)
     draw_graticule(ax, proj, extent, central_lon)
     draw_labels(ax, proj, extent, size, central_lon)
-    draw_geometry(ax, proj, groups, point, radius_value, central_lon)
+    draw_geometry(ax, proj, groups, point, radius_value, central_lon, area_color)
 
     # remove axes and padding
     ax.set_xticks([])

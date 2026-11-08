@@ -52,6 +52,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "DB_PATH": ("src.core", "DB_PATH"),
     "KEYWORD": ("src.core", "KEYWORD"),
     "RUNS_PER_HOUR": ("src.core", "RUNS_PER_HOUR"),
+    "SOURCE_INTERVAL_MINUTES": ("src.core", "SOURCE_INTERVAL_MINUTES"),
     "logger": ("src.core", "logger"),
     "console": ("src.core", "console"),
     # telegram_bot -> bot

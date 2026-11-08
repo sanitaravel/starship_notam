@@ -6,12 +6,12 @@ import math
 
 from src.core.logging import logger
 from src.visualization.image_composer.layout import BG_COLOR
-from src.visualization.map_renderer import MAP_H, MAP_W
+from src.visualization.map_renderer import AREA_RED, MAP_H, MAP_W
 from src.visualization.map_renderer.geometry import unwrap_groups
 
 
-def draw_fallback_map(img, map_x: int, map_y: int, coords, radius_nm):
-    """Draw the NOTAM area on a blank map box at ``(map_x, map_y)``.
+def draw_fallback_map(img, map_x: int, map_y: int, coords, radius_nm, area_color=AREA_RED):
+    """Draw the NOTAM area, in *area_color*, on a blank map box at ``(map_x, map_y)``.
 
     Polygons are scaled to fill the box; a point with a radius becomes an
     ellipse; a point without one is not drawn (no marker, by request). Returns
@@ -23,6 +23,9 @@ def draw_fallback_map(img, map_x: int, map_y: int, coords, radius_nm):
     map_box = (map_x, map_y, map_x + MAP_W, map_y + MAP_H)
     # Fallback: draw plain map background (match canvas background to avoid seams)
     draw.rectangle(map_box, fill=BG_COLOR)
+    fill = (*area_color, 80)
+    # Outline: each channel lifted by 80, so red keeps its (255, 80, 80).
+    outline = (*(min(255, c + 80) for c in area_color), 200)
     try:
         if isinstance(coords, list) and coords:
             # Normalize to a list of polygon groups so a multi-area NOTAM
@@ -56,7 +59,7 @@ def draw_fallback_map(img, map_x: int, map_y: int, coords, radius_nm):
                     y = int(map_y + pad + avail_h / 2.0 - (lat - center_lat) * scale)
                     pts.append((x, y))
                 if len(pts) >= 2:
-                    od.polygon(pts, fill=(207, 0, 0, 80), outline=(255, 80, 80, 200))
+                    od.polygon(pts, fill=fill, outline=outline)
             img = Image.alpha_composite(img, overlay)
         elif isinstance(coords, tuple) and coords:
             lat, lon = coords
@@ -84,7 +87,7 @@ def draw_fallback_map(img, map_x: int, map_y: int, coords, radius_nm):
                 ry = max(1, int((r / 60.0) * scale))
                 overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
                 od = ImageDraw.Draw(overlay)
-                od.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=(207, 0, 0, 80), outline=(255, 80, 80, 200), width=2)
+                od.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=fill, outline=outline, width=2)
                 img = Image.alpha_composite(img, overlay)
         # If coords is a single tuple and no radius is available, don't draw marker per request
     except Exception:
