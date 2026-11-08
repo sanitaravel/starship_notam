@@ -23,8 +23,9 @@ HEARTBEAT_FILE = Path(
     or Path(tempfile.gettempdir()) / "notam-heartbeat"
 )
 
-# Slack on top of the run interval: a cycle takes one to three minutes, longer
-# when a source is slow.
+# Slack on top of the wake-up interval (60 / RUNS_PER_HOUR, 5 minutes by
+# default): the first cycle takes one to three minutes, longer when a source
+# is slow.
 GRACE_SECONDS = 15 * 60
 
 

@@ -80,7 +80,7 @@ async def test_stop_during_sleep_exits_without_waiting(monkeypatch, loop_harness
 
     set_cycle(cycle)
 
-    # The real sleep lasts until the next :00/:30 slot unless stopped.
+    # The real sleep lasts until the next wake-up slot unless stopped.
     await asyncio.wait_for(loop.main_loop(), timeout=5)
 
     assert events == ["cycle", "heartbeat"]
@@ -399,3 +399,10 @@ async def test_main_loop_reuses_one_scheduler(monkeypatch, loop_harness):
 
     assert len(seen) == 2 and seen[0] is seen[1]
     assert isinstance(seen[0], StepScheduler)
+
+
+def test_sources_match_the_configured_intervals():
+    # A name missing from the config would KeyError every cycle.
+    names = [name for name, _ in loop._sources([])]
+
+    assert names == list(loop.config.DEFAULT_SOURCE_INTERVALS)

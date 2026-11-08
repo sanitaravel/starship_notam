@@ -7,6 +7,10 @@ cycles never start exactly one tick apart (steps take time, sleeping is
 imprecise), so a 30-minute source seen 29 minutes 57 seconds after its last
 run must still run now rather than wait a whole extra tick.
 
+Effectively, a source runs on the first wake-up at which its interval minus
+half a tick has elapsed, so intervals are rounded to a multiple of the tick,
+and any value up to half a tick runs on every wake-up.
+
 Public API: ``StepScheduler``.
 """
 

@@ -7,8 +7,8 @@ Each source has its own interval (``config.SOURCE_INTERVAL_MINUTES``); a
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 from functools import partial
 
 from src.bot.discord_webhook import DiscordWebhook
@@ -109,6 +109,7 @@ async def generate_and_send(scheduler: StepScheduler | None = None) -> None:
     ``shutdown``).
     """
     sources = _sources(destinations())
+    # Decided once, up front: the clock moves while the steps run.
     if scheduler is not None:
         due = [
             name
@@ -122,9 +123,9 @@ async def generate_and_send(scheduler: StepScheduler | None = None) -> None:
         if shutdown.stopping():
             logger.info("Stop requested; skipping the rest of this cycle")
             return
+        if name not in due:
+            continue
         if scheduler is not None:
-            if not scheduler.due(name, config.SOURCE_INTERVAL_MINUTES[name]):
-                continue
             scheduler.mark_ran(name)
         for step in steps:
             if shutdown.stopping():

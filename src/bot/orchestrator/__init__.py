@@ -62,6 +62,7 @@ from src.bot.orchestrator.sec_edgar import prefill_sec_edgar_filings
 from src.bot.orchestrator.uscg_bnm import prefill_uscg_bnm_notices
 
 __all__ = [
+    "StepScheduler",
     "ensure_setup",
     "generate_and_send",
     "main_loop",

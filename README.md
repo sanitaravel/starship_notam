@@ -128,11 +128,13 @@ docker compose ps        # postgres "healthy", prefill "exited (0)", bot "health
 docker compose logs -f bot
 ```
 
-A cycle takes one to three minutes. It ends with a line like
+The first cycle takes one to three minutes (later ones run only the sources
+that are due). It ends with a line like
 `Next run scheduled for 2026-10-13 11:00:00`. By then the first messages
 should be in your channel. The bot shows `health: starting` until the first
 step of that cycle finishes, then `healthy`. It turns `unhealthy` if it makes
-no progress for the run interval plus 15 minutes.
+no progress for the wake-up interval (`60 / RUNS_PER_HOUR`, 5 minutes by
+default) plus 15 minutes.
 
 `docker compose stop` and `docker compose down` let the bot finish the item
 it is posting before it exits, so nothing is posted twice after a restart.
