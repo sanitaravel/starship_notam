@@ -9,6 +9,7 @@ from src.core.config import (
     DISCORD_WEBHOOK_URL,
     KEYWORD,
     RUNS_PER_HOUR,
+    SOURCE_INTERVAL_MINUTES,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHANNEL_ID,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "DB_PATH",
     "KEYWORD",
     "RUNS_PER_HOUR",
+    "SOURCE_INTERVAL_MINUTES",
     "logger",
     "console",
 ]

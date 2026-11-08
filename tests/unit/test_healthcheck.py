@@ -65,7 +65,7 @@ def _base_env():
     return {
         key: value
         for key, value in os.environ.items()
-        if key not in ("TELEGRAM_BOT_TOKEN", "NOTAM_ENV_FILE")
+        if key not in ("TELEGRAM_BOT_TOKEN", "NOTAM_ENV_FILE", "RUNS_PER_HOUR")
     }
 
 
@@ -90,3 +90,13 @@ def test_module_reads_runs_per_hour(tmp_path):
 
     assert run_check(path, {"RUNS_PER_HOUR": "2"}).returncode == 0
     assert run_check(path, {"RUNS_PER_HOUR": "4"}).returncode == 1
+
+
+def test_module_defaults_to_twelve_runs_per_hour(tmp_path):
+    # Default 12 runs/hour (every 5 minutes) -> healthy up to 20 minutes.
+    path = tmp_path / "beat"
+    path.write_text(f"{time.time() - 25 * 60:.0f}\n")
+    assert run_check(path).returncode == 1
+
+    path.write_text(f"{time.time() - 15 * 60:.0f}\n")
+    assert run_check(path).returncode == 0

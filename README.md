@@ -83,7 +83,7 @@ POSTGRES_PASSWORD=ChooseALongRandomPassword
   password. To change it, reset the database (see below) or run
   `ALTER USER` in `psql`.
 - **Other settings** in [`.env.example`](.env.example) are optional, such as
-  `RUNS_PER_HOUR`.
+  `RUNS_PER_HOUR` and the per-source `<SOURCE>_INTERVAL_MINUTES`.
 - **Ignored under Compose:** `DATABASE_URL` and `NOTAM_DB_PATH`.
   Compose sets them for the containers itself, so a `.env` you also use for
   local runs works unchanged.
@@ -112,7 +112,9 @@ The services start in this order:
    nothing, so items published while the bot was down are still announced.
 3. **`bot`** starts after `prefill` succeeds. It runs a check cycle
    immediately, then `RUNS_PER_HOUR` times per hour on the clock (by default
-   at :00 and :30). It restarts automatically unless you stop it.
+   every 5 minutes); each source runs when its own interval has elapsed
+   (`<SOURCE>_INTERVAL_MINUTES` in [`.env.example`](.env.example)). It restarts
+   automatically unless you stop it.
 
 > **The first cycle posts everything that is currently active.** A new
 > database treats all current NOTAMs, FAA advisories, closures and licence
