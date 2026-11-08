@@ -6,12 +6,15 @@ import math
 
 from src.core.logging import logger
 
-# Fill/outline used for every NOTAM area (polygon or circle).
-_AREA_STYLE = dict(
-    facecolor=(207 / 255, 0, 0, 0.18),
-    edgecolor=(207 / 255, 0, 0, 0.95),
-    linewidth=1.6,
-)
+# Area colours (RGB 0-255): red for NOTAMs, blue for maritime notices.
+AREA_RED = (207, 0, 0)
+AREA_BLUE = (30, 136, 229)
+
+
+def _area_style(color: tuple[int, int, int]) -> dict:
+    """Fill/outline of an area (polygon or circle) drawn in *color*."""
+    r, g, b = (c / 255 for c in color)
+    return dict(facecolor=(r, g, b, 0.18), edgecolor=(r, g, b, 0.95), linewidth=1.6)
 
 
 def add_base_layers(ax, cfeature) -> None:
@@ -40,12 +43,14 @@ def add_base_layers(ax, cfeature) -> None:
             pass
 
 
-def draw_geometry(ax, proj, polygon_groups, point, radius_value, central_lon) -> None:
-    """Draw each NOTAM polygon, or the circle around ``point``.
+def draw_geometry(ax, proj, polygon_groups, point, radius_value, central_lon, area_color=AREA_RED) -> None:
+    """Draw each NOTAM polygon, or the circle around ``point``, in *area_color*.
 
     A point without a radius is not drawn (no centre marker, by request).
     """
     from shapely.geometry import Polygon
+
+    style = _area_style(area_color)
 
     if polygon_groups is not None:
         # Each area (e.g. two AND-separated DRA boundaries) is its own polygon
@@ -56,7 +61,7 @@ def draw_geometry(ax, proj, polygon_groups, point, radius_value, central_lon) ->
                 continue
             try:
                 poly = Polygon([(lon - central_lon, lat) for lat, lon in group])
-                ax.add_geometries([poly], crs=proj, **_AREA_STYLE)
+                ax.add_geometries([poly], crs=proj, **style)
             except Exception:
                 logger.exception("Failed to draw polygon group %d on cartopy map", gi)
     elif point and radius_value is not None:
@@ -72,7 +77,7 @@ def draw_geometry(ax, proj, polygon_groups, point, radius_value, central_lon) ->
             p_lon = lon + lon_deg * math.cos(ang)
             circle_pts.append((p_lon - central_lon, p_lat))
         try:
-            ax.add_geometries([Polygon(circle_pts)], crs=proj, **_AREA_STYLE)
+            ax.add_geometries([Polygon(circle_pts)], crs=proj, **style)
         except Exception:
             logger.exception("Failed to draw circle geometry on cartopy map")
     elif point:

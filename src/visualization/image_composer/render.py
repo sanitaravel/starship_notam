@@ -16,7 +16,7 @@ from src.visualization.image_composer.layout import (
     RED_CF,
     WHITE,
 )
-from src.visualization.map_renderer import MAP_H, MAP_W, render_map
+from src.visualization.map_renderer import AREA_RED, MAP_H, MAP_W, render_map
 
 
 def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") -> str:
@@ -189,14 +189,15 @@ def render_notam_image(notam_dict: dict, output_path: str = "notam_sample.png") 
     # Coordinates and radius for map rendering
     coords = notam.get("coords")
     radius_nm = notam.get("radius_nm")
+    area_color = notam.get("area_color") or AREA_RED
 
     # Try rendering a proper Earth map with the polygon/point using Cartopy
     try:
-        map_img = render_map(coords, (MAP_W, MAP_H), radius_nm=radius_nm)
+        map_img = render_map(coords, (MAP_W, MAP_H), radius_nm=radius_nm, area_color=area_color)
         img.paste(map_img, (map_x, map_y), map_img)
     except Exception:
         logger.exception("Cartopy map rendering failed, falling back to PIL rendering")
-        img = draw_fallback_map(img, map_x, map_y, coords, radius_nm)
+        img = draw_fallback_map(img, map_x, map_y, coords, radius_nm, area_color)
 
     # Draw a uniform 2px frame around the map. The cartopy axes spine renders
     # unevenly (the right/top edges get clipped at the figure boundary), so we

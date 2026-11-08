@@ -22,9 +22,12 @@ Submodules:
     labels         country, water body and Starbase labels
 """
 
+from src.visualization.map_renderer.layers import AREA_BLUE, AREA_RED
 from src.visualization.map_renderer.render import MAP_H, MAP_W, render_map
 
 __all__ = [
+    "AREA_BLUE",
+    "AREA_RED",
     "MAP_H",
     "MAP_W",
     "render_map",
