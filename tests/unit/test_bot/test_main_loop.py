@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from src.bot.orchestrator import loop, posting, shutdown
+from src.bot.orchestrator import StepScheduler, loop, posting, shutdown
 
 POSIX_ONLY = pytest.mark.skipif(
     sys.platform == "win32", reason="event loop signal handlers are POSIX-only"
@@ -53,7 +53,7 @@ async def test_stop_during_cycle_lets_the_running_step_finish(monkeypatch, loop_
     set_cycle, events = loop_harness
     captured = capture_stop_event(monkeypatch)
 
-    async def cycle():
+    async def cycle(*args):
         events.append("start")
         captured["stop"].set()
         await asyncio.sleep(0)
@@ -74,7 +74,7 @@ async def test_stop_during_sleep_exits_without_waiting(monkeypatch, loop_harness
     set_cycle, events = loop_harness
     captured = capture_stop_event(monkeypatch)
 
-    async def cycle():
+    async def cycle(*args):
         events.append("cycle")
         asyncio.get_running_loop().call_later(0.05, captured["stop"].set)
 
@@ -90,7 +90,7 @@ async def test_failed_cycle_still_writes_heartbeat(monkeypatch, loop_harness):
     set_cycle, events = loop_harness
     captured = capture_stop_event(monkeypatch)
 
-    async def cycle():
+    async def cycle(*args):
         captured["stop"].set()
         raise RuntimeError("source down")
 
@@ -109,7 +109,7 @@ async def test_heartbeat_write_error_does_not_stop_the_loop(monkeypatch, loop_ha
     def broken_heartbeat():
         raise OSError("read-only file system")
 
-    async def cycle():
+    async def cycle(*args):
         cycles.append(1)
         if len(cycles) == 2:
             captured["stop"].set()
@@ -219,7 +219,7 @@ async def test_stop_flag_is_cleared_after_the_loop(monkeypatch, loop_harness):
     set_cycle, _ = loop_harness
     captured = capture_stop_event(monkeypatch)
 
-    async def cycle():
+    async def cycle(*args):
         captured["stop"].set()
 
     set_cycle(cycle)
@@ -234,7 +234,7 @@ async def test_stop_flag_is_cleared_after_the_loop(monkeypatch, loop_harness):
 async def test_sigterm_finishes_cycle_then_exits(loop_harness):
     set_cycle, events = loop_harness
 
-    async def cycle():
+    async def cycle(*args):
         events.append("start")
         os.kill(os.getpid(), signal.SIGTERM)
         await asyncio.sleep(0.05)
@@ -251,7 +251,7 @@ async def test_sigterm_finishes_cycle_then_exits(loop_harness):
 async def test_second_signal_stops_immediately(loop_harness):
     set_cycle, events = loop_harness
 
-    async def cycle():
+    async def cycle(*args):
         events.append("start")
         os.kill(os.getpid(), signal.SIGTERM)
         await asyncio.sleep(0.05)
@@ -270,7 +270,7 @@ async def test_second_signal_stops_immediately(loop_harness):
 async def test_signal_handlers_are_removed_on_exit(loop_harness):
     set_cycle, _ = loop_harness
 
-    async def cycle():
+    async def cycle(*args):
         os.kill(os.getpid(), signal.SIGTERM)
         await asyncio.sleep(0.05)
 
@@ -279,3 +279,123 @@ async def test_signal_handlers_are_removed_on_exit(loop_harness):
     await asyncio.create_task(loop.main_loop())
 
     assert not asyncio.get_running_loop().remove_signal_handler(signal.SIGTERM)
+
+
+STEP_NAMES = (
+    "refresh_notams_from_source",
+    "process_notam_images",
+    "process_faa_activities",
+    "process_fcc_els_applications",
+    "process_faa_licenses",
+    "process_compass_files",
+    "process_federal_register_documents",
+    "process_regulations_gov_documents",
+    "process_sec_edgar_filings",
+    "process_uscg_bnm_notices",
+    "ingest_starbase_alerts",
+    "process_beach_alerts",
+    "process_road_alerts",
+)
+
+
+def stub_steps(monkeypatch, on_run=None) -> tuple[list[str], list[str]]:
+    """Replace every step with a recorder; return (ran, heartbeats)."""
+    ran: list[str] = []
+    heartbeats: list[str] = []
+    monkeypatch.setattr(loop, "write_heartbeat", lambda: heartbeats.append("hb"))
+
+    def make(name):
+        async def step(*args):
+            ran.append(name)
+            if on_run:
+                on_run(name)
+
+        return step
+
+    for name in STEP_NAMES:
+        monkeypatch.setattr(loop, name, make(name))
+    return ran, heartbeats
+
+
+class DueFor:
+    """Scheduler double: due only for the given sources; records marks."""
+
+    def __init__(self, *names):
+        self.names = set(names)
+        self.marked: list[str] = []
+
+    def due(self, name, interval_minutes):
+        return name in self.names
+
+    def mark_ran(self, name):
+        self.marked.append(name)
+
+
+async def test_scheduler_skips_sources_not_due(monkeypatch):
+    ran, heartbeats = stub_steps(monkeypatch)
+    scheduler = DueFor("starbase")
+
+    await loop.generate_and_send(scheduler)
+
+    assert ran == [
+        "ingest_starbase_alerts",
+        "process_beach_alerts",
+        "process_road_alerts",
+    ]
+    assert len(heartbeats) == 3
+    assert scheduler.marked == ["starbase"]
+
+
+async def test_due_sources_keep_cycle_order(monkeypatch):
+    ran, _ = stub_steps(monkeypatch)
+
+    await loop.generate_and_send(
+        DueFor("regulations_gov", "federal_register", "notams")
+    )
+
+    assert ran == [
+        "refresh_notams_from_source",
+        "process_notam_images",
+        "process_federal_register_documents",
+        "process_regulations_gov_documents",
+    ]
+
+
+async def test_stop_mid_cycle_does_not_mark_later_sources(monkeypatch):
+    stop = asyncio.Event()
+    monkeypatch.setattr(shutdown, "_stop", stop)
+    now = [0.0]
+    sched = StepScheduler(5, clock=lambda: now[0])
+    stub_steps(
+        monkeypatch,
+        on_run=lambda name: stop.set()
+        if name == "refresh_notams_from_source"
+        else None,
+    )
+
+    await loop.generate_and_send(sched)
+
+    assert not sched.due("notams", 10)
+    assert sched.due("faa_advisories", 5)
+
+
+async def test_main_loop_reuses_one_scheduler(monkeypatch, loop_harness):
+    set_cycle, _ = loop_harness
+    captured = capture_stop_event(monkeypatch)
+    seen = []
+
+    async def cycle(scheduler=None):
+        seen.append(scheduler)
+        if len(seen) == 2:
+            captured["stop"].set()
+
+    async def no_sleep(stop):
+        pass
+
+    set_cycle(cycle)
+    monkeypatch.setattr(loop, "sleep_until_next_run", no_sleep)
+
+    await asyncio.wait_for(loop.main_loop(), timeout=5)
+
+    assert len(seen) == 2 and seen[0] is seen[1]
+    assert isinstance(seen[0], StepScheduler)
