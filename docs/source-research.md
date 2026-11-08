@@ -1,18 +1,19 @@
 # New source research
 
 Candidate sources for the bot beyond the ones it already checks. Every
-endpoint below was called live on **2026-10-14**; sample values come from those
-responses.
+endpoint below was called live on **2026-10-14** (the Starship documentary on
+**2026-11-08**); sample values come from those responses.
 
-Scope: three sources picked from a wider survey. Launch Library 2 was dropped
-(not interesting enough), and the Federal Register is already implemented
-(`feat/federal-register`).
+Scope: three sources picked from a wider survey, plus the Starship documentary
+added later. Launch Library 2 was dropped (not interesting enough), and the
+Federal Register is already implemented (`feat/federal-register`).
 
 | Source | What it adds | Access | Effort |
 | --- | --- | --- | --- |
 | [Regulations.gov](#1-regulationsgov) | FAA/USCG Starship environmental and safety-zone documents, with PDFs and comment periods | JSON API, free key | Small |
 | [USCG Broadcast Notices to Mariners](#2-uscg-broadcast-notices-to-mariners) | Maritime hazard areas for every Starship flight, with coordinates and launch windows | RSS, no key | Medium (coordinate parsing, map card) |
 | [SEC EDGAR](#3-sec-edgar-spacex-spcx) | SpaceX's filings as a public company (8-K, 10-Q, 10-K) | JSON / Atom, no key | Small |
+| [SpaceX Starship documentary](#4-spacex-starship-documentary) | New episodes of SpaceX's Starship documentary series | HLS playlists at guessable URLs, no key | Small |
 
 ---
 
@@ -322,3 +323,89 @@ add a "mentions Starship" tag, or quote the matching sentence.
 - **Config:** `SEC_USER_AGENT` in `.env` (required by SEC; the source is
   disabled when unset).
 - **First run:** prefill existing filings as posted, as COMPASS does.
+
+---
+
+## 4. SpaceX Starship documentary
+
+> **Implemented** (`feat/starship-documentary`): `src/scrapers/starship_doc_fetcher.py`,
+> `src/parsers/starship_doc_parser.py` and `prefill_starship_doc.py`.
+
+SpaceX publishes a documentary series about Starship as HLS videos on its
+content CDN. Researched live on **2026-11-08**, not with the sources above.
+
+### Access
+
+- **No key**, plain `requests`. Served through Cloudflare
+  (`Cache-Control` max-age 600, so a new episode can take up to 10 minutes to
+  show up everywhere).
+- **URL pattern:** each episode has its own folder,
+  `https://content.spacex.com/cms-assets/content-hub/documentary/StarshipDoc_Ep{n:03d}/`,
+  holding:
+
+| File | Contents |
+| --- | --- |
+| `StarshipDoc_EpNNN.m3u8` | Master playlist: 720p, 1080p and 4K renditions |
+| `StarshipDoc_EpNNN-720p.m3u8`, `-1080p.m3u8`, `-4k.m3u8` | Media playlists of each rendition, listing the `.ts` segments |
+
+- **No index.** There is no feed or list of episodes, so new ones are found
+  by probing episode numbers.
+- **Released vs not:** a released episode answers **200** with
+  `audio/x-mpegurl`; an unreleased number answers **404** with
+  `application/xml` (a storage error page).
+- **Date:** the `Last-Modified` header dates the upload
+  (`Fri, 06 Nov 2026 13:44:03 GMT` for Ep003).
+- **No watch page:** `www.spacex.com` is a single-page app that answers 200
+  for any path, so a page URL can't be checked. Posts link the playlists
+  instead; they play in Safari and VLC.
+
+### What is online (2026-11-08)
+
+Ep001 to Ep004 answer 200; Ep005 and Ep006 answer 404. Ep004 runs about
+21 minutes (sum of the `#EXTINF` durations in its 4K playlist).
+
+Master playlist (Ep004):
+
+```
+#EXTM3U
+#EXT-X-VERSION:6
+#EXT-X-STREAM-INF:BANDWIDTH=5922400,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"
+StarshipDoc_Ep004-720p.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=8940800,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2"
+StarshipDoc_Ep004-1080p.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=38640800,RESOLUTION=3840x2160,CODECS="avc1.640033,mp4a.40.2"
+StarshipDoc_Ep004-4k.m3u8
+```
+
+4K media playlist (Ep003, head):
+
+```
+#EXTM3U
+#EXT-X-VERSION:6
+#EXT-X-TARGETDURATION:4
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-INDEPENDENT-SEGMENTS
+#EXTINF:2.002000,
+StarshipDoc_Ep003-4k0.ts
+#EXTINF:2.002000,
+StarshipDoc_Ep003-4k1.ts
+#EXTINF:3.795456,
+StarshipDoc_Ep003-4k3.ts
+```
+
+### Implementation notes
+
+- **Key:** the folder name (`StarshipDoc_Ep004`), stored in the
+  `starship_documentaries` table with the episode number.
+- **Probing:** fetch the `-4k.m3u8` playlist of each number after the highest
+  stored episode. Stop after `STARSHIP_DOC_LOOKAHEAD` (default 2) numbers in
+  a row are not online, so a skipped number doesn't hide later episodes.
+  403/404/410, or a 200 without the `#EXTM3U` header, means "not released";
+  any other error fails the whole fetch, so nothing is mistaken for "no new
+  episodes".
+- **Posts:** episode number, length (sum of `#EXTINF`), upload time from
+  `Last-Modified`, and links to the master and 4K playlists.
+- **Interval:** 30 minutes (`STARSHIP_DOC_INTERVAL_MINUTES`).
+- **First run:** `prefill_starship_doc.py --if-empty` probes from episode 1
+  and marks every released episode as posted.
